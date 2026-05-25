@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CZElectro - Simulasi Lab Elektronika interaktif dengan drag-drop komponen, kabel fleksibel, dan animasi realistis.">
+    <title>CZElectro — Lab Elektronika</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Hidden SVG Defs -->
+    <svg style="width:0;height:0;position:absolute">
+        <defs>
+            <linearGradient id="battBody" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#111" />
+                <stop offset="30%" stop-color="#444" />
+                <stop offset="50%" stop-color="#222" />
+                <stop offset="80%" stop-color="#555" />
+                <stop offset="100%" stop-color="#111" />
+            </linearGradient>
+            <linearGradient id="battTop" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#d4af37" />
+                <stop offset="100%" stop-color="#8b6508" />
+            </linearGradient>
+            <linearGradient id="resBody" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#e2e8f0" />
+                <stop offset="50%" stop-color="#f8fafc" />
+                <stop offset="100%" stop-color="#94a3b8" />
+            </linearGradient>
+            <radialGradient id="ledGlass" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.8)" />
+                <stop offset="50%" stop-color="rgba(200,200,200,0.3)" />
+                <stop offset="100%" stop-color="rgba(100,100,100,0.5)" />
+            </radialGradient>
+            <radialGradient id="ledGlowGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#fef08a" />
+                <stop offset="50%" stop-color="#eab308" />
+                <stop offset="100%" stop-color="#a16207" />
+            </radialGradient>
+            <radialGradient id="ledGlowRed" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#fca5a5" />
+                <stop offset="50%" stop-color="#ef4444" />
+                <stop offset="100%" stop-color="#991b1b" />
+            </radialGradient>
+            <radialGradient id="ledGlowGreen" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#86efac" />
+                <stop offset="50%" stop-color="#22c55e" />
+                <stop offset="100%" stop-color="#166534" />
+            </radialGradient>
+            <radialGradient id="ledGlowBlue" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#93c5fd" />
+                <stop offset="50%" stop-color="#3b82f6" />
+                <stop offset="100%" stop-color="#1e3a8a" />
+            </radialGradient>
+            <radialGradient id="ledGlowWhite" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="50%" stop-color="#e5e7eb" />
+                <stop offset="100%" stop-color="#6b7280" />
+            </radialGradient>
+            <radialGradient id="bulbGlowGrad" cx="50%" cy="40%" r="50%">
+                <stop offset="0%" stop-color="#fffbeb" />
+                <stop offset="40%" stop-color="#fde68a" />
+                <stop offset="100%" stop-color="#d97706" />
+            </radialGradient>
+            <linearGradient id="motorBody" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#374151" />
+                <stop offset="50%" stop-color="#4b5563" />
+                <stop offset="100%" stop-color="#1f2937" />
+            </linearGradient>
+            <filter id="innerShadow">
+                <feOffset dx="0" dy="3" />
+                <feGaussianBlur stdDeviation="3" result="offset-blur" />
+                <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse" />
+                <feFlood flood-color="black" flood-opacity="0.6" result="color" />
+                <feComposite operator="in" in="color" in2="inverse" result="shadow" />
+                <feComposite operator="over" in="shadow" in2="SourceGraphic" />
+            </filter>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                </feMerge>
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+        <div id="sidebar-header">
+            <div class="logo-row">
+                <div class="logo-icon">⚡</div>
+                <div class="title">CZElectro</div>
+            </div>
+            <div class="subtitle">Lab Elektronika Interaktif</div>
+        </div>
+        <div class="category-tabs">
+            <button class="cat-tab active" data-cat="all">Semua</button>
+            <button class="cat-tab" data-cat="source">Sumber</button>
+            <button class="cat-tab" data-cat="passive">Pasif</button>
+            <button class="cat-tab" data-cat="output">Output</button>
+        </div>
+        <div id="component-list"></div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main id="workspace-container">
+        <!-- Toolbar -->
+        <div id="toolbar">
+            <button class="tb-btn" id="btn-zoom-in" title="Zoom In">🔍+</button>
+            <button class="tb-btn" id="btn-zoom-out" title="Zoom Out">🔍−</button>
+            <span class="tb-label" id="zoom-label">100%</span>
+            <div class="tb-sep"></div>
+            <button class="tb-btn" id="btn-fit" title="Fit View">⊞</button>
+            <button class="tb-btn" id="btn-grid" title="Toggle Grid">▦</button>
+            <div class="tb-sep"></div>
+            <button class="tb-btn" id="btn-clear" title="Hapus Semua">🗑</button>
+        </div>
+
+        <!-- Canvas layers -->
+        <canvas id="grid-canvas"></canvas>
+        <div id="workspace">
+            <svg id="wire-layer" width="5000" height="5000">
+                <g id="wires-group"></g>
+                <path id="temp-wire" d="" fill="none" stroke="#60a5fa" stroke-width="3" stroke-dasharray="8 4"
+                    style="display:none;pointer-events:none" />
+            </svg>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="status-bar">
+            <div class="status-item">
+                <span class="status-dot" id="circuit-dot"></span>
+                <span id="circuit-status">No Circuit</span>
+            </div>
+            <div id="circuit-loops"></div>
+            <div class="status-item">
+                <span>🧩</span>
+                <span id="comp-count">0 parts</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <script src="components.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
