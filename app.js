@@ -10,6 +10,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let selRect = null, selStartX = 0, selStartY = 0; // selection rectangle
     let selectedIds = new Set();
     const GRID = 10, DRAG_THRESHOLD = 5;
+    let isMuted = false;
+
+    // ── Battery Simulation State ──
+    let simSpeed = 0;  // 0=paused, 1=1x, 10=10x, 60=60x
+    let simInterval = null;
+    let simElapsedMin = 0; // simulated minutes elapsed
+    let simMode = 'day'; // 'day' or 'night' — user toggleable
+    let simTotalLoadW = 0; // tracked from evaluateCircuit
+    let simTotalSrcW = 0;  // tracked from evaluateCircuit
 
     // ── Sound Engine (Web Audio API) ──
     let audioCtx = null;
@@ -24,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SFX = {
         // One-shot: component burn/break
         burn() {
+            if (isMuted) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -48,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // One-shot: fuse blow — sharp snap
         fuseSnap() {
+            if (isMuted) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -61,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // One-shot: switch click
         switchClick() {
+            if (isMuted) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -74,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // One-shot: wire connect snap
         wireSnap() {
+            if (isMuted) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -87,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // One-shot: relay click
         relayClick() {
+            if (isMuted) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -99,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Looping: motor hum — frequency varies with speed
         motorStart(id, speedRatio) {
+            if (isMuted) return;
             if (activeSounds[id]) return; // already playing
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
@@ -120,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Looping: buzzer tone
         buzzerStart(id) {
+            if (isMuted) return;
             if (activeSounds[id]) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
@@ -133,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Looping: speaker tone — pitch varies with voltage
         speakerStart(id, voltage) {
+            if (isMuted) return;
             if (activeSounds[id]) return;
             const ctx = getAudioCtx();
             const osc = ctx.createOscillator();
@@ -267,6 +284,22 @@ document.addEventListener('DOMContentLoaded', () => {
         renderWires(); evaluateCircuit();
         localStorage.removeItem('czelectro_state');
     };
+    document.getElementById('btn-rotate').onclick = () => {
+        if (selectedIds.size > 0) {
+            selectedIds.forEach(cid => rotateComponent(cid));
+        }
+    };
+    document.getElementById('btn-mute').onclick = () => {
+        isMuted = !isMuted;
+        const btn = document.getElementById('btn-mute');
+        btn.textContent = isMuted ? '🔇' : '🔊';
+        btn.classList.toggle('active', isMuted);
+        if (isMuted) {
+            SFX.stopAll();
+        } else {
+            evaluateCircuit(); // re-evaluate to restart sounds
+        }
+    };
 
     wCont.addEventListener('wheel', e => {
         e.preventDefault();
@@ -291,8 +324,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: (cx - r.left - panX) / zoom, y: (cy - r.top - panY) / zoom };
     }
 
+    // ── Rotation helper ──
+    function rotatePoint(px, py, cx, cy, angleDeg) {
+        let cos, sin;
+        switch (((angleDeg % 360) + 360) % 360) {
+            case 0:   cos = 1;  sin = 0;  break;
+            case 90:  cos = 0;  sin = 1;  break;
+            case 180: cos = -1; sin = 0;  break;
+            case 270: cos = 0;  sin = -1; break;
+            default:
+                const rad = angleDeg * Math.PI / 180;
+                cos = Math.cos(rad); sin = Math.sin(rad);
+        }
+        const dx = px - cx, dy = py - cy;
+        return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+    }
+
     function getAbsPos(comp, term) {
-        return { x: comp.x + term.x, y: comp.y + term.y };
+        const tmpl = COMPONENTS.find(t => t.id === comp.type);
+        if (!tmpl || !comp.rotation) {
+            return { x: comp.x + term.x, y: comp.y + term.y };
+        }
+        const cx = tmpl.width / 2, cy = tmpl.height / 2;
+        const rotated = rotatePoint(term.x, term.y, cx, cy, comp.rotation);
+        return { x: comp.x + rotated.x, y: comp.y + rotated.y };
     }
 
     // ── Spawn Component ──
@@ -315,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: uId, type: tmpl.id, voltage: tmpl.voltage,
             baseResistance: tmpl.resistance, currentResistance: tmpl.resistance,
             maxCurrent: tmpl.maxCurrent || null, glowGradient: tmpl.glowGradient || null,
-            isClosed: false, isBroken: false, x, y,
+            isClosed: false, isBroken: false, rotation: 0, x, y,
             terminals: JSON.parse(JSON.stringify(tmpl.terminals))
         };
 
@@ -326,10 +381,17 @@ document.addEventListener('DOMContentLoaded', () => {
             tEl.style.top = `${term.y - 8}px`;
             tEl.dataset.cid = uId;
             tEl.dataset.tidx = idx;
+            tEl.dataset.label = term.label || '';
             el.appendChild(tEl);
         });
 
         ws.appendChild(el);
+        // Initialize battery level if component has capacity
+        const tmplCap = COMPONENTS.find(t => t.id === comp.type);
+        if (tmplCap?.capacityWh) {
+            comp.batteryCapacity = tmplCap.capacityWh;
+            comp.batteryLevel = comp.batteryLevel ?? tmplCap.capacityWh; // preserve on load
+        }
         deployed.push(comp);
         updateStatus();
         return comp;
@@ -344,12 +406,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const term = comp.terminals[termIdx];
         const cx = tmpl.width / 2, cy = tmpl.height / 2;
         const tx = term.x - cx, ty = term.y - cy;
-        // Determine dominant direction
+        let dir;
         if (Math.abs(tx) > Math.abs(ty)) {
-            return tx > 0 ? { dx: 1, dy: 0 } : { dx: -1, dy: 0 };
+            dir = tx > 0 ? { dx: 1, dy: 0 } : { dx: -1, dy: 0 };
         } else {
-            return ty > 0 ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 };
+            dir = ty > 0 ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 };
         }
+        // Rotate direction vector if component is rotated
+        if (comp.rotation) {
+            const rad = comp.rotation * Math.PI / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            dir = { dx: Math.round(dir.dx * cos - dir.dy * sin), dy: Math.round(dir.dx * sin + dir.dy * cos) };
+        }
+        return dir;
     }
 
     function makeWirePath(p1, dir1, p2, dir2, bend, spreadOffset) {
@@ -517,19 +586,76 @@ document.addEventListener('DOMContentLoaded', () => {
         deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on', 'led-dim', 'led-bright', 'motor-active', 'buzzer-active', 'led-rgb-active', 'speaker-active', 'relay-active');
+            el.classList.remove('led-on', 'led-dim', 'led-bright', 'motor-active', 'motor-reversed', 'buzzer-active', 'led-rgb-active', 'speaker-active', 'relay-active');
             el.style.removeProperty('--glow-intensity');
             // Reset LED fill to original glass look
             const bulb = el.querySelector('.led-bulb');
             if (bulb && !c.isBroken) { bulb.style.fill = ''; bulb.style.filter = ''; }
             const ring = el.querySelector('.led-glow-ring');
             if (ring && !c.isBroken) { ring.style.fillOpacity = '0'; ring.style.fill = ''; }
-            // Reset motor spin
+            // Reset motor spin and direction badge
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
+            const dirBadge = el.querySelector('.motor-dir-badge');
+            if (dirBadge) dirBadge.remove();
             // Reset speaker cone
             const cones = el.querySelectorAll('.speaker-cone');
             cones.forEach(cone => cone.style.animation = 'none');
+            // Reset SCC state
+            el.classList.remove('scc-active', 'scc-protecting', 'ac-active', 'ac-no-inverter');
+            const sccStatus = el.querySelector('.scc-status');
+            if (sccStatus) sccStatus.remove();
+            const noAcBadge = el.querySelector('.no-ac-badge');
+            if (noAcBadge) noAcBadge.remove();
+            const powerBadge = el.querySelector('.power-badge');
+            if (powerBadge) powerBadge.remove();
+            // Reset AC appliance indicators
+            const ironPlate = el.querySelector('.iron-plate');
+            if (ironPlate) ironPlate.style.fill = '';
+            const ironInd = el.querySelector('.iron-indicator');
+            if (ironInd) ironInd.style.fill = '';
+            const fridgeInd = el.querySelector('.fridge-indicator');
+            if (fridgeInd) fridgeInd.style.fill = '';
+            const blenderBlade = el.querySelector('.blender-blade');
+            if (blenderBlade) blenderBlade.style.animation = 'none';
+            const blenderInd = el.querySelector('.blender-indicator');
+            if (blenderInd) blenderInd.style.fill = '';
+            const rcInd = el.querySelector('.rc-indicator');
+            if (rcInd) rcInd.style.fill = '';
+            const acInd = el.querySelector('.ac-indicator');
+            if (acInd) acInd.style.fill = '';
+            const acFan = el.querySelector('.ac-fan');
+            if (acFan) acFan.style.animation = 'none';
+            const tvScreen = el.querySelector('.tv-screen');
+            if (tvScreen) { tvScreen.style.fill = ''; tvScreen.style.filter = ''; }
+            const tvInd = el.querySelector('.tv-indicator');
+            if (tvInd) tvInd.style.fill = '';
+            const lampGlow = el.querySelector('.lamp-glow');
+            if (lampGlow) { lampGlow.style.fill = 'none'; lampGlow.style.opacity = '0'; lampGlow.style.filter = ''; }
+            const pcScreen = el.querySelector('.pc-screen');
+            if (pcScreen) { pcScreen.style.fill = ''; pcScreen.style.filter = ''; }
+            const pcPower = el.querySelector('.pc-power');
+            if (pcPower) pcPower.style.opacity = '';
+            const pcInd = el.querySelector('.pc-indicator');
+            if (pcInd) pcInd.style.fill = '';
+            const sdInd = el.querySelector('.sd-indicator');
+            if (sdInd) sdInd.style.fill = '';
+            const sdStatus = el.querySelector('.sd-status');
+            if (sdStatus) sdStatus.remove();
+            const pumpImp = el.querySelector('.pump-impeller');
+            if (pumpImp) pumpImp.style.animation = 'none';
+            const pumpInd = el.querySelector('.pump-indicator');
+            if (pumpInd) pumpInd.style.fill = '';
+            // Reset SCC resistance to base
+            if (c.type === 'charge_controller') {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                if (tmpl) c.currentResistance = tmpl.resistance;
+            }
+            // Reset Step-Down resistance to base
+            if (c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                if (tmpl) c.currentResistance = tmpl.resistance;
+            }
         });
         SFX.stopAll(); // Stop all looping sounds before re-evaluating
         wires.forEach(w => w.energized = false);
@@ -537,7 +663,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let hasLoop = false;
         const activeLoops = [];
 
-        deployed.filter(c => c.type.startsWith('battery')).forEach(batt => {
+        const isSource = c => c.type.startsWith('battery') || c.type.startsWith('solar_');
+
+        deployed.filter(isSource).forEach(batt => {
             const paths = [];
             traceCircuit({ cid: batt.id, pin: 0 }, [batt.id], [], paths, batt.id);
 
@@ -545,11 +673,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 let rTotal = 0, open = false;
                 const compsInLoop = [];
                 const wireIndices = new Set();
+                const compEntryPin = {}; // Track which pin current enters each component
 
                 loop.forEach(node => {
                     const c = deployed.find(x => x.id === node.cid);
                     if (c && !compsInLoop.includes(c)) compsInLoop.push(c);
                     if (node.wireIdx !== undefined) wireIndices.add(node.wireIdx);
+                    // Nodes without wireIdx are "entry" nodes — record which pin was entered
+                    if (node.wireIdx === undefined && node.cid) {
+                        compEntryPin[node.cid] = node.pin;
+                    }
                 });
 
                 compsInLoop.forEach(c => {
@@ -559,19 +692,127 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (open || rTotal === Infinity || rTotal <= 0) return;
 
-                // Sum voltages of ALL batteries in this loop (series batteries!)
+                // Sum voltages of ALL sources in this loop (series batteries/solar panels!)
                 let loopVoltage = 0;
                 compsInLoop.forEach(c => {
-                    if (c.type.startsWith('battery')) loopVoltage += c.voltage;
+                    if (isSource(c)) {
+                        // Dead batteries contribute 0V
+                        if (c.batteryCapacity && c.batteryLevel <= 0) return;
+                        // Solar panels contribute 0V at night
+                        if (c.type.startsWith('solar_') && simMode === 'night') return;
+                        loopVoltage += c.voltage;
+                    }
                 });
 
                 hasLoop = true;
-                const amps = loopVoltage / rTotal;
+                let amps = loopVoltage / rTotal;
+
+                // ── Charge Controller Protection Logic ──
+                const scc = compsInLoop.find(c => c.type === 'charge_controller');
+                if (scc && !scc.isBroken) {
+                    const tmpl = COMPONENTS.find(t => t.id === 'charge_controller');
+                    const maxOut = tmpl?.maxOutputCurrent || 0.05;
+                    const hasSolar = compsInLoop.some(c => c.type.startsWith('solar_'));
+                    const hasBattery = compsInLoop.some(c => c.type.startsWith('battery'));
+                    // SCC only limits on CHARGING circuits (no load components)
+                    const hasLoads = compsInLoop.some(c => {
+                        const isACLoad = ['iron', 'fridge', 'blender', 'ricecooker', 'ac_05pk', 'ac_1pk', 'tv_led', 'lamp_30w', 'computer', 'pump_125', 'pump_250'].includes(c.type);
+                        const isDCLoad = c.type.startsWith('led_') || c.type === 'bulb' || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker';
+                        const hasInv = c.type === 'inverter' || c.type === 'inverter_3k' || c.type === 'inverter_5k';
+                        return isACLoad || isDCLoad || hasInv;
+                    });
+
+                    if (hasSolar && !hasLoads && amps > maxOut) {
+                        // SCC increases its resistance to limit current
+                        const neededR = loopVoltage / maxOut;
+                        scc.currentResistance = Math.max(tmpl.resistance, neededR - (rTotal - scc.currentResistance));
+                        rTotal = loopVoltage / maxOut;
+                        amps = maxOut;
+
+                        // Mark SCC as protecting
+                        const sccEl = document.getElementById(scc.id);
+                        if (sccEl) {
+                            sccEl.classList.add('scc-active', 'scc-protecting');
+                            let badge = sccEl.querySelector('.scc-status');
+                            if (!badge) {
+                                badge = document.createElement('div');
+                                badge.className = 'scc-status';
+                                sccEl.appendChild(badge);
+                            }
+                            badge.textContent = hasBattery
+                                ? `⚡ PROTECT ${(amps*1000).toFixed(0)}mA`
+                                : `⚡ LIMIT ${(amps*1000).toFixed(0)}mA`;
+                        }
+                    } else if (hasSolar) {
+                        // SCC is active but not limiting
+                        const sccEl = document.getElementById(scc.id);
+                        if (sccEl) {
+                            sccEl.classList.add('scc-active');
+                            let badge = sccEl.querySelector('.scc-status');
+                            if (!badge) {
+                                badge = document.createElement('div');
+                                badge.className = 'scc-status';
+                                sccEl.appendChild(badge);
+                            }
+                            badge.textContent = `✓ OK ${(amps*1000).toFixed(0)}mA`;
+                        }
+                    }
+                }
+
+                // ── Step-Down Converter Protection Logic ──
+                const stepDowns = compsInLoop.filter(c => c.type === 'stepdown_12v' || c.type === 'stepdown_5v');
+                stepDowns.forEach(sd => {
+                    if (sd.isBroken) return;
+                    const sdTmpl = COMPONENTS.find(t => t.id === sd.type);
+                    const sdMaxOut = sdTmpl?.maxOutputCurrent || 0.02;
+                    if (amps > sdMaxOut) {
+                        const neededR = loopVoltage / sdMaxOut;
+                        sd.currentResistance = Math.max(sdTmpl.resistance, neededR - (rTotal - sd.currentResistance));
+                        rTotal = loopVoltage / sdMaxOut;
+                        amps = sdMaxOut;
+                        const sdEl = document.getElementById(sd.id);
+                        if (sdEl) {
+                            sdEl.classList.add('scc-protecting');
+                            let badge = sdEl.querySelector('.sd-status');
+                            if (!badge) {
+                                badge = document.createElement('div');
+                                badge.className = 'scc-status';
+                                sdEl.appendChild(badge);
+                            }
+                            badge.textContent = `⚡ ${(amps*1000).toFixed(0)}mA`;
+                            const ind = sdEl.querySelector('.sd-indicator');
+                            if (ind) ind.style.fill = '#f59e0b';
+                        }
+                    } else {
+                        const sdEl = document.getElementById(sd.id);
+                        if (sdEl) {
+                            sdEl.classList.add('scc-active');
+                            let badge = sdEl.querySelector('.sd-status');
+                            if (!badge) {
+                                badge = document.createElement('div');
+                                badge.className = 'scc-status';
+                                sdEl.appendChild(badge);
+                            }
+                            badge.textContent = `✓ ${(amps*1000).toFixed(0)}mA`;
+                            const ind = sdEl.querySelector('.sd-indicator');
+                            if (ind) ind.style.fill = '#22c55e';
+                        }
+                    }
+                });
 
                 // Deduplicate: skip if same set of components already processed
                 const loopKey = compsInLoop.map(c => c.id).sort().join(',');
                 if (activeLoops.find(l => l.key === loopKey)) return;
-                activeLoops.push({ key: loopKey, v: loopVoltage, r: rTotal, i: amps });
+                const watts = loopVoltage * amps;
+                // Real-world power calculation
+                let srcPower = 0, loadPower = 0;
+                compsInLoop.forEach(c => {
+                    const t = COMPONENTS.find(x => x.id === c.type);
+                    if (!t) return;
+                    if (isSource(c) && t.ratedPower) srcPower += t.ratedPower;
+                    else if (t.ratedPower && !isSource(c) && c.type !== 'charge_controller' && c.type !== 'inverter' && c.type !== 'inverter_3k' && c.type !== 'inverter_5k' && c.type !== 'switch_toggle') loadPower += t.ratedPower;
+                });
+                activeLoops.push({ key: loopKey, v: loopVoltage, r: rTotal, i: amps, w: watts, srcW: srcPower, loadW: loadPower });
 
                 console.log(`[CZElectro] Loop ${activeLoops.length}: V=${loopVoltage}V, R=${rTotal.toFixed(1)}Ω, I=${(amps*1000).toFixed(1)}mA, components:`, compsInLoop.map(c => `${c.type}(${c.currentResistance}Ω)`).join(' → '));
 
@@ -586,7 +827,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const el = document.getElementById(c.id);
                     if (!el || c.isBroken) return;
                     const isLed = c.type.startsWith('led_') || c.type === 'bulb';
-                    const isOutput = isLed || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || c.type === 'fuse';
+                    const isAC = c.type === 'iron' || c.type === 'fridge' || c.type === 'blender' || c.type === 'ricecooker' || c.type === 'ac_05pk' || c.type === 'ac_1pk' || c.type === 'tv_led' || c.type === 'lamp_30w' || c.type === 'computer' || c.type === 'pump_125' || c.type === 'pump_250';
+                    const isOutput = isLed || isAC || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || c.type === 'fuse';
                     if (isOutput && c.maxCurrent && amps > c.maxCurrent) {
                         loopBroken = true;
                         c.isBroken = true;
@@ -610,12 +852,42 @@ document.addEventListener('DOMContentLoaded', () => {
                         else SFX.burn();
                     }
                 });
+                // Check if loop has an inverter (needed for AC appliances)
+                const hasInverter = compsInLoop.some(c => c.type === 'inverter' || c.type === 'inverter_3k' || c.type === 'inverter_5k');
 
                 // PASS 2: Activate outputs using per-component voltage division
                 if (!loopBroken) {
                     compsInLoop.forEach(c => {
                         const el = document.getElementById(c.id);
                         if (!el || c.isBroken) return;
+
+                        const tmplAC = COMPONENTS.find(t => t.id === c.type);
+                        // AC-only check: skip activation if no inverter
+                        if (tmplAC?.acOnly && !hasInverter) {
+                            el.classList.add('ac-no-inverter');
+                            let noAcBadge = el.querySelector('.no-ac-badge');
+                            if (!noAcBadge) {
+                                noAcBadge = document.createElement('div');
+                                noAcBadge.className = 'no-ac-badge';
+                                noAcBadge.textContent = '⚠ NO AC';
+                                el.appendChild(noAcBadge);
+                            }
+                            return; // Don't activate
+                        }
+
+                        // Power budget check: if source can't supply the load, don't activate
+                        const isOutputComp2 = tmplAC && tmplAC.ratedPower && !isSource(c) && c.type !== 'charge_controller' && c.type !== 'inverter' && c.type !== 'inverter_3k' && c.type !== 'inverter_5k' && c.type !== 'switch_toggle';
+                        if (isOutputComp2 && srcPower > 0 && loadPower > srcPower) {
+                            el.classList.add('ac-no-inverter'); // reuse dim style
+                            let lpBadge = el.querySelector('.no-ac-badge');
+                            if (!lpBadge) {
+                                lpBadge = document.createElement('div');
+                                lpBadge.className = 'no-ac-badge';
+                                el.appendChild(lpBadge);
+                            }
+                            lpBadge.textContent = `⚠ DAYA KURANG (${srcPower}W < ${loadPower}W)`;
+                            return; // Don't activate
+                        }
 
                         // Voltage across this component: V = I × R
                         const vComp = amps * c.currentResistance;
@@ -679,7 +951,20 @@ document.addEventListener('DOMContentLoaded', () => {
                             el.classList.add('motor-active');
                             const speed = 0.2 + (1 - speedRatio) * 5.8;
                             const spin = el.querySelector('.motor-spin');
-                            if (spin) spin.style.animation = `spin ${speed.toFixed(2)}s linear infinite`;
+                            // Determine polarity: if current enters at pin 1 (−), motor is reversed
+                            const entryPin = compEntryPin[c.id];
+                            const isReversed = entryPin === 1;
+                            if (spin) spin.style.animation = `spin ${speed.toFixed(2)}s linear infinite${isReversed ? ' reverse' : ''}`;
+                            // Add direction indicator
+                            el.classList.toggle('motor-reversed', isReversed);
+                            let badge = el.querySelector('.motor-dir-badge');
+                            if (!badge) {
+                                badge = document.createElement('div');
+                                badge.className = 'motor-dir-badge';
+                                el.appendChild(badge);
+                            }
+                            badge.textContent = isReversed ? '↺ REV' : '↻ FWD';
+                            badge.classList.toggle('reversed', isReversed);
                             SFX.motorStart(c.id, speedRatio);
                             SFX.motorUpdate(c.id, speedRatio);
                         }
@@ -707,12 +992,106 @@ document.addEventListener('DOMContentLoaded', () => {
                                 SFX.relayClick();
                             }
                         }
+                        // AC Appliances activation
+                        if (c.type === 'iron') {
+                            el.classList.add('ac-active');
+                            const plate = el.querySelector('.iron-plate');
+                            const indicator = el.querySelector('.iron-indicator');
+                            if (plate) plate.style.fill = '#ef4444';
+                            if (indicator) indicator.style.fill = '#ef4444';
+                        }
+                        if (c.type === 'fridge') {
+                            el.classList.add('ac-active');
+                            const indicator = el.querySelector('.fridge-indicator');
+                            if (indicator) indicator.style.fill = '#22c55e';
+                        }
+                        if (c.type === 'blender') {
+                            el.classList.add('ac-active');
+                            const blade = el.querySelector('.blender-blade');
+                            const indicator = el.querySelector('.blender-indicator');
+                            if (blade) blade.style.animation = 'spin 0.3s linear infinite';
+                            if (indicator) indicator.style.fill = '#22c55e';
+                        }
+                        if (c.type === 'ricecooker') {
+                            el.classList.add('ac-active');
+                            const indicator = el.querySelector('.rc-indicator');
+                            if (indicator) indicator.style.fill = '#ef4444';
+                        }
+                        if (c.type === 'ac_05pk' || c.type === 'ac_1pk') {
+                            el.classList.add('ac-active');
+                            const indicator = el.querySelector('.ac-indicator');
+                            if (indicator) indicator.style.fill = '#22c55e';
+                            const fan = el.querySelector('.ac-fan');
+                            if (fan) fan.style.animation = 'spin 2s linear infinite';
+                        }
+                        if (c.type === 'tv_led') {
+                            el.classList.add('ac-active');
+                            const screen = el.querySelector('.tv-screen');
+                            if (screen) { screen.style.fill = '#1e40af'; screen.style.filter = 'brightness(1.5)'; }
+                            const indicator = el.querySelector('.tv-indicator');
+                            if (indicator) indicator.style.fill = '#22c55e';
+                        }
+                        if (c.type === 'lamp_30w') {
+                            el.classList.add('ac-active');
+                            const glow = el.querySelector('.lamp-glow');
+                            if (glow) { glow.style.fill = '#fbbf24'; glow.style.opacity = '0.6'; glow.style.filter = 'blur(4px)'; }
+                        }
+                        if (c.type === 'computer') {
+                            el.classList.add('ac-active');
+                            const screen = el.querySelector('.pc-screen');
+                            if (screen) { screen.style.fill = '#1e3a5f'; screen.style.filter = 'brightness(1.4)'; }
+                            const power = el.querySelector('.pc-power');
+                            if (power) power.style.opacity = '1';
+                            const indicator = el.querySelector('.pc-indicator');
+                            if (indicator) indicator.style.fill = '#22c55e';
+                        }
+                        if (c.type === 'pump_125' || c.type === 'pump_250') {
+                            el.classList.add('ac-active');
+                            const impeller = el.querySelector('.pump-impeller');
+                            if (impeller) impeller.style.animation = 'spin 0.5s linear infinite';
+                            const indicator = el.querySelector('.pump-indicator');
+                            if (indicator) indicator.style.fill = '#22c55e';
+                        }
+
+                        // Power badge for output components
+                        const isOutputComp = c.type.startsWith('led_') || c.type === 'bulb' || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || c.type === 'iron' || c.type === 'fridge' || c.type === 'blender' || c.type === 'ricecooker' || c.type === 'ac_05pk' || c.type === 'ac_1pk' || c.type === 'tv_led' || c.type === 'lamp_30w' || c.type === 'computer' || c.type === 'pump_125' || c.type === 'pump_250';
+                        if (isOutputComp) {
+                            const pComp = vComp * amps;
+                            let pBadge = el.querySelector('.power-badge');
+                            if (!pBadge) {
+                                pBadge = document.createElement('div');
+                                pBadge.className = 'power-badge';
+                                el.appendChild(pBadge);
+                            }
+                            pBadge.textContent = tmpl?.ratedPower
+                                ? (tmpl.ratedPower >= 1 ? `${tmpl.ratedPower}W` : `${(tmpl.ratedPower * 1000).toFixed(0)}mW`)
+                                : (pComp >= 1 ? `${pComp.toFixed(1)}W` : `${(pComp * 1000).toFixed(0)}mW`);
+                        }
                     });
                 }
             });
         });
 
         renderWires();
+        // Track power for simulation engine
+        simTotalLoadW = 0;
+        simTotalSrcW = 0;
+        const activeBatteryIds = new Set();
+        activeLoops.forEach(l => {
+            simTotalSrcW += l.srcW || 0;
+            simTotalLoadW += l.loadW || 0;
+        });
+        // Find batteries that are in active loops
+        deployed.forEach(c => {
+            if (c.type.startsWith('battery') && c.batteryCapacity) {
+                const hasWire = wires.some(w => w.c1 === c.id || w.c2 === c.id);
+                const el = document.getElementById(c.id);
+                if (hasWire && el && wires.some(w => w.energized && (w.c1 === c.id || w.c2 === c.id))) {
+                    activeBatteryIds.add(c.id);
+                }
+            }
+        });
+        window._activeBatteryIds = activeBatteryIds;
         updateStatusValues(hasLoop, activeLoops);
         saveState();
     }
@@ -748,6 +1127,10 @@ document.addEventListener('DOMContentLoaded', () => {
         el.innerHTML = tmpl.svg;
         el.className = 'board-component';
         el.style.cssText = `width:${tmpl.width}px;height:${tmpl.height}px;left:${comp.x}px;top:${comp.y}px;`;
+        // Re-apply rotation if component was rotated
+        if (comp.rotation) {
+            el.style.transform = `rotate(${comp.rotation}deg)`;
+        }
 
         // Re-create terminals
         comp.terminals = JSON.parse(JSON.stringify(tmpl.terminals));
@@ -758,6 +1141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tEl.style.top = `${term.y - 8}px`;
             tEl.dataset.cid = compId;
             tEl.dataset.tidx = idx;
+            tEl.dataset.label = term.label || '';
             el.appendChild(tEl);
         });
 
@@ -766,6 +1150,33 @@ document.addEventListener('DOMContentLoaded', () => {
         el.style.outlineOffset = '4px';
         setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 600);
 
+        evaluateCircuit();
+    }
+
+    // Rotate a component by 90 degrees
+    function rotateComponent(compId) {
+        const comp = deployed.find(c => c.id === compId);
+        if (!comp) return;
+        const el = document.getElementById(compId);
+        if (!el) return;
+
+        comp.rotation = ((comp.rotation || 0) + 90) % 360;
+        el.style.transform = comp.rotation ? `rotate(${comp.rotation}deg)` : '';
+
+        // Show/hide rotation badge
+        let badge = el.querySelector('.rotation-badge');
+        if (comp.rotation) {
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'rotation-badge';
+                el.appendChild(badge);
+            }
+            badge.textContent = `${comp.rotation}°`;
+        } else if (badge) {
+            badge.remove();
+        }
+
+        renderWires();
         evaluateCircuit();
     }
 
@@ -786,6 +1197,39 @@ document.addEventListener('DOMContentLoaded', () => {
             const nextComp = deployed.find(c => c.id === nCid);
             if (!nextComp || visited.includes(nCid)) return;
 
+            // Ground component: single terminal (pin 0) — jump to all other grounds
+            const nextTmpl = COMPONENTS.find(t => t.id === nextComp.type);
+            if (nextTmpl?.isGround) {
+                const otherGrounds = deployed.filter(c => {
+                    const t = COMPONENTS.find(x => x.id === c.type);
+                    return t?.isGround && c.id !== nCid && !visited.includes(c.id);
+                });
+                otherGrounds.forEach(gnd => {
+                    // From this ground, continue to whatever is connected to the other ground's terminal (pin 0)
+                    const gndConns = wires.map((gw, idx) => ({ ...gw, wireIdx: idx }))
+                        .filter(gw => (gw.c1 === gnd.id && gw.i1 === 0) || (gw.c2 === gnd.id && gw.i2 === 0));
+                    gndConns.forEach(gw => {
+                        const gIsFrom = (gw.c1 === gnd.id && gw.i1 === 0);
+                        const gNCid = gIsFrom ? gw.c2 : gw.c1;
+                        const gNPin = gIsFrom ? gw.i2 : gw.i1;
+                        if (gNCid === targetBatt && gNPin === 1) {
+                            paths.push([...path, { cid: curr.cid, pin: curr.pin, wireIdx: w.wireIdx }, { cid: nCid, pin: nPin }, { cid: gnd.id, pin: 0, wireIdx: gw.wireIdx }]);
+                            return;
+                        }
+                        const gNextComp = deployed.find(c => c.id === gNCid);
+                        if (!gNextComp || visited.includes(gNCid)) return;
+                        const gOutPin = gNPin === 0 ? 1 : 0;
+                        traceCircuit(
+                            { cid: gNCid, pin: gOutPin },
+                            [...visited, nCid, gnd.id, gNCid],
+                            [...path, { cid: curr.cid, pin: curr.pin, wireIdx: w.wireIdx }, { cid: nCid, pin: nPin }, { cid: gnd.id, pin: 0, wireIdx: gw.wireIdx }, { cid: gNCid, pin: gNPin }],
+                            paths, targetBatt
+                        );
+                    });
+                });
+                return; // Ground handled — don't continue normal trace
+            }
+
             const outPin = nPin === 0 ? 1 : 0;
             traceCircuit(
                 { cid: nCid, pin: outPin },
@@ -801,6 +1245,198 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('comp-count').textContent = deployed.length + ' parts';
     }
 
+    // ── Battery Simulation Engine ──
+    function simTick() {
+        // Always show current status
+        const batteries = deployed.filter(c => c.type.startsWith('battery') && c.batteryCapacity);
+        const isDaytime = simMode === 'day';
+        const solarFactor = isDaytime ? 1 : 0;
+        const hour = isDaytime ? 12 : 0;
+        const totalSolarW = isDaytime ? simTotalSrcW : 0;
+        const totalLoadW = simTotalLoadW;
+
+        // Update panel even when paused
+        if (batteries.length > 0) {
+            updateSimPanel(totalSolarW, totalLoadW, batteries, hour, isDaytime, solarFactor);
+        }
+
+        if (simSpeed === 0) return;
+        const deltaMin = simSpeed;
+        simElapsedMin += deltaMin;
+
+        // Net power (negative = draining, positive = charging)
+        const netW = totalSolarW - totalLoadW;
+        const deltaWh = (netW * deltaMin) / 60;
+
+        // Only drain batteries that are in active circuits
+        const activeIds = window._activeBatteryIds || new Set();
+        const activeBatteries = batteries.filter(b => b.batteryLevel > 0 && activeIds.has(b.id));
+        
+        console.log(`[SIM] mode=${simMode} speed=${simSpeed} solar=${totalSolarW}W load=${totalLoadW}W net=${netW}W delta=${deltaWh.toFixed(1)}Wh batteries=${batteries.length} active=${activeBatteries.length} activeIds=${[...activeIds].join(',')}`);
+
+        if (activeBatteries.length > 0) {
+            const perBattery = deltaWh / activeBatteries.length;
+            activeBatteries.forEach(bat => {
+                const before = bat.batteryLevel;
+                bat.batteryLevel = Math.max(0, Math.min(bat.batteryCapacity, bat.batteryLevel + perBattery));
+                console.log(`[SIM] ${bat.id}: ${before.toFixed(0)} → ${bat.batteryLevel.toFixed(0)} Wh (${perBattery.toFixed(1)})`);
+            });
+            saveState(); // Persist drained level immediately
+        }
+
+        // Re-evaluate circuit FIRST (resets styles)
+        evaluateCircuit();
+
+        // Then update battery visuals AFTER evaluateCircuit (so they persist)
+        batteries.forEach(bat => {
+            const el = document.getElementById(bat.id);
+            if (!el) return;
+            const pct = (bat.batteryLevel / bat.batteryCapacity) * 100;
+
+            let bar = el.querySelector('.battery-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.className = 'battery-bar';
+                bar.innerHTML = '<div class="battery-fill"></div><span class="battery-pct"></span>';
+                el.appendChild(bar);
+            }
+            const fill = bar.querySelector('.battery-fill');
+            const pctLabel = bar.querySelector('.battery-pct');
+            fill.style.width = `${pct}%`;
+            fill.style.background = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+            pctLabel.textContent = `${pct.toFixed(0)}%`;
+
+            if (bat.batteryLevel <= 0) {
+                el.classList.add('battery-dead');
+                el.style.opacity = '0.5';
+            } else {
+                el.classList.remove('battery-dead');
+                el.style.opacity = '';
+            }
+        });
+
+        // Update sim panel
+        updateSimPanel(totalSolarW, totalLoadW, batteries, hour, isDaytime, solarFactor);
+    }
+
+    function updateSimPanel(solarW, loadW, batteries, hour, isDaytime, solarFactor) {
+        let panel = document.getElementById('sim-panel');
+        if (!panel) return;
+        const hrs = Math.floor(simElapsedMin / 60);
+        const mins = Math.floor(simElapsedMin % 60);
+        const dayNum = Math.floor(simElapsedMin / 1440) + 1;
+        const clockH = Math.floor(hour);
+        const clockM = Math.floor((hour % 1) * 60);
+        const timeIcon = isDaytime ? '☀️' : '🌙';
+        const netW = solarW - loadW;
+        const netSign = netW >= 0 ? '+' : '';
+        const speedLabel = simSpeed === 0 ? '⏸ PAUSE' : `▶ ${simSpeed}x`;
+        const speedColor = simSpeed === 0 ? '#ef4444' : '#22c55e';
+
+        let battInfo = '';
+        batteries.forEach(b => {
+            const pct = (b.batteryLevel / b.batteryCapacity) * 100;
+            const icon = pct > 50 ? '🟢' : pct > 20 ? '🟡' : pct > 0 ? '🔴' : '💀';
+            battInfo += `<div class="sim-batt">${icon} ${pct.toFixed(0)}% (${b.batteryLevel.toFixed(0)}Wh)</div>`;
+        });
+
+        panel.innerHTML = `
+            <div class="sim-header">${timeIcon} <span style="color:${speedColor}">${speedLabel}</span> | ${hrs}h${mins}m</div>
+            <div class="sim-power">☀️${solarW.toFixed(0)}W 🏠-${loadW.toFixed(0)}W = ${netSign}${netW.toFixed(0)}W</div>
+            ${battInfo}
+        `;
+    }
+
+    function startSim(speed) {
+        simSpeed = speed;
+        if (simInterval) clearInterval(simInterval);
+        if (speed > 0) {
+            simInterval = setInterval(simTick, 1000);
+            simTick(); // Run immediately, don't wait 1s
+        }
+        document.querySelectorAll('.sim-btn[data-speed]').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.querySelector(`.sim-btn[data-speed="${speed}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+        saveSimState();
+    }
+
+    function resetBatteries() {
+        deployed.forEach(c => {
+            if (c.batteryCapacity) {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                c.batteryLevel = c.batteryCapacity;
+                if (tmpl) c.voltage = tmpl.voltage;
+                const el = document.getElementById(c.id);
+                if (el) {
+                    el.classList.remove('battery-dead');
+                    el.style.opacity = '';
+                }
+            }
+        });
+        simElapsedMin = 0;
+        saveSimState();
+        evaluateCircuit();
+    }
+
+    function saveSimState() {
+        try {
+            localStorage.setItem('czelectro_sim', JSON.stringify({
+                simSpeed, simMode, simElapsedMin
+            }));
+        } catch(e) {}
+    }
+
+    function restoreSimState() {
+        try {
+            const raw = localStorage.getItem('czelectro_sim');
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            simMode = s.simMode || 'day';
+            simElapsedMin = s.simElapsedMin || 0;
+            // Restore mode buttons
+            const dayBtn = document.querySelector('.sim-day');
+            const nightBtn = document.querySelector('.sim-night');
+            if (dayBtn) dayBtn.classList.toggle('active', simMode === 'day');
+            if (nightBtn) nightBtn.classList.toggle('active', simMode === 'night');
+            // Restore speed (start paused, user can resume)
+            if (s.simSpeed > 0) {
+                startSim(s.simSpeed);
+            }
+            // Re-evaluate with correct mode and show battery bars
+            setTimeout(() => {
+                evaluateCircuit(); // Apply night mode voltage rules
+                updateBatteryBars(); // Show bars + dead state
+            }, 150);
+        } catch(e) {}
+    }
+
+    function updateBatteryBars() {
+        deployed.forEach(bat => {
+            if (!bat.batteryCapacity) return;
+            const el = document.getElementById(bat.id);
+            if (!el) return;
+            const pct = (bat.batteryLevel / bat.batteryCapacity) * 100;
+
+            let bar = el.querySelector('.battery-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.className = 'battery-bar';
+                bar.innerHTML = '<div class="battery-fill"></div><span class="battery-pct"></span>';
+                el.appendChild(bar);
+            }
+            const fill = bar.querySelector('.battery-fill');
+            const pctLabel = bar.querySelector('.battery-pct');
+            fill.style.width = `${pct}%`;
+            fill.style.background = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+            pctLabel.textContent = `${pct.toFixed(0)}%`;
+
+            if (bat.batteryLevel <= 0) {
+                el.classList.add('battery-dead');
+                el.style.opacity = '0.5';
+            }
+        });
+    }
+
     function updateStatusValues(hasLoop, loops) {
         const dot = document.getElementById('circuit-dot');
         const statusTxt = document.getElementById('circuit-status');
@@ -811,7 +1447,13 @@ document.addEventListener('DOMContentLoaded', () => {
             statusTxt.textContent = loops.length === 1 ? 'Circuit Active' : `${loops.length} Circuits Active`;
             loopsDiv.innerHTML = loops.map((l, idx) => {
                 const label = loops.length > 1 ? `<span style="color:var(--accent);font-weight:700;">#${idx + 1}</span> ` : '';
-                return `<div class="status-item">${label}⚡${l.v.toFixed(1)}V &nbsp;🔌${(l.i * 1000).toFixed(1)}mA &nbsp;Ω${l.r.toFixed(0)}</div>`;
+                const wattStr = l.w >= 1 ? `${l.w.toFixed(1)}W` : `${(l.w * 1000).toFixed(0)}mW`;
+                let realInfo = '';
+                if (l.srcW > 0 && l.loadW > 0) {
+                    const ok = l.srcW >= l.loadW;
+                    realInfo = `<div class="status-item" style="color:${ok ? '#4ade80' : '#f87171'};font-size:10px;">${ok ? '✅' : '⚠️'} Sumber: ${l.srcW}W | Beban: ${l.loadW}W ${ok ? '(Cukup)' : '(Kurang!)'}</div>`;
+                }
+                return `<div class="status-item">${label}⚡${l.v.toFixed(1)}V &nbsp;🔌${(l.i * 1000).toFixed(1)}mA &nbsp;Ω${l.r.toFixed(0)} &nbsp;💡${wattStr}</div>${realInfo}`;
             }).join('');
         } else if (deployed.length) {
             dot.className = 'status-dot warn';
@@ -894,9 +1536,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const bComp = e.target.closest('.board-component');
         if (bComp && e.button === 0) {
             dragEl = bComp;
-            const r = dragEl.getBoundingClientRect();
-            dragOX = (e.clientX - r.left) / zoom;
-            dragOY = (e.clientY - r.top) / zoom;
+            // Use workspace coordinates for offset — immune to CSS rotation
+            const comp = deployed.find(c => c.id === bComp.id);
+            const wPos = clientToWorkspace(e.clientX, e.clientY);
+            dragOX = comp ? wPos.x - comp.x : 0;
+            dragOY = comp ? wPos.y - comp.y : 0;
             dragStartX = e.clientX;
             dragStartY = e.clientY;
             dragMoved = false;
@@ -1149,7 +1793,13 @@ document.addEventListener('DOMContentLoaded', () => {
             menuItems += `<div class="ctx-item" data-action="reset">🔄 Reset / Perbaiki</div>`;
         }
 
+        if (!isMulti && comp?.batteryCapacity) {
+            const pct = ((comp.batteryLevel / comp.batteryCapacity) * 100).toFixed(0);
+            menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Baterai (${pct}% → 100%)</div>`;
+        }
+
         menuItems += `<div class="ctx-item" data-action="duplicate">📋 Duplikat${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
+        menuItems += `<div class="ctx-item" data-action="rotate">🔄 Putar 90° (R)${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
         menuItems += `<div class="ctx-item" data-action="copytext">📝 Salin Teks Rangkaian</div>`;
         menuItems += `<div class="ctx-sep"></div>`;
         menuItems += `<div class="ctx-item danger" data-action="delete">🗑 Hapus${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
@@ -1202,6 +1852,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else if (action === 'reset' && comp) {
                 resetComponent(comp.id);
+            } else if (action === 'resetbatt' && comp) {
+                comp.batteryLevel = comp.batteryCapacity;
+                const tmpl = COMPONENTS.find(t => t.id === comp.type);
+                if (tmpl) comp.voltage = tmpl.voltage;
+                const el = document.getElementById(comp.id);
+                if (el) {
+                    el.classList.remove('battery-dead');
+                    el.style.opacity = '';
+                    const bar = el.querySelector('.battery-bar');
+                    if (bar) {
+                        bar.querySelector('.battery-fill').style.width = '100%';
+                        bar.querySelector('.battery-fill').style.background = '#22c55e';
+                        bar.querySelector('.battery-pct').textContent = '100%';
+                    }
+                }
+                evaluateCircuit();
+            } else if (action === 'rotate') {
+                selectedIds.forEach(cid => rotateComponent(cid));
             }
             menu.remove();
         });
@@ -1233,6 +1901,17 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             duplicateSelected();
         }
+        // R = Rotate selected components 90°
+        if (e.key === 'r' || e.key === 'R') {
+            if (selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                selectedIds.forEach(cid => rotateComponent(cid));
+            }
+        }
+        // M = Toggle mute
+        if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            document.getElementById('btn-mute').click();
+        }
     });
 
     // ── Shared duplicate function (used by Ctrl+D and context menu) ──
@@ -1260,9 +1939,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: newId, type: comp.type, voltage: tmpl.voltage,
                 baseResistance: tmpl.resistance, currentResistance: tmpl.resistance,
                 maxCurrent: tmpl.maxCurrent || null, glowGradient: tmpl.glowGradient || null,
-                isClosed: false, isBroken: false, x: nx, y: ny,
+                isClosed: false, isBroken: false, rotation: comp.rotation || 0, x: nx, y: ny,
                 terminals: JSON.parse(JSON.stringify(tmpl.terminals))
             };
+            // Apply rotation CSS if source was rotated
+            if (newComp.rotation) {
+                el.style.transform = `rotate(${newComp.rotation}deg)`;
+                const badge = document.createElement('div');
+                badge.className = 'rotation-badge';
+                badge.textContent = `${newComp.rotation}°`;
+                el.appendChild(badge);
+            }
             newComp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
                 tEl.className = 'terminal';
@@ -1270,6 +1957,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tEl.style.top = `${term.y - 8}px`;
                 tEl.dataset.cid = newId;
                 tEl.dataset.tidx = idx;
+                tEl.dataset.label = term.label || '';
                 el.appendChild(tEl);
             });
             ws.appendChild(el);
@@ -1307,7 +1995,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 deployed: deployed.map(c => ({
                     id: c.id, type: c.type, x: c.x, y: c.y,
                     isBroken: c.isBroken, isClosed: c.isClosed,
-                    currentResistance: c.currentResistance
+                    currentResistance: c.currentResistance,
+                    rotation: c.rotation || 0,
+                    batteryLevel: c.batteryLevel,
+                    batteryCapacity: c.batteryCapacity
                 })),
                 wires: wires.map(w => ({
                     c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
@@ -1350,6 +2041,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     glowGradient: tmpl.glowGradient || null,
                     isClosed: saved.isClosed || false,
                     isBroken: saved.isBroken || false,
+                    rotation: saved.rotation || 0,
                     x: saved.x, y: saved.y,
                     terminals: JSON.parse(JSON.stringify(tmpl.terminals))
                 };
@@ -1362,6 +2054,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tEl.style.top = `${term.y - 8}px`;
                     tEl.dataset.cid = saved.id;
                     tEl.dataset.tidx = idx;
+                    tEl.dataset.label = term.label || '';
                     el.appendChild(tEl);
                 });
 
@@ -1373,6 +2066,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (comp.isClosed && comp.type === 'switch_toggle') {
                     el.classList.add('switch-closed');
+                }
+                // Restore rotation
+                if (comp.rotation) {
+                    el.style.transform = `rotate(${comp.rotation}deg)`;
+                    const badge = document.createElement('div');
+                    badge.className = 'rotation-badge';
+                    badge.textContent = `${comp.rotation}°`;
+                    el.appendChild(badge);
                 }
 
                 ws.appendChild(el);
@@ -1403,9 +2104,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hook auto-save into evaluateCircuit
     // saveState() is called at the end of evaluateCircuit and after wire/component changes
 
+    // ── Simulation Event Listeners ──
+    document.addEventListener('sim-speed', (e) => startSim(e.detail));
+    document.addEventListener('sim-reset', () => resetBatteries());
+    document.addEventListener('sim-mode', (e) => {
+        simMode = e.detail;
+        document.querySelector('.sim-day').classList.toggle('active', simMode === 'day');
+        document.querySelector('.sim-night').classList.toggle('active', simMode === 'night');
+        saveSimState();
+        evaluateCircuit(); // Re-evaluate immediately
+    });
+
     // ── Init ──
     document.getElementById('btn-grid').classList.add('active');
     restoreState();
+    restoreSimState();
     drawGrid();
     window.addEventListener('resize', drawGrid);
     applyTransform();

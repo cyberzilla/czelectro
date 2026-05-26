@@ -116,6 +116,10 @@
             <button class="tb-btn" id="btn-fit" title="Fit View">⊞</button>
             <button class="tb-btn" id="btn-grid" title="Toggle Grid">▦</button>
             <div class="tb-sep"></div>
+            <button class="tb-btn" id="btn-rotate" title="Putar 90° (R)">🔄</button>
+            <div class="tb-sep"></div>
+            <button class="tb-btn" id="btn-mute" title="Mute/Unmute Suara (M)">🔊</button>
+            <div class="tb-sep"></div>
             <button class="tb-btn" id="btn-clear" title="Hapus Semua">🗑</button>
         </div>
 
@@ -140,6 +144,18 @@
                 <span>🧩</span>
                 <span id="comp-count">0 parts</span>
             </div>
+            <div class="sim-controls">
+                <span class="sim-label">🔋 Simulasi:</span>
+                <button class="sim-btn active" data-speed="0" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:0}))">⏸</button>
+                <button class="sim-btn" data-speed="1" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:1}))">1x</button>
+                <button class="sim-btn" data-speed="10" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:10}))">10x</button>
+                <button class="sim-btn" data-speed="60" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:60}))">60x</button>
+                <button class="sim-btn sim-reset" onclick="document.dispatchEvent(new CustomEvent('sim-reset'))">🔄</button>
+                <span class="sim-divider">|</span>
+                <button class="sim-btn sim-day active" data-mode="day" onclick="document.dispatchEvent(new CustomEvent('sim-mode',{detail:'day'}))">☀️ Siang</button>
+                <button class="sim-btn sim-night" data-mode="night" onclick="document.dispatchEvent(new CustomEvent('sim-mode',{detail:'night'}))">🌙 Malam</button>
+            </div>
+            <div id="sim-panel" class="sim-panel"></div>
         </div>
     </main>
 
