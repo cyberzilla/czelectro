@@ -14,9 +14,9 @@ const COMPONENTS = [
         ratedPower: 4.5,  // 9V battery ~4.5W capacity
         width: 70, height: 110,
         svg: `<svg width="100%" height="100%" viewBox="0 0 70 110">
-            <rect x="5" y="15" width="60" height="90" rx="8" fill="url(#battBody)" stroke="#000" stroke-width="2"/>
-            <rect x="5" y="40" width="60" height="40" fill="#fbbf24"/>
-            <text x="35" y="65" fill="#000" font-weight="900" font-size="18" text-anchor="middle" font-family="sans-serif">9V</text>
+            <rect x="5" y="15" width="60" height="90" rx="8" fill="#1a1a2e" stroke="#333" stroke-width="2"/>
+            <rect class="batt-fill" x="7" y="17" width="56" height="86" rx="6" fill="#22c55e" opacity="0.85"/>
+            <text x="35" y="65" fill="#fff" font-weight="900" font-size="18" text-anchor="middle" font-family="sans-serif" style="text-shadow:0 1px 3px rgba(0,0,0,0.8)">9V</text>
             <rect x="15" y="2" width="12" height="13" rx="2" fill="url(#battTop)" stroke="#333"/>
             <rect x="40" y="2" width="18" height="13" rx="2" fill="url(#battTop)" stroke="#333"/>
         </svg>`,
@@ -35,9 +35,9 @@ const COMPONENTS = [
         capacityWh: 7.5,
         width: 80, height: 50,
         svg: `<svg width="100%" height="100%" viewBox="0 0 80 50">
-            <rect x="5" y="10" width="70" height="30" rx="6" fill="#374151" stroke="#000" stroke-width="1.5"/>
-            <rect x="5" y="18" width="70" height="14" fill="#16a34a"/>
-            <text x="40" y="30" fill="#fff" font-weight="800" font-size="12" text-anchor="middle" font-family="sans-serif">3V</text>
+            <rect x="5" y="10" width="70" height="30" rx="6" fill="#1a1a2e" stroke="#333" stroke-width="1.5"/>
+            <rect class="batt-fill" x="7" y="12" width="66" height="26" rx="4" fill="#22c55e" opacity="0.85"/>
+            <text x="40" y="30" fill="#fff" font-weight="800" font-size="12" text-anchor="middle" font-family="sans-serif" style="text-shadow:0 1px 3px rgba(0,0,0,0.8)">3V</text>
             <rect x="0" y="18" width="5" height="14" rx="1" fill="url(#battTop)" stroke="#333"/>
             <rect x="75" y="16" width="5" height="18" rx="1" fill="url(#battTop)" stroke="#333"/>
         </svg>`,
@@ -56,9 +56,9 @@ const COMPONENTS = [
         capacityWh: 3.75,
         width: 60, height: 40,
         svg: `<svg width="100%" height="100%" viewBox="0 0 60 40">
-            <rect x="5" y="8" width="50" height="24" rx="5" fill="#374151" stroke="#000" stroke-width="1.5"/>
-            <rect x="5" y="14" width="50" height="12" fill="#ca8a04"/>
-            <text x="30" y="24" fill="#fff" font-weight="800" font-size="10" text-anchor="middle" font-family="sans-serif">1.5V</text>
+            <rect x="5" y="8" width="50" height="24" rx="5" fill="#1a1a2e" stroke="#333" stroke-width="1.5"/>
+            <rect class="batt-fill" x="7" y="10" width="46" height="20" rx="3" fill="#22c55e" opacity="0.85"/>
+            <text x="30" y="24" fill="#fff" font-weight="800" font-size="10" text-anchor="middle" font-family="sans-serif" style="text-shadow:0 1px 3px rgba(0,0,0,0.8)">1.5V</text>
             <rect x="0" y="14" width="5" height="12" rx="1" fill="url(#battTop)" stroke="#333"/>
             <rect x="55" y="12" width="5" height="16" rx="1" fill="url(#battTop)" stroke="#333"/>
         </svg>`,
@@ -136,12 +136,12 @@ const COMPONENTS = [
     {
         id: 'led_yellow',
         name: 'LED Kuning',
-        spec: 'Max 20mA, 2V drop',
+        spec: '2V, 20mA max',
         category: 'output',
         voltage: 0,
-        resistance: 20,
-        maxCurrent: 0.02,
-        voltageDrop: 2,
+        resistance: 100,
+        maxCurrent: 0.025,
+        ratedPower: 0.04,
         width: 50, height: 80,
         glowGradient: 'ledGlowGrad',
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -158,12 +158,12 @@ const COMPONENTS = [
     {
         id: 'led_red',
         name: 'LED Merah',
-        spec: 'Max 20mA, 1.8V drop',
+        spec: '1.8V, 20mA max',
         category: 'output',
         voltage: 0,
-        resistance: 18,
-        maxCurrent: 0.02,
-        voltageDrop: 1.8,
+        resistance: 90,
+        maxCurrent: 0.025,
+        ratedPower: 0.036,
         width: 50, height: 80,
         glowGradient: 'ledGlowRed',
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -180,12 +180,12 @@ const COMPONENTS = [
     {
         id: 'led_green',
         name: 'LED Hijau',
-        spec: 'Max 20mA, 2.1V drop',
+        spec: '2.1V, 20mA max',
         category: 'output',
         voltage: 0,
-        resistance: 21,
-        maxCurrent: 0.02,
-        voltageDrop: 2.1,
+        resistance: 105,
+        maxCurrent: 0.025,
+        ratedPower: 0.042,
         width: 50, height: 80,
         glowGradient: 'ledGlowGreen',
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -202,11 +202,11 @@ const COMPONENTS = [
     {
         id: 'bulb',
         name: 'Bohlam',
-        spec: '6V 0.5W, 60mA max',
+        spec: '6V 0.5W, 100mA max',
         category: 'output',
         voltage: 0,
-        resistance: 100,
-        maxCurrent: 0.06,
+        resistance: 72,
+        maxCurrent: 0.1,
         ratedPower: 0.5,  // 6V 0.5W
         width: 60, height: 90,
         glowGradient: 'bulbGlowGrad',
@@ -228,12 +228,12 @@ const COMPONENTS = [
     {
         id: 'motor_dc',
         name: 'Motor DC',
-        spec: '3-9V, 100mA max',
+        spec: '3-9V, 200mA max',
         category: 'output',
         voltage: 0,
         resistance: 50,
-        maxCurrent: 0.1,
-        ratedPower: 0.9,  // 3-9V ~0.9W
+        maxCurrent: 0.2,
+        ratedPower: 0.9,
         ratedVoltage: 3,
         width: 70, height: 70,
         svg: `<svg width="100%" height="100%" viewBox="0 0 70 70">
@@ -258,11 +258,11 @@ const COMPONENTS = [
     {
         id: 'buzzer',
         name: 'Buzzer',
-        spec: '3-12V Piezo',
+        spec: '3-12V Piezo, 30mA max',
         category: 'output',
         voltage: 0,
-        resistance: 40,
-        maxCurrent: 0.03,
+        resistance: 400,
+        maxCurrent: 0.035,
         ratedPower: 0.1,  // ~100mW
         width: 60, height: 65,
         svg: `<svg width="100%" height="100%" viewBox="0 0 60 65">
@@ -412,9 +412,9 @@ const COMPONENTS = [
         capacityWh: 1.2,
         width: 50, height: 80,
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
-            <rect x="10" y="8" width="30" height="64" rx="5" fill="#374151" stroke="#000" stroke-width="1.5"/>
-            <rect x="10" y="20" width="30" height="40" fill="#1e40af"/>
-            <text x="25" y="44" fill="#fff" font-weight="900" font-size="11" text-anchor="middle" font-family="sans-serif">12V</text>
+            <rect x="10" y="8" width="30" height="64" rx="5" fill="#1a1a2e" stroke="#333" stroke-width="1.5"/>
+            <rect class="batt-fill" x="12" y="10" width="26" height="60" rx="3" fill="#22c55e" opacity="0.85"/>
+            <text x="25" y="44" fill="#fff" font-weight="900" font-size="11" text-anchor="middle" font-family="sans-serif" style="text-shadow:0 1px 3px rgba(0,0,0,0.8)">12V</text>
             <rect x="18" y="2" width="14" height="8" rx="2" fill="url(#battTop)" stroke="#333"/>
             <rect x="15" y="72" width="20" height="4" rx="1" fill="#555"/>
         </svg>`,
@@ -426,12 +426,12 @@ const COMPONENTS = [
     {
         id: 'led_blue',
         name: 'LED Biru',
-        spec: '3.2V, 20mA',
+        spec: '3.2V, 20mA max',
         category: 'output',
         voltage: 0,
-        resistance: 20,
-        maxCurrent: 0.02,
-        voltageDrop: 3.2,
+        resistance: 160,
+        maxCurrent: 0.025,
+        ratedPower: 0.064,
         glowGradient: 'ledGlowBlue',
         width: 50, height: 80,
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -448,12 +448,12 @@ const COMPONENTS = [
     {
         id: 'led_white',
         name: 'LED Putih',
-        spec: '3.3V, 20mA',
+        spec: '3.3V, 20mA max',
         category: 'output',
         voltage: 0,
-        resistance: 20,
-        maxCurrent: 0.02,
-        voltageDrop: 3.3,
+        resistance: 165,
+        maxCurrent: 0.025,
+        ratedPower: 0.066,
         glowGradient: 'ledGlowWhite',
         width: 50, height: 80,
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -470,12 +470,12 @@ const COMPONENTS = [
     {
         id: 'led_rgb',
         name: 'LED RGB',
-        spec: '3V, 20mA, Warna-warni',
+        spec: '3V, 20mA max, Warna-warni',
         category: 'output',
         voltage: 0,
-        resistance: 20,
-        maxCurrent: 0.02,
-        voltageDrop: 3,
+        resistance: 150,
+        maxCurrent: 0.025,
+        ratedPower: 0.06,
         glowGradient: 'ledGlowRGB',
         width: 50, height: 80,
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -804,7 +804,7 @@ const COMPONENTS = [
             <text x="8" y="15" fill="#4ade80" font-size="6" font-weight="900" font-family="monospace">3.2V</text>
             <text x="5" y="28" fill="#86efac" font-size="5" font-weight="700" font-family="sans-serif">15Ah</text>
             <rect x="8" y="32" width="14" height="3" rx="1" fill="#111827"/>
-            <rect x="9" y="33" width="10" height="1.5" rx="0.5" fill="#4ade80" opacity="0.6"/>
+            <rect class="batt-fill" x="9" y="33" width="12" height="1.5" rx="0.5" fill="#4ade80" opacity="0.8"/>
             <text x="4" y="43" fill="#a7f3d0" font-size="3.5" font-weight="700" font-family="sans-serif">32140</text>
             <text x="3" y="50" fill="#6ee7b7" font-size="3" font-weight="600" font-family="sans-serif">LiFePO4</text>
         </svg>`,
@@ -830,7 +830,7 @@ const COMPONENTS = [
             <rect x="6" y="10" width="28" height="20" rx="2" fill="#0f172a" stroke="#1e293b"/>
             <text x="9" y="23" fill="#3b82f6" font-size="8" font-weight="900" font-family="monospace">3.2V</text>
             <rect x="8" y="34" width="24" height="5" rx="1.5" fill="#111827" stroke="#1e293b"/>
-            <rect x="9" y="35" width="18" height="3" rx="1" fill="#22c55e" opacity="0.6"/>
+            <rect class="batt-fill" x="9" y="35" width="22" height="3" rx="1" fill="#22c55e" opacity="0.8"/>
             <circle cx="12" cy="45" r="2" fill="#22c55e" opacity="0.6"/>
             <circle cx="20" cy="45" r="2" fill="#3b82f6" opacity="0.4"/>
             <circle cx="28" cy="45" r="2" fill="#6b7280" opacity="0.3"/>
@@ -862,8 +862,8 @@ const COMPONENTS = [
             <text x="16" y="30" fill="#22c55e" font-size="10" font-weight="900" font-family="monospace">48V</text>
             <text x="50" y="30" fill="#4ade80" font-size="8" font-weight="700" font-family="monospace">100Ah</text>
             <rect x="12" y="46" width="66" height="6" rx="2" fill="#111827" stroke="#1e293b"/>
-            <rect x="13" y="47" width="52" height="4" rx="1.5" fill="url(#battBody)"/>
-            <text x="68" y="51" fill="#4ade80" font-size="5" font-weight="800" font-family="sans-serif">80%</text>
+            <rect class="batt-fill" x="13" y="47" width="64" height="4" rx="1.5" fill="#22c55e" opacity="0.8"/>
+            <text class="batt-pct" x="68" y="51" fill="#4ade80" font-size="5" font-weight="800" font-family="sans-serif">100%</text>
             <circle cx="18" cy="60" r="3" fill="#22c55e" opacity="0.7"/>
             <circle cx="28" cy="60" r="3" fill="#22c55e" opacity="0.5"/>
             <circle cx="38" cy="60" r="3" fill="#3b82f6" opacity="0.5"/>
@@ -893,8 +893,8 @@ const COMPONENTS = [
             <text x="14" y="32" fill="#3b82f6" font-size="11" font-weight="900" font-family="monospace">48V</text>
             <text x="50" y="32" fill="#60a5fa" font-size="9" font-weight="700" font-family="monospace">200Ah</text>
             <rect x="10" y="50" width="80" height="8" rx="3" fill="#111827" stroke="#1e293b"/>
-            <rect x="11" y="51" width="68" height="6" rx="2" fill="#22c55e" opacity="0.7"/>
-            <text x="82" y="57" fill="#22c55e" font-size="5" font-weight="800" font-family="sans-serif">85%</text>
+            <rect class="batt-fill" x="11" y="51" width="78" height="6" rx="2" fill="#22c55e" opacity="0.8"/>
+            <text class="batt-pct" x="82" y="57" fill="#22c55e" font-size="5" font-weight="800" font-family="sans-serif">100%</text>
             <circle cx="16" cy="68" r="3.5" fill="#22c55e" opacity="0.7"/>
             <circle cx="26" cy="68" r="3.5" fill="#22c55e" opacity="0.6"/>
             <circle cx="36" cy="68" r="3.5" fill="#3b82f6" opacity="0.5"/>

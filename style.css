@@ -1028,7 +1028,7 @@ body {
 /* ── Power Badge ── */
 .power-badge {
     position: absolute;
-    bottom: -18px;
+    bottom: -16px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 8px;
@@ -1042,6 +1042,29 @@ body {
     background: rgba(0, 0, 0, 0.8);
     border: 1px solid rgba(34, 211, 238, 0.3);
     z-index: 20;
+}
+
+/* ── Motor Direction Badge ── */
+.motor-dir-badge {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 7px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-weight: 800;
+    color: #a78bfa;
+    white-space: nowrap;
+    pointer-events: none;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    z-index: 20;
+}
+.motor-dir-badge.reversed {
+    color: #fb923c;
+    border-color: rgba(251, 146, 44, 0.3);
 }
 
 /* ── AC Appliance States ── */
@@ -1213,6 +1236,19 @@ body {
     margin-left: 4px;
     white-space: nowrap;
     overflow-x: auto;
+}
+.sim-panel-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sim-clock-wrap {
+    flex-shrink: 0;
+}
+.sim-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 .sim-header {
     color: #60a5fa;

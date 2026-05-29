@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let simSpeed = 0;  // 0=paused, 1=1x, 10=10x, 60=60x
     let simInterval = null;
     let simElapsedMin = 0; // simulated minutes elapsed
-    let simMode = 'day'; // 'day' or 'night' — user toggleable
+    // simMode removed — simulation uses automatic 24h solar cycle based on simElapsedMin
     let simTotalLoadW = 0; // tracked from evaluateCircuit
     let simTotalSrcW = 0;  // tracked from evaluateCircuit
 
@@ -596,19 +596,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset motor spin and direction badge
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
-            const dirBadge = el.querySelector('.motor-dir-badge');
-            if (dirBadge) dirBadge.remove();
+            el.querySelectorAll('.motor-dir-badge').forEach(b => b.remove());
             // Reset speaker cone
             const cones = el.querySelectorAll('.speaker-cone');
             cones.forEach(cone => cone.style.animation = 'none');
             // Reset SCC state
             el.classList.remove('scc-active', 'scc-protecting', 'ac-active', 'ac-no-inverter');
-            const sccStatus = el.querySelector('.scc-status');
-            if (sccStatus) sccStatus.remove();
-            const noAcBadge = el.querySelector('.no-ac-badge');
-            if (noAcBadge) noAcBadge.remove();
-            const powerBadge = el.querySelector('.power-badge');
-            if (powerBadge) powerBadge.remove();
+            el.querySelectorAll('.scc-status').forEach(s => s.remove());
+            el.querySelectorAll('.no-ac-badge').forEach(b => b.remove());
+            el.querySelectorAll('.power-badge').forEach(b => b.remove());
             // Reset AC appliance indicators
             const ironPlate = el.querySelector('.iron-plate');
             if (ironPlate) ironPlate.style.fill = '';
@@ -640,8 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pcInd) pcInd.style.fill = '';
             const sdInd = el.querySelector('.sd-indicator');
             if (sdInd) sdInd.style.fill = '';
-            const sdStatus = el.querySelector('.sd-status');
-            if (sdStatus) sdStatus.remove();
+            el.querySelectorAll('.sd-status').forEach(b => b.remove());
             const pumpImp = el.querySelector('.pump-impeller');
             if (pumpImp) pumpImp.style.animation = 'none';
             const pumpInd = el.querySelector('.pump-indicator');
@@ -685,24 +680,61 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
+                // Identify parallel sources: entered at pin 0 (+) means opposing EMF
+                const parallelSourceIds = new Set();
                 compsInLoop.forEach(c => {
+                    if (isSource(c) && c.id !== batt.id && compEntryPin[c.id] === 0) {
+                        parallelSourceIds.add(c.id);
+                    }
+                });
+
+                compsInLoop.forEach(c => {
+                    if (parallelSourceIds.has(c.id)) return; // Skip parallel sources' resistance
                     rTotal += c.currentResistance;
                     if (c.type === 'switch_toggle' && !c.isClosed) open = true;
                 });
 
+                // Parallel batteries: use parallel resistance formula (R_eq = 1/(1/R1 + 1/R2 + ...))
+                if (parallelSourceIds.size > 0) {
+                    const allParR = [batt.currentResistance];
+                    parallelSourceIds.forEach(id => {
+                        const psrc = deployed.find(x => x.id === id);
+                        if (psrc) allParR.push(psrc.currentResistance);
+                    });
+                    const equivR = 1 / allParR.reduce((s, r) => s + 1 / r, 0);
+                    rTotal = rTotal - batt.currentResistance + equivR;
+                }
+
                 if (open || rTotal === Infinity || rTotal <= 0) return;
 
-                // Sum voltages of ALL sources in this loop (series batteries/solar panels!)
+                // Sum voltages based on entry pin direction (series vs parallel detection)
+                // Pin 1 (−) entry = series (same EMF direction) → ADD voltage
+                // Pin 0 (+) entry = parallel (opposing EMF) → SUBTRACT voltage
                 let loopVoltage = 0;
                 compsInLoop.forEach(c => {
                     if (isSource(c)) {
-                        // Dead batteries contribute 0V
-                        if (c.batteryCapacity && c.batteryLevel <= 0) return;
-                        // Solar panels contribute 0V at night
-                        if (c.type.startsWith('solar_') && simMode === 'night') return;
-                        loopVoltage += c.voltage;
+                        let effectiveV = c.voltage;
+                        // Dead batteries contribute 0V (DoD limit for rechargeable)
+                        if (c.batteryCapacity) {
+                            const isRechargeable = c.type.includes('lifepo4') || c.type.includes('plts') || c.type === 'battery_32140';
+                            const minLevel = isRechargeable ? c.batteryCapacity * 0.10 : 0;
+                            if (c.batteryLevel <= minLevel) effectiveV = 0;
+                        }
+                        // Solar panels: 0V outside daylight hours (6-18)
+                        if (c.type.startsWith('solar_')) {
+                            const hod = (simElapsedMin / 60) % 24;
+                            if (hod < 6 || hod >= 18) effectiveV = 0;
+                        }
+                        // Parallel source: subtract (opposing EMF, e.g. parallel batteries → net 0V)
+                        if (parallelSourceIds.has(c.id)) {
+                            loopVoltage -= effectiveV;
+                        } else {
+                            loopVoltage += effectiveV;
+                        }
                     }
                 });
+
+                if (loopVoltage <= 0) return; // No net voltage = no current, skip loop
 
                 hasLoop = true;
                 let amps = loopVoltage / rTotal;
@@ -776,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             let badge = sdEl.querySelector('.sd-status');
                             if (!badge) {
                                 badge = document.createElement('div');
-                                badge.className = 'scc-status';
+                                badge.className = 'sd-status scc-status';
                                 sdEl.appendChild(badge);
                             }
                             badge.textContent = `⚡ ${(amps*1000).toFixed(0)}mA`;
@@ -790,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             let badge = sdEl.querySelector('.sd-status');
                             if (!badge) {
                                 badge = document.createElement('div');
-                                badge.className = 'scc-status';
+                                badge.className = 'sd-status scc-status';
                                 sdEl.appendChild(badge);
                             }
                             badge.textContent = `✓ ${(amps*1000).toFixed(0)}mA`;
@@ -809,10 +841,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 compsInLoop.forEach(c => {
                     const t = COMPONENTS.find(x => x.id === c.type);
                     if (!t) return;
-                    if (isSource(c) && t.ratedPower) srcPower += t.ratedPower;
+                    // Only count non-battery sources (solar/generator) as power generation
+                    // Batteries are energy storage, not generators for the energy balance
+                    if (isSource(c) && t.ratedPower && !c.type.startsWith('battery')) srcPower += t.ratedPower;
                     else if (t.ratedPower && !isSource(c) && c.type !== 'charge_controller' && c.type !== 'inverter' && c.type !== 'inverter_3k' && c.type !== 'inverter_5k' && c.type !== 'switch_toggle') loadPower += t.ratedPower;
                 });
-                activeLoops.push({ key: loopKey, v: loopVoltage, r: rTotal, i: amps, w: watts, srcW: srcPower, loadW: loadPower });
+                const battIds = compsInLoop.filter(c => c.type.startsWith('battery') && c.batteryCapacity).map(c => c.id);
+                const hasCC = compsInLoop.some(c => c.type === 'charge_controller');
+                const hasInverter = compsInLoop.some(c => c.type.startsWith('inverter'));
+                activeLoops.push({ key: loopKey, v: loopVoltage, r: rTotal, i: amps, w: watts, srcW: srcPower, loadW: loadPower, battIds, hasCC, hasInverter });
 
                 console.log(`[CZElectro] Loop ${activeLoops.length}: V=${loopVoltage}V, R=${rTotal.toFixed(1)}Ω, I=${(amps*1000).toFixed(1)}mA, components:`, compsInLoop.map(c => `${c.type}(${c.currentResistance}Ω)`).join(' → '));
 
@@ -852,8 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         else SFX.burn();
                     }
                 });
-                // Check if loop has an inverter (needed for AC appliances)
-                const hasInverter = compsInLoop.some(c => c.type === 'inverter' || c.type === 'inverter_3k' || c.type === 'inverter_5k');
+                // Check if loop has an inverter (needed for AC appliances) — hasInverter declared above
 
                 // PASS 2: Activate outputs using per-component voltage division
                 if (!loopBroken) {
@@ -1092,7 +1128,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         window._activeBatteryIds = activeBatteryIds;
+
+        // ── Expand loop battIds to include parallel batteries ──
+        // Union-Find on wire connectivity: batteries connected via wires
+        // share the same electrical node and should drain equally
+        const ufParent = {};
+        deployed.forEach(c => ufParent[c.id] = c.id);
+        function ufFind(x) { return ufParent[x] === x ? x : (ufParent[x] = ufFind(ufParent[x])); }
+        function ufUnion(a, b) { ufParent[ufFind(a)] = ufFind(b); }
+        wires.forEach(w => ufUnion(w.c1, w.c2));
+
+        const allBatteries = deployed.filter(c => c.type.startsWith('battery') && c.batteryCapacity);
+        activeLoops.forEach(loop => {
+            if (!loop.battIds || loop.battIds.length === 0) return;
+            const expanded = new Set(loop.battIds);
+            loop.battIds.forEach(loopBatId => {
+                allBatteries.forEach(b => {
+                    if (ufFind(loopBatId) === ufFind(b.id)) expanded.add(b.id);
+                });
+            });
+            loop.battIds = [...expanded];
+        });
+
+        window._activeLoops = activeLoops; // Per-loop drain info for simTick
         updateStatusValues(hasLoop, activeLoops);
+        updateBatteryBars(); // Always show battery progress on all battery components
         saveState();
     }
 
@@ -1245,14 +1305,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('comp-count').textContent = deployed.length + ' parts';
     }
 
+    // ── Solar Irradiance Curve ──
+    // Sinusoidal model: sunrise 6:00, peak noon, sunset 18:00
+    function getSolarFactor(hourOfDay) {
+        if (hourOfDay < 6 || hourOfDay >= 18) return 0;
+        return Math.sin(Math.PI * (hourOfDay - 6) / 12);
+    }
+
     // ── Battery Simulation Engine ──
     function simTick() {
         // Always show current status
         const batteries = deployed.filter(c => c.type.startsWith('battery') && c.batteryCapacity);
-        const isDaytime = simMode === 'day';
-        const solarFactor = isDaytime ? 1 : 0;
-        const hour = isDaytime ? 12 : 0;
-        const totalSolarW = isDaytime ? simTotalSrcW : 0;
+        // Time-based solar curve (automatic 24h cycle)
+        const hourOfDay = (simElapsedMin / 60) % 24;
+        const solarFactor = getSolarFactor(hourOfDay);
+        const isDaytime = solarFactor > 0;
+        const hour = hourOfDay;
+        const totalSolarW = simTotalSrcW * solarFactor;
         const totalLoadW = simTotalLoadW;
 
         // Update panel even when paused
@@ -1261,88 +1330,182 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (simSpeed === 0) return;
+
+        // Detect no-power state (all batteries depleted + no solar)
+        const allBattsDead = batteries.length > 0 && batteries.every(b => {
+            const isRch = b.type.includes('lifepo4') || b.type.includes('plts') || b.type === 'battery_32140';
+            const minLevel = isRch ? b.batteryCapacity * 0.10 : 0;
+            return b.batteryLevel <= minLevel;
+        });
+        const noPower = allBattsDead && !isDaytime;
+
         const deltaMin = simSpeed;
         simElapsedMin += deltaMin;
 
-        // Net power (negative = draining, positive = charging)
-        const netW = totalSolarW - totalLoadW;
-        const deltaWh = (netW * deltaMin) / 60;
-
-        // Only drain batteries that are in active circuits
-        const activeIds = window._activeBatteryIds || new Set();
-        const activeBatteries = batteries.filter(b => b.batteryLevel > 0 && activeIds.has(b.id));
-        
-        console.log(`[SIM] mode=${simMode} speed=${simSpeed} solar=${totalSolarW}W load=${totalLoadW}W net=${netW}W delta=${deltaWh.toFixed(1)}Wh batteries=${batteries.length} active=${activeBatteries.length} activeIds=${[...activeIds].join(',')}`);
-
-        if (activeBatteries.length > 0) {
-            const perBattery = deltaWh / activeBatteries.length;
-            activeBatteries.forEach(bat => {
-                const before = bat.batteryLevel;
-                bat.batteryLevel = Math.max(0, Math.min(bat.batteryCapacity, bat.batteryLevel + perBattery));
-                console.log(`[SIM] ${bat.id}: ${before.toFixed(0)} → ${bat.batteryLevel.toFixed(0)} Wh (${perBattery.toFixed(1)})`);
+        // Per-loop battery drain (each circuit drains its own batteries)
+        const loopsDrain = window._activeLoops || [];
+        let anyDrained = false;
+        loopsDrain.forEach(loop => {
+            if (!loop.battIds || loop.battIds.length === 0) return;
+            // Apply solar curve to source power
+            let adjSrcW = (loop.srcW || 0) * solarFactor;
+            let adjLoadW = loop.loadW || 0;
+            // Efficiency losses (real-world component losses)
+            if (loop.hasCC) adjSrcW *= 0.93;       // Charge controller ~93% efficiency
+            if (loop.hasInverter) adjLoadW /= 0.90; // Inverter ~90% efficiency (draws 10% more)
+            const loopNetW = adjSrcW - adjLoadW;
+            if (loopNetW === 0) return;
+            // Charging: include non-full batteries; Draining: include non-empty batteries
+            const isCharging = loopNetW > 0;
+            const loopBatts = loop.battIds
+                .map(id => deployed.find(c => c.id === id))
+                .filter(b => b && (isCharging ? b.batteryLevel < b.batteryCapacity : b.batteryLevel > 0));
+            if (loopBatts.length === 0) return;
+            const perBattRaw = (loopNetW * deltaMin) / 60 / loopBatts.length;
+            loopBatts.forEach(bat => {
+                let delta = perBattRaw;
+                if (isCharging) {
+                    // Cap charging at 0.5C rate (minimum 2 hours to full charge)
+                    const maxChargeWhPerMin = (bat.batteryCapacity * 0.5) / 60;
+                    const maxDelta = maxChargeWhPerMin * deltaMin;
+                    delta = Math.min(delta, maxDelta);
+                }
+                // DoD limit: rechargeable batteries stop at 10% (BMS protection)
+                const isRechargeable = bat.type.includes('lifepo4') || bat.type.includes('plts') || bat.type === 'battery_32140';
+                const minLevel = isRechargeable ? bat.batteryCapacity * 0.10 : 0;
+                bat.batteryLevel = Math.max(minLevel, Math.min(bat.batteryCapacity, bat.batteryLevel + delta));
             });
-            saveState(); // Persist drained level immediately
+            anyDrained = true;
+        });
+
+        if (anyDrained) {
+            saveState();
         }
 
         // Re-evaluate circuit FIRST (resets styles)
         evaluateCircuit();
 
-        // Then update battery visuals AFTER evaluateCircuit (so they persist)
-        batteries.forEach(bat => {
-            const el = document.getElementById(bat.id);
-            if (!el) return;
-            const pct = (bat.batteryLevel / bat.batteryCapacity) * 100;
-
-            let bar = el.querySelector('.battery-bar');
-            if (!bar) {
-                bar = document.createElement('div');
-                bar.className = 'battery-bar';
-                bar.innerHTML = '<div class="battery-fill"></div><span class="battery-pct"></span>';
-                el.appendChild(bar);
-            }
-            const fill = bar.querySelector('.battery-fill');
-            const pctLabel = bar.querySelector('.battery-pct');
-            fill.style.width = `${pct}%`;
-            fill.style.background = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
-            pctLabel.textContent = `${pct.toFixed(0)}%`;
-
-            if (bat.batteryLevel <= 0) {
-                el.classList.add('battery-dead');
-                el.style.opacity = '0.5';
-            } else {
-                el.classList.remove('battery-dead');
-                el.style.opacity = '';
-            }
-        });
+        // Battery visuals are handled by updateBatteryBars() called from evaluateCircuit()
 
         // Update sim panel
-        updateSimPanel(totalSolarW, totalLoadW, batteries, hour, isDaytime, solarFactor);
+        updateSimPanel(totalSolarW, totalLoadW, batteries, hour, isDaytime, solarFactor, noPower);
     }
 
-    function updateSimPanel(solarW, loadW, batteries, hour, isDaytime, solarFactor) {
+    function updateSimPanel(solarW, loadW, batteries, hour, isDaytime, solarFactor, noPower) {
         let panel = document.getElementById('sim-panel');
         if (!panel) return;
-        const hrs = Math.floor(simElapsedMin / 60);
-        const mins = Math.floor(simElapsedMin % 60);
         const dayNum = Math.floor(simElapsedMin / 1440) + 1;
         const clockH = Math.floor(hour);
         const clockM = Math.floor((hour % 1) * 60);
+        const timeStr = `${String(clockH).padStart(2,'0')}:${String(clockM).padStart(2,'0')}`;
         const timeIcon = isDaytime ? '☀️' : '🌙';
+        const solarPct = (solarFactor * 100).toFixed(0);
         const netW = solarW - loadW;
         const netSign = netW >= 0 ? '+' : '';
+        const netColor = netW >= 0 ? '#22c55e' : '#ef4444';
         const speedLabel = simSpeed === 0 ? '⏸ PAUSE' : `▶ ${simSpeed}x`;
         const speedColor = simSpeed === 0 ? '#ef4444' : '#22c55e';
 
-        let battInfo = '';
+        // Cumulative angles (never wrap backwards for smooth CSS transitions)
+        const hourAngle = simElapsedMin * 0.5; // 0.5° per minute
+        const minAngle = simElapsedMin * 6;    // 6° per minute
+
+        // Day/night face color
+        const faceColor = isDaytime ? '#1a2a3a' : '#0d0d1a';
+        const rimColor = isDaytime ? '#f59e0b' : '#334155';
+
+        // Sun position on rim
+        const sunAngleVis = ((hour % 12) / 12) * 360;
+        const sunX = 30 + 24 * Math.sin(sunAngleVis * Math.PI / 180);
+        const sunY = 30 - 24 * Math.cos(sunAngleVis * Math.PI / 180);
+
+        // === Persistent Clock (create once, update via DOM) ===
+        let clockWrap = panel.querySelector('.sim-clock-wrap');
+        if (!clockWrap) {
+            clockWrap = document.createElement('div');
+            clockWrap.className = 'sim-clock-wrap';
+            // Build tick marks (static)
+            let ticks = '';
+            for (let i = 0; i < 12; i++) {
+                const a = i * 30;
+                const maj = i % 3 === 0;
+                const r1 = maj ? 22 : 24, r2 = 27;
+                const x1 = 30 + r1 * Math.sin(a * Math.PI / 180);
+                const y1 = 30 - r1 * Math.cos(a * Math.PI / 180);
+                const x2 = 30 + r2 * Math.sin(a * Math.PI / 180);
+                const y2 = 30 - r2 * Math.cos(a * Math.PI / 180);
+                ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${maj?'#94a3b8':'#475569'}" stroke-width="${maj?2:1}" stroke-linecap="round"/>`;
+            }
+            clockWrap.innerHTML = `
+            <svg viewBox="0 0 60 60" width="44" height="44">
+                <circle class="ck-face" cx="30" cy="30" r="28" fill="${faceColor}" stroke="${rimColor}" stroke-width="1.5" style="transition:fill .5s,stroke .5s"/>
+                ${ticks}
+                <circle class="ck-sun-glow" cx="${sunX}" cy="${sunY}" r="5" fill="#f59e0b" opacity="0" style="transition:cx .3s,cy .3s,opacity .3s"/>
+                <circle class="ck-sun" cx="${sunX}" cy="${sunY}" r="3" fill="#f59e0b" opacity="0.5" style="transition:cx .3s,cy .3s,opacity .3s,fill .3s"/>
+                <line class="ck-hour" x1="30" y1="30" x2="30" y2="14" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round" style="transform-origin:30px 30px;transition:transform .9s linear"/>
+                <line class="ck-min" x1="30" y1="30" x2="30" y2="8" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" style="transform-origin:30px 30px;transition:transform .9s linear"/>
+                <circle cx="30" cy="30" r="2" fill="#f59e0b"/>
+            </svg>`;
+            panel.insertBefore(clockWrap, panel.firstChild);
+        }
+
+        // Update clock hands (smooth via CSS transition)
+        const hHand = clockWrap.querySelector('.ck-hour');
+        const mHand = clockWrap.querySelector('.ck-min');
+        hHand.style.transform = `rotate(${hourAngle}deg)`;
+        mHand.style.transform = `rotate(${minAngle}deg)`;
+
+        // Update face & sun
+        const face = clockWrap.querySelector('.ck-face');
+        face.setAttribute('fill', faceColor);
+        face.setAttribute('stroke', rimColor);
+        const sunEl = clockWrap.querySelector('.ck-sun');
+        const sunGlow = clockWrap.querySelector('.ck-sun-glow');
+        sunEl.setAttribute('cx', sunX); sunEl.setAttribute('cy', sunY);
+        sunEl.setAttribute('opacity', isDaytime ? '0.9' : '0.3');
+        sunEl.setAttribute('fill', isDaytime ? '#f59e0b' : '#94a3b8');
+        sunGlow.setAttribute('cx', sunX); sunGlow.setAttribute('cy', sunY);
+        sunGlow.setAttribute('opacity', isDaytime ? '0.2' : '0');
+
+        // === Info section (rebuilt each tick) ===
+        // Group batteries by type
+        const battGroups = {};
         batteries.forEach(b => {
-            const pct = (b.batteryLevel / b.batteryCapacity) * 100;
-            const icon = pct > 50 ? '🟢' : pct > 20 ? '🟡' : pct > 0 ? '🔴' : '💀';
-            battInfo += `<div class="sim-batt">${icon} ${pct.toFixed(0)}% (${b.batteryLevel.toFixed(0)}Wh)</div>`;
+            if (!battGroups[b.type]) battGroups[b.type] = [];
+            battGroups[b.type].push(b);
         });
 
-        panel.innerHTML = `
-            <div class="sim-header">${timeIcon} <span style="color:${speedColor}">${speedLabel}</span> | ${hrs}h${mins}m</div>
-            <div class="sim-power">☀️${solarW.toFixed(0)}W 🏠-${loadW.toFixed(0)}W = ${netSign}${netW.toFixed(0)}W</div>
+        let battInfo = '';
+        Object.entries(battGroups).forEach(([type, batts]) => {
+            const totalLevel = batts.reduce((s, b) => s + b.batteryLevel, 0);
+            const totalCap = batts.reduce((s, b) => s + b.batteryCapacity, 0);
+            const avgPct = (totalLevel / totalCap) * 100;
+            const isRch = type.includes('lifepo4') || type.includes('plts') || type === 'battery_32140';
+            const icon = avgPct > 50 ? '🟢' : avgPct > 20 ? '🟡' : (isRch && avgPct <= 10) ? '🛑' : avgPct > 0 ? '🔴' : '💀';
+            const dodLabel = isRch && avgPct <= 10 ? ' <span style="color:#ef4444;font-size:9px">(BMS)</span>' : '';
+            const tmpl = COMPONENTS.find(t => t.id === type);
+            const typeName = tmpl ? tmpl.name : type;
+            if (batts.length === 1) {
+                battInfo += `<div class="sim-batt">${icon} ${avgPct.toFixed(0)}% (${totalLevel.toFixed(0)}Wh)${dodLabel}</div>`;
+            } else {
+                const whLabel = totalLevel >= 1000 ? `${(totalLevel/1000).toFixed(1)}kWh` : `${totalLevel.toFixed(0)}Wh`;
+                const capLabel = totalCap >= 1000 ? `${(totalCap/1000).toFixed(1)}kWh` : `${totalCap.toFixed(0)}Wh`;
+                battInfo += `<div class="sim-batt">${icon} ${batts.length}× ${typeName}: ${avgPct.toFixed(0)}% (${whLabel}/${capLabel})${dodLabel}</div>`;
+            }
+        });
+
+        const noPowerLabel = noPower ? ' <span style="color:#ef4444;font-weight:700">⛔ NO POWER</span>' : '';
+
+        // Update or create info section
+        let infoEl = panel.querySelector('.sim-info');
+        if (!infoEl) {
+            infoEl = document.createElement('div');
+            infoEl.className = 'sim-info';
+            panel.appendChild(infoEl);
+        }
+        infoEl.innerHTML = `
+            <div class="sim-header">${timeIcon} Hari ${dayNum} ${timeStr} <span style="color:#f59e0b">☀${solarPct}%</span> | <span style="color:${speedColor}">${speedLabel}</span>${noPowerLabel}</div>
+            <div class="sim-power">⚡${solarW.toFixed(0)}W ⬇ 🏠${loadW.toFixed(0)}W ⬆ = <span style="color:${netColor}">${netSign}${netW.toFixed(0)}W</span></div>
             ${battInfo}
         `;
     }
@@ -1381,7 +1544,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveSimState() {
         try {
             localStorage.setItem('czelectro_sim', JSON.stringify({
-                simSpeed, simMode, simElapsedMin
+                simSpeed, simElapsedMin
             }));
         } catch(e) {}
     }
@@ -1391,13 +1554,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const raw = localStorage.getItem('czelectro_sim');
             if (!raw) return;
             const s = JSON.parse(raw);
-            simMode = s.simMode || 'day';
             simElapsedMin = s.simElapsedMin || 0;
-            // Restore mode buttons
-            const dayBtn = document.querySelector('.sim-day');
-            const nightBtn = document.querySelector('.sim-night');
-            if (dayBtn) dayBtn.classList.toggle('active', simMode === 'day');
-            if (nightBtn) nightBtn.classList.toggle('active', simMode === 'night');
             // Restore speed (start paused, user can resume)
             if (s.simSpeed > 0) {
                 startSim(s.simSpeed);
@@ -1410,29 +1567,61 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {}
     }
 
+    // ── Battery Fill Config — dimensions for each battery type ──
+    const BATT_FILL_CFG = {
+        'battery_9v':       { dir: 'v', yTop: 17, yBot: 103 },
+        'battery_3v':       { dir: 'h', maxW: 66 },
+        'battery_1v5':      { dir: 'h', maxW: 46 },
+        'battery_12v':      { dir: 'v', yTop: 10, yBot: 70 },
+        'battery_32140':    { dir: 'h', maxW: 12 },
+        'battery_lifepo4':  { dir: 'h', maxW: 22 },
+        'battery_plts_100': { dir: 'h', maxW: 64 },
+        'battery_plts_200': { dir: 'h', maxW: 78 },
+    };
+
     function updateBatteryBars() {
         deployed.forEach(bat => {
             if (!bat.batteryCapacity) return;
             const el = document.getElementById(bat.id);
             if (!el) return;
-            const pct = (bat.batteryLevel / bat.batteryCapacity) * 100;
+            const pct = Math.max(0, Math.min(100, (bat.batteryLevel / bat.batteryCapacity) * 100));
+            const cfg = BATT_FILL_CFG[bat.type];
+            const fillEl = el.querySelector('.batt-fill');
+            const pctEl = el.querySelector('.batt-pct');
 
-            let bar = el.querySelector('.battery-bar');
-            if (!bar) {
-                bar = document.createElement('div');
-                bar.className = 'battery-bar';
-                bar.innerHTML = '<div class="battery-fill"></div><span class="battery-pct"></span>';
-                el.appendChild(bar);
+            // Color based on charge level
+            const color = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+
+            if (fillEl && cfg) {
+                fillEl.setAttribute('fill', color);
+                if (cfg.dir === 'v') {
+                    // Vertical fill: bottom to top
+                    const totalH = cfg.yBot - cfg.yTop;
+                    const fillH = (pct / 100) * totalH;
+                    fillEl.setAttribute('y', (cfg.yBot - fillH).toFixed(1));
+                    fillEl.setAttribute('height', fillH.toFixed(1));
+                } else {
+                    // Horizontal fill: left to right
+                    const fillW = (pct / 100) * cfg.maxW;
+                    fillEl.setAttribute('width', fillW.toFixed(1));
+                }
             }
-            const fill = bar.querySelector('.battery-fill');
-            const pctLabel = bar.querySelector('.battery-pct');
-            fill.style.width = `${pct}%`;
-            fill.style.background = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
-            pctLabel.textContent = `${pct.toFixed(0)}%`;
 
-            if (bat.batteryLevel <= 0) {
+            // Update percentage text for PLTS batteries (white for contrast)
+            if (pctEl) {
+                pctEl.textContent = `${pct.toFixed(0)}%`;
+                pctEl.setAttribute('fill', '#fff');
+            }
+
+            // DoD threshold: rechargeable batteries show dead at 10% (BMS cutoff)
+            const isRechargeable = bat.type.includes('lifepo4') || bat.type.includes('plts') || bat.type === 'battery_32140';
+            const deadThreshold = isRechargeable ? bat.batteryCapacity * 0.10 : 0;
+            if (bat.batteryLevel <= deadThreshold) {
                 el.classList.add('battery-dead');
                 el.style.opacity = '0.5';
+            } else {
+                el.classList.remove('battery-dead');
+                el.style.opacity = '';
             }
         });
     }
@@ -1793,9 +1982,19 @@ document.addEventListener('DOMContentLoaded', () => {
             menuItems += `<div class="ctx-item" data-action="reset">🔄 Reset / Perbaiki</div>`;
         }
 
-        if (!isMulti && comp?.batteryCapacity) {
-            const pct = ((comp.batteryLevel / comp.batteryCapacity) * 100).toFixed(0);
-            menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Baterai (${pct}% → 100%)</div>`;
+        // Show reset battery for single battery or multi-select where all are batteries
+        const allBatteries = isMulti && [...selectedIds].every(cid => {
+            const c = deployed.find(d => d.id === cid);
+            return c && c.batteryCapacity;
+        });
+
+        if ((!isMulti && comp?.batteryCapacity) || allBatteries) {
+            if (!isMulti) {
+                const pct = ((comp.batteryLevel / comp.batteryCapacity) * 100).toFixed(0);
+                menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Baterai (${pct}% → 100%)</div>`;
+            } else {
+                menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Semua Baterai (${selectedIds.size}) → 100%</div>`;
+            }
         }
 
         menuItems += `<div class="ctx-item" data-action="duplicate">📋 Duplikat${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
@@ -1852,21 +2051,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else if (action === 'reset' && comp) {
                 resetComponent(comp.id);
-            } else if (action === 'resetbatt' && comp) {
-                comp.batteryLevel = comp.batteryCapacity;
-                const tmpl = COMPONENTS.find(t => t.id === comp.type);
-                if (tmpl) comp.voltage = tmpl.voltage;
-                const el = document.getElementById(comp.id);
-                if (el) {
-                    el.classList.remove('battery-dead');
-                    el.style.opacity = '';
-                    const bar = el.querySelector('.battery-bar');
-                    if (bar) {
-                        bar.querySelector('.battery-fill').style.width = '100%';
-                        bar.querySelector('.battery-fill').style.background = '#22c55e';
-                        bar.querySelector('.battery-pct').textContent = '100%';
-                    }
-                }
+            } else if (action === 'resetbatt') {
+                // Reset batteries — single or multi-select
+                const targets = isMulti ? [...selectedIds] : (comp ? [comp.id] : []);
+                targets.forEach(cid => {
+                    const c = deployed.find(d => d.id === cid);
+                    if (!c || !c.batteryCapacity) return;
+                    c.batteryLevel = c.batteryCapacity;
+                    const t = COMPONENTS.find(x => x.id === c.type);
+                    if (t) c.voltage = t.voltage;
+                });
                 evaluateCircuit();
             } else if (action === 'rotate') {
                 selectedIds.forEach(cid => rotateComponent(cid));
@@ -1942,6 +2136,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 isClosed: false, isBroken: false, rotation: comp.rotation || 0, x: nx, y: ny,
                 terminals: JSON.parse(JSON.stringify(tmpl.terminals))
             };
+            // Copy battery properties from source
+            if (tmpl.capacityWh) {
+                newComp.batteryCapacity = tmpl.capacityWh;
+                newComp.batteryLevel = comp.batteryLevel ?? tmpl.capacityWh;
+            }
             // Apply rotation CSS if source was rotated
             if (newComp.rotation) {
                 el.style.transform = `rotate(${newComp.rotation}deg)`;
@@ -2046,6 +2245,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     terminals: JSON.parse(JSON.stringify(tmpl.terminals))
                 };
 
+                // Restore battery level from saved state
+                if (tmpl.capacityWh) {
+                    comp.batteryCapacity = tmpl.capacityWh;
+                    comp.batteryLevel = saved.batteryLevel ?? tmpl.capacityWh;
+                }
+
                 // Re-create terminals
                 comp.terminals.forEach((term, idx) => {
                     const tEl = document.createElement('div');
@@ -2107,12 +2312,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Simulation Event Listeners ──
     document.addEventListener('sim-speed', (e) => startSim(e.detail));
     document.addEventListener('sim-reset', () => resetBatteries());
-    document.addEventListener('sim-mode', (e) => {
-        simMode = e.detail;
-        document.querySelector('.sim-day').classList.toggle('active', simMode === 'day');
-        document.querySelector('.sim-night').classList.toggle('active', simMode === 'night');
+    document.addEventListener('sim-jump', (e) => {
+        // Jump simulation clock to a specific time of day
+        const currentDay = Math.floor(simElapsedMin / 1440);
+        if (e.detail === 'day') {
+            // Jump to 06:00 (sunrise)
+            simElapsedMin = currentDay * 1440 + 6 * 60;
+        } else {
+            // Jump to 18:00 (sunset)
+            simElapsedMin = currentDay * 1440 + 18 * 60;
+        }
         saveSimState();
-        evaluateCircuit(); // Re-evaluate immediately
+        evaluateCircuit();
+        // Run one tick to update panel immediately
+        if (simSpeed > 0) simTick();
     });
 
     // ── Init ──

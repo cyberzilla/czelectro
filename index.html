@@ -152,8 +152,8 @@
                 <button class="sim-btn" data-speed="60" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:60}))">60x</button>
                 <button class="sim-btn sim-reset" onclick="document.dispatchEvent(new CustomEvent('sim-reset'))">🔄</button>
                 <span class="sim-divider">|</span>
-                <button class="sim-btn sim-day active" data-mode="day" onclick="document.dispatchEvent(new CustomEvent('sim-mode',{detail:'day'}))">☀️ Siang</button>
-                <button class="sim-btn sim-night" data-mode="night" onclick="document.dispatchEvent(new CustomEvent('sim-mode',{detail:'night'}))">🌙 Malam</button>
+                <button class="sim-btn sim-day" onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'day'}))">☀️ →06:00</button>
+                <button class="sim-btn sim-night" onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'night'}))">🌙 →18:00</button>
             </div>
             <div id="sim-panel" class="sim-panel"></div>
         </div>
