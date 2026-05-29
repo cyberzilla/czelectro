@@ -9,8 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeWireDrag = null;
     let selRect = null, selStartX = 0, selStartY = 0; // selection rectangle
     let selectedIds = new Set();
+    let selectedHandles = new Set(); // tracks selected wire handles as 'wireIdx:handleIdx'
     const GRID = 10, DRAG_THRESHOLD = 5;
     let isMuted = false;
+    let workspaceMode = 'select'; // 'select' or 'pan'
+
+    // ── Undo/Redo History ──
+    const UNDO_MAX = 100; // configurable max history depth
+    let undoStack = [], redoStack = [];
+    let isRestoring = false; // flag to prevent saving during undo/redo restore
+
+    // ── Groups ──
+    let groups = []; // Array of { id, members: [compId, ...], label: '' }
 
     // ── Battery Simulation State ──
     let simSpeed = 0;  // 0=paused, 1=1x, 10=10x, 60=60x
@@ -267,9 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
         drawGrid();
     }
 
-    document.getElementById('btn-zoom-in').onclick = () => { zoom = Math.min(3, zoom + 0.1); applyTransform(); saveState(); };
-    document.getElementById('btn-zoom-out').onclick = () => { zoom = Math.max(0.2, zoom - 0.1); applyTransform(); saveState(); };
-    document.getElementById('btn-fit').onclick = () => { zoom = 1; panX = 0; panY = 0; applyTransform(); saveState(); };
+    document.getElementById('btn-zoom-in').onclick = () => { zoom = Math.min(3, zoom + 0.1); applyTransform(); persistView(); };
+    document.getElementById('btn-zoom-out').onclick = () => { zoom = Math.max(0.2, zoom - 0.1); applyTransform(); persistView(); };
+    document.getElementById('btn-fit').onclick = () => { zoom = 1; panX = 0; panY = 0; applyTransform(); persistView(); };
     document.getElementById('btn-grid').onclick = (e) => {
         showGrid = !showGrid;
         e.currentTarget.classList.toggle('active', showGrid);
@@ -280,6 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Hapus semua komponen dan kabel?')) return;
         ws.querySelectorAll('.board-component').forEach(el => el.remove());
         deployed = []; wires = []; counter = 0;
+        groups = []; groupCounter = 0;
+        document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
         SFX.stopAll();
         renderWires(); evaluateCircuit();
         localStorage.removeItem('czelectro_state');
@@ -301,11 +313,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // ── Mode Toggle (Select / Pan) ──
+    function setMode(mode) {
+        workspaceMode = mode;
+        const btnSel = document.getElementById('btn-mode-select');
+        const btnPan = document.getElementById('btn-mode-pan');
+        btnSel.classList.toggle('active', mode === 'select');
+        btnPan.classList.toggle('active', mode === 'pan');
+        wCont.classList.toggle('mode-pan', mode === 'pan');
+    }
+    document.getElementById('btn-mode-select').onclick = () => setMode('select');
+    document.getElementById('btn-mode-pan').onclick = () => setMode('pan');
+
+    // Auto-expand selection to include all group members
+    function expandSelectionToGroups() {
+        let expanded = true;
+        while (expanded) {
+            expanded = false;
+            groups.forEach(g => {
+                const hasAny = g.members.some(id => selectedIds.has(id));
+                if (hasAny) {
+                    g.members.forEach(id => {
+                        if (!selectedIds.has(id)) {
+                            selectedIds.add(id);
+                            document.getElementById(id)?.classList.add('selected');
+                            expanded = true;
+                        }
+                    });
+                }
+            });
+        }
+    }
+
     wCont.addEventListener('wheel', e => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.08 : 0.08;
-        zoom = Math.min(3, Math.max(0.2, zoom + delta));
-        applyTransform(); saveState();
+        const oldZoom = zoom;
+        const newZoom = Math.min(3, Math.max(0.2, zoom + delta));
+        // Zoom toward mouse cursor position
+        const rect = wCont.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        // Point in workspace under mouse before zoom
+        const wx = (mx - panX) / oldZoom;
+        const wy = (my - panY) / oldZoom;
+        // Adjust pan so the same workspace point stays under mouse after zoom
+        panX = mx - wx * newZoom;
+        panY = my - wy * newZoom;
+        zoom = newZoom;
+        applyTransform(); persistView();
     }, { passive: false });
 
     // Middle-click pan
@@ -421,25 +477,107 @@ document.addEventListener('DOMContentLoaded', () => {
         return dir;
     }
 
-    function makeWirePath(p1, dir1, p2, dir2, bend, spreadOffset) {
-        const bx = bend?.x || 0, by = bend?.y || 0;
-        const sox = spreadOffset?.x || 0, soy = spreadOffset?.y || 0;
+    // ── Multi-Control-Point Wire Path ──
+    // Generates a smooth Catmull-Rom spline through control points,
+    // giving wires a natural, flexible cable look.
+    // controlPoints is an array of {x, y} offsets from the wire midline.
+
+    function getDefaultControlPoints() {
+        return [
+            { x: 0, y: 0 },  // handle at ~25%
+            { x: 0, y: 0 },  // handle at ~50%
+            { x: 0, y: 0 }   // handle at ~75%
+        ];
+    }
+
+    // Convert controlPoints offsets into absolute positions along the wire
+    function resolveControlPoints(p1, dir1, p2, dir2, controlPoints) {
         const dx = p2.x - p1.x, dy = p2.y - p1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const arm = Math.max(50, Math.min(dist * 0.5, 200));
 
-        const cp1x = p1.x + dir1.dx * arm + bx * 0.6 + sox;
-        const cp1y = p1.y + dir1.dy * arm + by * 0.6 + soy;
-        const cp2x = p2.x + dir2.dx * arm + bx * 0.4 + sox;
-        const cp2y = p2.y + dir2.dy * arm + by * 0.4 + soy;
+        // Base cubic bezier — spread-independent so handles stay stable
+        const bc1x = p1.x + dir1.dx * arm;
+        const bc1y = p1.y + dir1.dy * arm;
+        const bc2x = p2.x + dir2.dx * arm;
+        const bc2y = p2.y + dir2.dy * arm;
 
-        return {
-            d: `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`,
-            mid: {
-                x: 0.125*p1.x + 0.375*cp1x + 0.375*cp2x + 0.125*p2.x,
-                y: 0.125*p1.y + 0.375*cp1y + 0.375*cp2y + 0.125*p2.y
+        // Evaluate the base bezier at t to get natural positions
+        function baseBezier(t) {
+            const u = 1 - t;
+            return {
+                x: u*u*u*p1.x + 3*u*u*t*bc1x + 3*u*t*t*bc2x + t*t*t*p2.x,
+                y: u*u*u*p1.y + 3*u*u*t*bc1y + 3*u*t*t*bc2y + t*t*t*p2.y
+            };
+        }
+
+        const cps = controlPoints || getDefaultControlPoints();
+        const tValues = [0.25, 0.5, 0.75];
+        return tValues.map((t, i) => {
+            const base = baseBezier(t);
+            const offset = cps[i] || { x: 0, y: 0 };
+            return { x: base.x + offset.x, y: base.y + offset.y };
+        });
+    }
+
+    function makeWirePath(p1, dir1, p2, dir2, controlPoints, spreadOffset) {
+        const pts = resolveControlPoints(p1, dir1, p2, dir2, controlPoints);
+
+        // Build smooth path: p1 → pts[0] → pts[1] → pts[2] → p2
+        // Use Catmull-Rom to Bezier conversion for smooth segments
+        const allPts = [p1, pts[0], pts[1], pts[2], p2];
+        const n = allPts.length;
+        let d = `M ${allPts[0].x} ${allPts[0].y}`;
+
+        const dx0 = p2.x - p1.x, dy0 = p2.y - p1.y;
+        const dist0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+        const arm = Math.max(50, Math.min(dist0 * 0.5, 200));
+        const sox = spreadOffset?.x || 0, soy = spreadOffset?.y || 0;
+
+        // Spread offset only affects tangent direction — not control point base positions
+        // This keeps wire shapes stable when new wires are added to the same terminal
+        const exitTan = { x: dir1.dx * arm * 0.6 + sox * 0.7, y: dir1.dy * arm * 0.6 + soy * 0.7 };
+        const enterTan = { x: dir2.dx * arm * 0.6 + sox * 0.7, y: dir2.dy * arm * 0.6 + soy * 0.7 };
+
+        for (let i = 0; i < n - 1; i++) {
+            const p0 = allPts[Math.max(0, i - 1)];
+            const pi = allPts[i];
+            const pi1 = allPts[i + 1];
+            const p3 = allPts[Math.min(n - 1, i + 2)];
+
+            let cp1x, cp1y, cp2x, cp2y;
+            const tension = 0.45; // higher = smoother curves
+
+            // Compute segment-length-aware tangent scaling
+            const segLen = Math.sqrt((pi1.x - pi.x) ** 2 + (pi1.y - pi.y) ** 2) || 1;
+            const tScale = Math.min(tension, segLen / 300); // prevent overshooting on short segments
+
+            if (i === 0) {
+                // First segment: use terminal exit direction, scale to segment length
+                const exitScale = Math.min(1, segLen / (arm * 1.2));
+                cp1x = pi.x + exitTan.x * exitScale;
+                cp1y = pi.y + exitTan.y * exitScale;
+                cp2x = pi1.x - (p3.x - pi.x) * tScale;
+                cp2y = pi1.y - (p3.y - pi.y) * tScale;
+            } else if (i === n - 2) {
+                // Last segment: use terminal enter direction, scale to segment length
+                const enterScale = Math.min(1, segLen / (arm * 1.2));
+                cp1x = pi.x + (pi1.x - p0.x) * tScale;
+                cp1y = pi.y + (pi1.y - p0.y) * tScale;
+                cp2x = pi1.x + enterTan.x * enterScale;
+                cp2y = pi1.y + enterTan.y * enterScale;
+            } else {
+                // Middle segments: Catmull-Rom tangents
+                cp1x = pi.x + (pi1.x - p0.x) * tScale;
+                cp1y = pi.y + (pi1.y - p0.y) * tScale;
+                cp2x = pi1.x - (p3.x - pi.x) * tScale;
+                cp2y = pi1.y - (p3.y - pi.y) * tScale;
             }
-        };
+
+            d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${pi1.x} ${pi1.y}`;
+        }
+
+        return { d, handlePositions: pts };
     }
 
     // For temp-wire preview (mouse endpoint has no component direction)
@@ -504,7 +642,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const dir1 = getTerminalDir(c1, w.i1);
             const dir2 = getTerminalDir(c2, w.i2);
 
-            const { d, mid } = makeWirePath(p1, dir1, p2, dir2, w.bend, wireSpread[idx]);
+            // Migrate legacy single-bend to controlPoints array
+            if (!w.controlPoints && w.bend) {
+                w.controlPoints = [
+                    { x: w.bend.x * 0.5, y: w.bend.y * 0.5 },
+                    { x: w.bend.x, y: w.bend.y },
+                    { x: w.bend.x * 0.5, y: w.bend.y * 0.5 }
+                ];
+            }
+            if (!w.controlPoints) w.controlPoints = getDefaultControlPoints();
+
+            const { d, handlePositions } = makeWirePath(p1, dir1, p2, dir2, w.controlPoints, wireSpread[idx]);
 
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.classList.add('wire-group');
@@ -522,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
             vis.setAttribute('stroke', w.color || '#94a3b8');
             vis.setAttribute('stroke-width', '3.5');
             vis.setAttribute('stroke-linecap', 'round');
+            vis.setAttribute('stroke-linejoin', 'round');
             vis.classList.add('real-wire');
 
             // Flow animation if energized
@@ -532,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 flow.setAttribute('stroke-width', '2');
                 flow.setAttribute('fill', 'none');
                 flow.setAttribute('stroke-linecap', 'round');
+                flow.setAttribute('stroke-linejoin', 'round');
                 flow.classList.add('wire-flow');
                 g.appendChild(flow);
             }
@@ -539,14 +689,22 @@ document.addEventListener('DOMContentLoaded', () => {
             g.appendChild(vis);
             g.appendChild(hit);
 
-            // Draggable midpoint handle
-            const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            handle.setAttribute('cx', mid.x);
-            handle.setAttribute('cy', mid.y);
-            handle.setAttribute('r', '5');
-            handle.classList.add('wire-handle');
-            handle.dataset.widx = idx;
-            g.appendChild(handle);
+            // Draggable handles — 3 control points, hidden by default, visible on hover
+            handlePositions.forEach((hp, hIdx) => {
+                const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                handle.setAttribute('cx', hp.x);
+                handle.setAttribute('cy', hp.y);
+                handle.setAttribute('r', hIdx === 1 ? '5' : '4');
+                handle.classList.add('wire-handle');
+                if (hIdx !== 1) handle.classList.add('wire-handle-minor');
+                handle.dataset.widx = idx;
+                handle.dataset.hidx = hIdx;
+                // Re-apply selected state if this handle was previously selected
+                if (selectedHandles.has(`${idx}:${hIdx}`)) {
+                    handle.classList.add('handle-selected');
+                }
+                g.appendChild(handle);
+            });
 
             wiresG.appendChild(g);
 
@@ -1734,26 +1892,38 @@ document.addEventListener('DOMContentLoaded', () => {
             dragStartY = e.clientY;
             dragMoved = false;
             isDragging = true;
+
+            // Auto-select group members when dragging a grouped component
+            const grp = groups.find(g => g.members.includes(bComp.id));
+            if (grp && !selectedIds.has(bComp.id)) {
+                selectedIds.add(bComp.id);
+                bComp.classList.add('selected');
+            }
+            expandSelectionToGroups();
+            renderGroupLabels();
             return;
         }
 
         // Empty workspace click
         if (e.button === 0 && (e.target === ws || e.target === gridCanvas || e.target === wCont)) {
-            if (e.shiftKey) {
-                // Shift+drag = pan workspace
+            const wantPan = workspaceMode === 'pan' ? !e.ctrlKey : e.ctrlKey;
+            if (wantPan) {
+                // Pan workspace (Ctrl+drag in select mode, normal drag in pan mode)
                 e.preventDefault(); isPanning = true;
                 panStartX = e.clientX; panStartY = e.clientY;
                 panStartPX = panX; panStartPY = panY;
                 wCont.style.cursor = 'grabbing';
             } else {
-                // Normal drag = selection rectangle
+                // Selection rectangle (normal drag in select mode, Ctrl+drag in pan mode)
                 const m = clientToWorkspace(e.clientX, e.clientY);
                 selStartX = m.x; selStartY = m.y;
                 selRect = document.createElement('div');
                 selRect.className = 'selection-rect';
                 ws.appendChild(selRect);
                 selectedIds.clear();
+                selectedHandles.clear();
                 document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
             }
         }
     });
@@ -1769,16 +1939,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const m = clientToWorkspace(e.clientX, e.clientY);
 
-        // Wire bend drag
+        // Wire control-point drag — move all selected handles together
         if (activeWireDrag) {
-            const w = wires[activeWireDrag.wireIdx];
-            if (w) {
-                w.bend = {
-                    x: activeWireDrag.startBend.x + (m.x - activeWireDrag.startMouse.x),
-                    y: activeWireDrag.startBend.y + (m.y - activeWireDrag.startMouse.y)
-                };
-                renderWires();
+            const dx = m.x - activeWireDrag.startMouse.x;
+            const dy = m.y - activeWireDrag.startMouse.y;
+            // Move all selected handles by the same delta
+            if (activeWireDrag.allHandles && activeWireDrag.allHandles.length > 0) {
+                activeWireDrag.allHandles.forEach(h => {
+                    const wire = wires[h.wireIdx];
+                    if (wire && wire.controlPoints) {
+                        wire.controlPoints[h.handleIdx] = {
+                            x: h.startOffset.x + dx,
+                            y: h.startOffset.y + dy
+                        };
+                    }
+                });
+            } else {
+                // Fallback: single handle
+                const w = wires[activeWireDrag.wireIdx];
+                if (w && w.controlPoints) {
+                    w.controlPoints[activeWireDrag.handleIdx] = {
+                        x: activeWireDrag.startOffset.x + dx,
+                        y: activeWireDrag.startOffset.y + dy
+                    };
+                }
             }
+            renderWires();
             return;
         }
 
@@ -1811,6 +1997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
                 renderWires();
+                renderGroupLabels();
             }
         }
 
@@ -1832,12 +2019,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.addEventListener('mouseup', e => {
-        if (isPanning) { isPanning = false; wCont.style.cursor = ''; saveState(); return; }
+        if (isPanning) { isPanning = false; wCont.style.cursor = ''; persistView(); return; }
 
-        // End wire bend drag
+        // End wire control-point drag
         if (activeWireDrag) { activeWireDrag = null; saveState(); return; }
 
-        // End selection rectangle — select components within
+        // End selection rectangle — select components & wire handles within
         if (selRect) {
             const rx = parseFloat(selRect.style.left) || 0;
             const ry = parseFloat(selRect.style.top) || 0;
@@ -1845,6 +2032,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rh = parseFloat(selRect.style.height) || 0;
             selRect.remove(); selRect = null;
             if (rw > 5 || rh > 5) {
+                // Select components within rectangle
                 deployed.forEach(c => {
                     const tmpl = COMPONENTS.find(t => t.id === c.type);
                     if (!tmpl) return;
@@ -1854,7 +2042,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById(c.id)?.classList.add('selected');
                     }
                 });
+                // Select wire handles within rectangle
+                document.querySelectorAll('.wire-handle').forEach(h => {
+                    const hx = parseFloat(h.getAttribute('cx'));
+                    const hy = parseFloat(h.getAttribute('cy'));
+                    if (hx >= rx && hx <= rx + rw && hy >= ry && hy <= ry + rh) {
+                        const key = `${h.dataset.widx}:${h.dataset.hidx}`;
+                        selectedHandles.add(key);
+                        h.classList.add('handle-selected');
+                    }
+                });
             }
+            // Auto-expand selection to include all group members
+            expandSelectionToGroups();
+            renderGroupLabels();
             return;
         }
 
@@ -1899,7 +2100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             c2: tCid, i2: tIdx,
                             color: colors[wires.length % colors.length],
                             energized: false,
-                            bend: { x: 0, y: 0 }
+                            controlPoints: getDefaultControlPoints()
                         });
                         renderWires();
                         evaluateCircuit();
@@ -1911,21 +2112,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Wire drag (left-click on wire/handle = bend) 
+    // Wire handle click (select) and drag (move control points)
     document.addEventListener('mousedown', e => {
         const handle = e.target.closest('.wire-handle');
-        const hitArea = e.target.closest('.wire-hit-area');
-        const target = handle || hitArea;
-        if (target && e.button === 0) {
+        if (handle && e.button === 0) {
             e.stopPropagation();
-            const wi = parseInt(target.dataset.widx);
+            const wi = parseInt(handle.dataset.widx);
+            const hi = parseInt(handle.dataset.hidx);
             const w = wires[wi];
             if (!w) return;
+
+            // Block handle editing if both wire endpoints are in the same group
+            const wireGroup = groups.find(g =>
+                g.members.includes(w.c1) && g.members.includes(w.c2)
+            );
+            if (wireGroup) return; // locked — must ungroup first
+
+            if (!w.controlPoints) w.controlPoints = getDefaultControlPoints();
+            const key = `${wi}:${hi}`;
+
+            // Ctrl+click = toggle selection without clearing others
+            if (e.ctrlKey || e.metaKey) {
+                if (selectedHandles.has(key)) {
+                    selectedHandles.delete(key);
+                    handle.classList.remove('handle-selected');
+                } else {
+                    selectedHandles.add(key);
+                    handle.classList.add('handle-selected');
+                }
+            } else {
+                // Normal click = select only this handle (clear others)
+                if (!selectedHandles.has(key)) {
+                    selectedHandles.clear();
+                    document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+                    selectedHandles.add(key);
+                    handle.classList.add('handle-selected');
+                }
+            }
+
+            // Start drag — record start state for all selected handles
             const m = clientToWorkspace(e.clientX, e.clientY);
+            const dragHandles = [];
+            selectedHandles.forEach(k => {
+                const [wIdx, hIdx] = k.split(':').map(Number);
+                const wire = wires[wIdx];
+                if (wire && wire.controlPoints) {
+                    dragHandles.push({
+                        wireIdx: wIdx, handleIdx: hIdx,
+                        startOffset: { x: wire.controlPoints[hIdx].x, y: wire.controlPoints[hIdx].y }
+                    });
+                }
+            });
             activeWireDrag = {
                 wireIdx: wi,
+                handleIdx: hi,
                 startMouse: { x: m.x, y: m.y },
-                startBend: { x: w.bend?.x || 0, y: w.bend?.y || 0 }
+                startOffset: { x: w.controlPoints[hi].x, y: w.controlPoints[hi].y },
+                allHandles: dragHandles
             };
         }
     }, true); // capture phase so it fires before component drag
@@ -2001,6 +2244,20 @@ document.addEventListener('DOMContentLoaded', () => {
         menuItems += `<div class="ctx-item" data-action="rotate">🔄 Putar 90° (R)${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
         menuItems += `<div class="ctx-item" data-action="copytext">📝 Salin Teks Rangkaian</div>`;
         menuItems += `<div class="ctx-sep"></div>`;
+
+        // Group/Ungroup options
+        const anyInGroup = [...selectedIds].some(id => groups.some(g => g.members.includes(id)));
+        const allSameGroup = isMulti && groups.some(g => [...selectedIds].every(id => g.members.includes(id)));
+        if (isMulti && !allSameGroup) {
+            menuItems += `<div class="ctx-item" data-action="group">📦 Group (Ctrl+G)</div>`;
+        }
+        if (anyInGroup) {
+            menuItems += `<div class="ctx-item" data-action="ungroup">📭 Ungroup (Ctrl+Shift+G)</div>`;
+        }
+        if (isMulti || anyInGroup) {
+            menuItems += `<div class="ctx-sep"></div>`;
+        }
+
         menuItems += `<div class="ctx-item danger" data-action="delete">🗑 Hapus${isMulti ? ` (${selectedIds.size})` : ''}</div>`;
 
         menu.innerHTML = menuItems;
@@ -2024,8 +2281,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     deployed = deployed.filter(c => c.id !== cid);
                     wires = wires.filter(w => w.c1 !== cid && w.c2 !== cid);
                     document.getElementById(cid)?.remove();
+                    // Clean up group membership
+                    groups.forEach(g => {
+                        const idx = g.members.indexOf(cid);
+                        if (idx >= 0) g.members.splice(idx, 1);
+                    });
                 });
+                groups = groups.filter(g => g.members.length > 0);
                 selectedIds.clear();
+                renderGroupLabels();
                 renderWires(); evaluateCircuit();
             } else if (action === 'duplicate') {
                 duplicateSelected();
@@ -2064,6 +2328,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 evaluateCircuit();
             } else if (action === 'rotate') {
                 selectedIds.forEach(cid => rotateComponent(cid));
+            } else if (action === 'group') {
+                groupSelected();
+            } else if (action === 'ungroup') {
+                ungroupSelected();
             }
             menu.remove();
         });
@@ -2081,14 +2349,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     deployed = deployed.filter(c => c.id !== cid);
                     wires = wires.filter(w => w.c1 !== cid && w.c2 !== cid);
                     document.getElementById(cid)?.remove();
+                    // Clean up group membership
+                    groups.forEach(g => {
+                        const idx = g.members.indexOf(cid);
+                        if (idx >= 0) g.members.splice(idx, 1);
+                    });
                 });
+                groups = groups.filter(g => g.members.length > 0);
                 selectedIds.clear();
+                renderGroupLabels();
                 renderWires(); evaluateCircuit();
             }
         }
         if (e.key === 'Escape') {
             selectedIds.clear();
+            selectedHandles.clear();
             document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+            renderGroupLabels();
+        }
+        // V = Select mode, H = Pan/Hand mode
+        if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            setMode('select');
+        }
+        if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            setMode('pan');
+        }
+        // Ctrl+Z = Undo
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            performUndo();
+        }
+        // Ctrl+Y or Ctrl+Shift+Z = Redo
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))) {
+            e.preventDefault();
+            performRedo();
+        }
+        // Ctrl+G = Group selected
+        if ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey) {
+            e.preventDefault();
+            groupSelected();
+        }
+        // Ctrl+Shift+G = Ungroup selected
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'G' || (e.key === 'g' && e.shiftKey))) {
+            e.preventDefault();
+            ungroupSelected();
         }
         // Ctrl+D = Duplicate selected
         if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
@@ -2171,7 +2476,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     c1: idMap[w.c1], i1: w.i1,
                     c2: idMap[w.c2], i2: w.i2,
                     color: w.color, energized: false,
-                    bend: { x: (w.bend?.x || 0), y: (w.bend?.y || 0) }
+                    controlPoints: (w.controlPoints || getDefaultControlPoints()).map(cp => ({ x: cp.x, y: cp.y }))
                 });
             }
         });
@@ -2188,26 +2493,290 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Persistence: Save & Restore ──
     const STORAGE_KEY = 'czelectro_state';
 
-    function saveState() {
-        try {
-            const state = {
-                deployed: deployed.map(c => ({
-                    id: c.id, type: c.type, x: c.x, y: c.y,
-                    isBroken: c.isBroken, isClosed: c.isClosed,
-                    currentResistance: c.currentResistance,
-                    rotation: c.rotation || 0,
-                    batteryLevel: c.batteryLevel,
-                    batteryCapacity: c.batteryCapacity
-                })),
-                wires: wires.map(w => ({
-                    c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
-                    color: w.color, bend: w.bend || { x: 0, y: 0 }
-                })),
-                counter, zoom, panX, panY
+    // ── Snapshot helpers for undo/redo ──
+    function getSnapshot() {
+        return JSON.stringify({
+            deployed: deployed.map(c => ({
+                id: c.id, type: c.type, x: c.x, y: c.y,
+                isBroken: c.isBroken, isClosed: c.isClosed,
+                currentResistance: c.currentResistance,
+                rotation: c.rotation || 0,
+                batteryLevel: c.batteryLevel,
+                batteryCapacity: c.batteryCapacity
+            })),
+            wires: wires.map(w => ({
+                c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
+                color: w.color,
+                controlPoints: w.controlPoints || getDefaultControlPoints()
+            })),
+            groups: groups.map(g => ({ id: g.id, members: [...g.members], label: g.label || '' })),
+            counter, zoom, panX, panY
+        });
+    }
+
+    function applySnapshot(json) {
+        const state = JSON.parse(json);
+        // Clear current DOM
+        document.querySelectorAll('.board-component').forEach(el => el.remove());
+        document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
+        deployed = []; wires = [];
+
+        counter = state.counter || 0;
+        zoom = state.zoom || 1;
+        panX = state.panX || 0;
+        panY = state.panY || 0;
+        groups = (state.groups || []).map(g => ({ id: g.id, members: [...g.members], label: g.label || '' }));
+
+        // Rebuild components
+        state.deployed.forEach(saved => {
+            const tmpl = COMPONENTS.find(t => t.id === saved.type);
+            if (!tmpl) return;
+            const el = document.createElement('div');
+            el.className = 'board-component';
+            el.id = saved.id;
+            el.style.cssText = `width:${tmpl.width}px;height:${tmpl.height}px;left:${saved.x}px;top:${saved.y}px;`;
+            el.innerHTML = tmpl.svg;
+
+            const comp = {
+                id: saved.id, type: saved.type, voltage: tmpl.voltage,
+                baseResistance: tmpl.resistance,
+                currentResistance: saved.currentResistance ?? tmpl.resistance,
+                maxCurrent: tmpl.maxCurrent || null,
+                glowGradient: tmpl.glowGradient || null,
+                isClosed: saved.isClosed || false,
+                isBroken: saved.isBroken || false,
+                rotation: saved.rotation || 0,
+                x: saved.x, y: saved.y,
+                terminals: JSON.parse(JSON.stringify(tmpl.terminals))
             };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            if (tmpl.capacityWh) {
+                comp.batteryCapacity = tmpl.capacityWh;
+                comp.batteryLevel = saved.batteryLevel ?? tmpl.capacityWh;
+            }
+            comp.terminals.forEach((term, idx) => {
+                const tEl = document.createElement('div');
+                tEl.className = 'terminal';
+                tEl.style.left = `${term.x - 8}px`;
+                tEl.style.top = `${term.y - 8}px`;
+                tEl.dataset.cid = saved.id;
+                tEl.dataset.tidx = idx;
+                tEl.dataset.label = term.label || '';
+                el.appendChild(tEl);
+            });
+            if (comp.isBroken) {
+                el.classList.add('comp-broken');
+                if (comp.type.startsWith('led_') || comp.type === 'bulb') el.classList.add('led-broken');
+                if (comp.type === 'fuse') el.classList.add('fuse-blown');
+            }
+            if (comp.isClosed && comp.type === 'switch_toggle') el.classList.add('switch-closed');
+            if (comp.rotation) {
+                el.style.transform = `rotate(${comp.rotation}deg)`;
+                const badge = document.createElement('div');
+                badge.className = 'rotation-badge';
+                badge.textContent = `${comp.rotation}°`;
+                el.appendChild(badge);
+            }
+            // Mark grouped components
+            const grp = groups.find(g => g.members.includes(saved.id));
+            if (grp) el.classList.add('grouped');
+
+            ws.appendChild(el);
+            deployed.push(comp);
+        });
+
+        // Rebuild wires
+        state.wires.forEach(saved => {
+            let cps = saved.controlPoints;
+            if (!cps && saved.bend) {
+                cps = [
+                    { x: saved.bend.x * 0.5, y: saved.bend.y * 0.5 },
+                    { x: saved.bend.x, y: saved.bend.y },
+                    { x: saved.bend.x * 0.5, y: saved.bend.y * 0.5 }
+                ];
+            }
+            wires.push({
+                c1: saved.c1, i1: saved.i1,
+                c2: saved.c2, i2: saved.i2,
+                color: saved.color || '#94a3b8',
+                energized: false,
+                controlPoints: cps || getDefaultControlPoints()
+            });
+        });
+
+        applyTransform();
+        renderWires();
+        renderGroupLabels();
+        evaluateCircuit();
+    }
+
+    function updateUndoRedoButtons() {
+        document.getElementById('btn-undo').disabled = undoStack.length === 0;
+        document.getElementById('btn-redo').disabled = redoStack.length === 0;
+    }
+
+    function saveState() {
+        if (isRestoring) return; // don't save during undo/redo
+        try {
+            const snap = getSnapshot();
+            // Avoid pushing duplicate consecutive states
+            if (undoStack.length > 0 && undoStack[undoStack.length - 1] === snap) return;
+            undoStack.push(snap);
+            if (undoStack.length > UNDO_MAX) undoStack.shift();
+            redoStack = []; // any new action clears redo
+            updateUndoRedoButtons();
+            localStorage.setItem(STORAGE_KEY, snap);
         } catch (e) { /* quota exceeded, silently fail */ }
     }
+
+    // Save view-only changes (zoom/pan) without pushing to undo stack
+    function persistView() {
+        try {
+            localStorage.setItem(STORAGE_KEY, getSnapshot());
+        } catch (e) { /* silently fail */ }
+    }
+
+    function performUndo() {
+        if (undoStack.length === 0) return;
+        redoStack.push(getSnapshot()); // save current state to redo
+        const snap = undoStack.pop();
+        isRestoring = true;
+        applySnapshot(snap);
+        isRestoring = false;
+        updateUndoRedoButtons();
+        try { localStorage.setItem(STORAGE_KEY, snap); } catch(e) {}
+    }
+
+    function performRedo() {
+        if (redoStack.length === 0) return;
+        undoStack.push(getSnapshot()); // save current state to undo
+        const snap = redoStack.pop();
+        isRestoring = true;
+        applySnapshot(snap);
+        isRestoring = false;
+        updateUndoRedoButtons();
+        try { localStorage.setItem(STORAGE_KEY, snap); } catch(e) {}
+    }
+
+    // ── Group / Ungroup ──
+    let groupCounter = 0;
+
+    function groupSelected() {
+        if (selectedIds.size < 2) return;
+        // Check if all selected are already in the same group
+        const memberIds = [...selectedIds];
+        const existingGroup = groups.find(g => memberIds.every(id => g.members.includes(id)));
+        if (existingGroup) return; // already grouped together
+
+        // Remove members from any existing groups first
+        memberIds.forEach(id => {
+            groups.forEach(g => {
+                const idx = g.members.indexOf(id);
+                if (idx >= 0) g.members.splice(idx, 1);
+            });
+        });
+        // Clean up empty groups
+        groups = groups.filter(g => g.members.length > 0);
+
+        groupCounter++;
+        const newGroup = { id: `grp_${groupCounter}`, members: memberIds, label: '' };
+        groups.push(newGroup);
+
+        // Visual update
+        memberIds.forEach(id => {
+            document.getElementById(id)?.classList.add('grouped');
+        });
+        renderGroupLabels();
+        saveState();
+    }
+
+    function ungroupSelected() {
+        const memberIds = [...selectedIds];
+        let changed = false;
+        memberIds.forEach(id => {
+            const gi = groups.findIndex(g => g.members.includes(id));
+            if (gi >= 0) {
+                // Ungroup all members of that group
+                groups[gi].members.forEach(mid => {
+                    document.getElementById(mid)?.classList.remove('grouped');
+                });
+                groups.splice(gi, 1);
+                changed = true;
+            }
+        });
+        if (changed) {
+            renderGroupLabels();
+            saveState();
+        }
+    }
+
+    function renderGroupLabels() {
+        document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
+        groups.forEach(g => {
+            if (!g.label && !selectedIds.size) return; // only show badge if there's a label or something is selected
+            // Find bounding box of group members
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let hasMembers = false;
+            g.members.forEach(id => {
+                const c = deployed.find(d => d.id === id);
+                if (!c) return;
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                if (!tmpl) return;
+                hasMembers = true;
+                minX = Math.min(minX, c.x);
+                minY = Math.min(minY, c.y);
+                maxX = Math.max(maxX, c.x + tmpl.width);
+                maxY = Math.max(maxY, c.y + tmpl.height);
+            });
+            if (!hasMembers) return;
+
+            // Check if any group member is selected
+            const isGroupSelected = g.members.some(id => selectedIds.has(id));
+
+            const badge = document.createElement('div');
+            badge.className = 'group-label-badge';
+            if (isGroupSelected) badge.classList.add('group-selected');
+            badge.dataset.gid = g.id;
+            badge.style.left = `${(minX + maxX) / 2}px`;
+            badge.style.top = `${minY - 22}px`;
+
+            if (isGroupSelected) {
+                // Editable input
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'group-label-input';
+                input.placeholder = 'Label grup...';
+                input.value = g.label || '';
+                input.addEventListener('input', () => {
+                    g.label = input.value;
+                });
+                input.addEventListener('blur', () => {
+                    renderGroupLabels();
+                    saveState();
+                });
+                input.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { input.blur(); e.preventDefault(); }
+                    e.stopPropagation(); // prevent V/H/R shortcuts
+                });
+                badge.appendChild(input);
+                // Auto-focus after DOM insertion
+                requestAnimationFrame(() => {
+                    if (!g.label) input.focus();
+                });
+            } else if (g.label) {
+                badge.textContent = g.label;
+            } else {
+                return; // no label, not selected — don't show
+            }
+
+            ws.appendChild(badge);
+        });
+    }
+
+    // Toolbar buttons
+    document.getElementById('btn-undo').onclick = performUndo;
+    document.getElementById('btn-redo').onclick = performRedo;
+    document.getElementById('btn-group').onclick = groupSelected;
+    document.getElementById('btn-ungroup').onclick = ungroupSelected;
 
     function restoreState() {
         try {
@@ -2220,6 +2789,14 @@ document.addEventListener('DOMContentLoaded', () => {
             zoom = state.zoom || 1;
             panX = state.panX || 0;
             panY = state.panY || 0;
+
+            // Restore groups
+            groups = (state.groups || []).map(g => ({ id: g.id, members: [...g.members], label: g.label || '' }));
+            // Restore groupCounter
+            groups.forEach(g => {
+                const num = parseInt(g.id.replace('grp_', ''));
+                if (num > groupCounter) groupCounter = num;
+            });
 
             // Rebuild components
             state.deployed.forEach(saved => {
@@ -2280,6 +2857,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     badge.textContent = `${comp.rotation}°`;
                     el.appendChild(badge);
                 }
+                // Mark grouped components
+                const grp = groups.find(g => g.members.includes(saved.id));
+                if (grp) el.classList.add('grouped');
 
                 ws.appendChild(el);
                 deployed.push(comp);
@@ -2287,17 +2867,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Rebuild wires
             state.wires.forEach(saved => {
+                // Backward compat: migrate legacy single-bend to controlPoints
+                let cps = saved.controlPoints;
+                if (!cps && saved.bend) {
+                    cps = [
+                        { x: saved.bend.x * 0.5, y: saved.bend.y * 0.5 },
+                        { x: saved.bend.x, y: saved.bend.y },
+                        { x: saved.bend.x * 0.5, y: saved.bend.y * 0.5 }
+                    ];
+                }
                 wires.push({
                     c1: saved.c1, i1: saved.i1,
                     c2: saved.c2, i2: saved.i2,
                     color: saved.color || '#94a3b8',
                     energized: false,
-                    bend: saved.bend || { x: 0, y: 0 }
+                    controlPoints: cps || getDefaultControlPoints()
                 });
             });
 
             applyTransform();
             renderWires();
+            renderGroupLabels();
             evaluateCircuit();
             return true;
         } catch (e) {

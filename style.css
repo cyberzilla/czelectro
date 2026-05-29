@@ -271,19 +271,45 @@ body {
     cursor: grabbing;
 }
 
-/* Draggable midpoint handle */
+/* Draggable control-point handles — hidden by default, revealed on hover */
 .wire-handle {
     pointer-events: all;
     cursor: grab;
-    fill: rgba(148, 163, 184, 0.6);
-    stroke: rgba(255, 255, 255, 0.3);
+    fill: rgba(148, 163, 184, 0);
+    stroke: rgba(255, 255, 255, 0);
     stroke-width: 1.5;
-    transition: fill 0.2s, r 0.2s;
+    transition: fill 0.25s ease, stroke 0.25s ease, r 0.15s ease, opacity 0.25s ease;
+    opacity: 0;
 }
 
+/* Minor handles (25% and 75%) — slightly smaller */
+.wire-handle-minor {
+    r: 4;
+}
+
+/* Show handles when hovering the wire group */
+.wire-group:hover .wire-handle {
+    fill: rgba(148, 163, 184, 0.5);
+    stroke: rgba(255, 255, 255, 0.25);
+    opacity: 1;
+}
+
+/* Individual handle hover — glow accent */
 .wire-handle:hover {
     fill: var(--accent);
     stroke: #fff;
+    opacity: 1;
+    r: 7;
+    filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.6));
+}
+
+/* Grabbing state */
+.wire-handle:active {
+    cursor: grabbing;
+    fill: #4ade80;
+    stroke: #fff;
+    r: 6;
+    filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.8));
 }
 
 .real-wire {
@@ -292,13 +318,37 @@ body {
     transition: stroke 0.3s, filter 0.3s;
 }
 
+/* Subtle highlight on wire hover — not aggressive red */
 .wire-group:hover .real-wire {
-    stroke: var(--danger) !important;
-    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+    filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.5));
 }
 
 .wire-group:hover .wire-hit-area {
-    stroke: rgba(239, 68, 68, 0.15);
+    stroke: rgba(148, 163, 184, 0.08);
+}
+
+/* Selected wire handles — always visible with accent glow */
+.wire-handle.handle-selected {
+    fill: #22d3ee;
+    stroke: #fff;
+    stroke-width: 2;
+    opacity: 1;
+    r: 6;
+    filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.7));
+}
+
+.wire-handle.handle-selected:hover {
+    fill: #67e8f9;
+    r: 7;
+    filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.9));
+}
+
+/* Pan mode cursor */
+#workspace-container.mode-pan {
+    cursor: grab;
+}
+#workspace-container.mode-pan:active {
+    cursor: grabbing;
 }
 
 /* ── Board Components ── */
@@ -325,6 +375,63 @@ body {
     outline-offset: 6px;
 }
 
+/* Grouped component indicator */
+.board-component.grouped {
+    outline: 1.5px dashed rgba(139, 92, 246, 0.4);
+    outline-offset: 4px;
+}
+
+.board-component.grouped.selected {
+    outline: 2px dashed #8b5cf6;
+    outline-offset: 6px;
+}
+
+/* Group label badge — floats above group bounding box */
+.group-label-badge {
+    position: absolute;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 6px;
+    padding: 2px 8px;
+    white-space: nowrap;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.group-label-badge.group-selected {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.6);
+    pointer-events: auto;
+    box-shadow: 0 2px 12px rgba(139, 92, 246, 0.3);
+}
+
+/* Group label live-edit input */
+.group-label-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e9d5ff;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    width: 100px;
+    text-align: center;
+    padding: 0;
+    caret-color: #a78bfa;
+}
+
+.group-label-input::placeholder {
+    color: rgba(196, 181, 253, 0.4);
+    font-style: italic;
+}
+
 /* ── Terminals ── */
 .terminal {
     position: absolute;
@@ -337,13 +444,19 @@ body {
     pointer-events: auto;
     z-index: 15;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.3);
-    transition: transform 0.2s var(--transition-smooth), background 0.2s, border-color 0.2s;
+    transition: transform 0.2s var(--transition-smooth), background 0.2s, border-color 0.2s, opacity 0.25s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 0;
 }
 
-/* Label inside terminal circle */
+/* Show terminals on component hover */
+.board-component:hover .terminal {
+    opacity: 1;
+}
+
+/* Label inside terminal circle — also hidden, shown on hover */
 .terminal::after {
     content: attr(data-label);
     font-size: 8px;
@@ -353,6 +466,14 @@ body {
     line-height: 1;
     pointer-events: none;
     text-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.3);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+/* Show labels on component hover or terminal hover */
+.board-component:hover .terminal::after,
+.terminal:hover::after {
+    opacity: 1;
 }
 
 .terminal:hover {
@@ -360,6 +481,7 @@ body {
     background: radial-gradient(circle at 35% 35%, #4ade80, #166534);
     border-color: #064e3b;
     box-shadow: 0 0 12px rgba(74, 222, 128, 0.6), 0 2px 6px rgba(0, 0, 0, 0.5);
+    opacity: 1;
 }
 
 .terminal.connected {
@@ -555,30 +677,7 @@ body {
     filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.7));
 }
 
-/* Motor direction badge (FWD / REV) */
-.motor-dir-badge {
-    position: absolute;
-    bottom: -20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 9px;
-    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
-    font-weight: 800;
-    color: #4ade80;
-    white-space: nowrap;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid rgba(74, 222, 128, 0.3);
-    z-index: 20;
-    animation: badgeFadeIn 0.3s ease-out;
-}
-
-.motor-dir-badge.reversed {
-    color: #f97316;
-    border-color: rgba(249, 115, 22, 0.4);
-}
+/* Motor direction badge (FWD / REV) — defined once below in Motor Direction Badge section */
 
 @keyframes badgeFadeIn {
     from { opacity: 0; transform: translateX(-50%) translateY(4px); }
@@ -747,6 +846,12 @@ body {
     background: rgba(74, 222, 128, 0.2);
     color: var(--accent);
     border-color: var(--accent);
+}
+
+.tb-btn:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    cursor: default;
 }
 
 .tb-sep {
@@ -1047,20 +1152,21 @@ body {
 /* ── Motor Direction Badge ── */
 .motor-dir-badge {
     position: absolute;
-    top: -20px;
+    bottom: -36px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 7px;
+    font-size: 8px;
     font-family: 'Cascadia Code', 'Consolas', monospace;
     font-weight: 800;
     color: #a78bfa;
     white-space: nowrap;
     pointer-events: none;
-    padding: 1px 5px;
-    border-radius: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
     background: rgba(0, 0, 0, 0.8);
     border: 1px solid rgba(167, 139, 250, 0.3);
     z-index: 20;
+    animation: badgeFadeIn 0.3s ease-out;
 }
 .motor-dir-badge.reversed {
     color: #fb923c;
