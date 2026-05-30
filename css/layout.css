@@ -684,17 +684,33 @@
     .sidebar-toggle {
         left: 0;
         top: 0;
-        border-radius: 0 0 var(--radius-sm) 0;
+        border-radius: 0;
         z-index: 101;
-        width: 48px;
-        height: 48px;
-        font-size: 20px;
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
         border-top: none;
         border-left: none;
+        border-right: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+        box-shadow: none;
+        transition: left 0.35s var(--transition-smooth),
+                    border-radius 0.35s var(--transition-smooth),
+                    background 0.2s, color 0.2s;
     }
 
     #sidebar.open ~ .sidebar-toggle {
         left: 300px;
+        border-radius: 0 0 var(--radius-sm) 0;
+    }
+
+    /* Dim toolbar & status bar when sidebar is open — matches overlay backdrop */
+    #sidebar.open ~ #workspace-container #toolbar,
+    #sidebar.open ~ #workspace-container #status-bar {
+        opacity: 0.3;
+        pointer-events: none;
+        filter: blur(2px);
+        transition: opacity 0.3s, filter 0.3s;
     }
 
     .item-icon { width: 40px; height: 40px; }
@@ -704,50 +720,115 @@
     #toolbar {
         position: fixed;
         top: 0;
-        left: 48px;
+        left: 44px;
         right: 0;
         transform: none;
-        padding: 6px 10px;
-        gap: 4px;
+        padding: 4px 8px;
+        gap: 3px;
         flex-wrap: nowrap;
         overflow-x: auto;
         overflow-y: hidden;
         max-width: none;
-        border-radius: 0 0 var(--radius-md) var(--radius-md);
+        height: 44px;
+        border-radius: 0 0 var(--radius-md) 0;
         border-top: none;
+        border-left: none;
         z-index: 55;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        align-items: center;
+        transition: opacity 0.3s, filter 0.3s;
     }
     #toolbar::-webkit-scrollbar { display: none; }
     .tb-btn {
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
         font-size: 14px;
         flex-shrink: 0;
     }
     .tb-sep {
         width: 1px;
         min-width: 1px;
-        margin: 6px 2px;
+        height: 20px;
+        margin: 0 1px;
         flex-shrink: 0;
     }
     .tb-label {
-        font-size: 0.62rem;
-        padding: 0 4px;
+        font-size: 0.6rem;
+        padding: 0 3px;
         flex-shrink: 0;
     }
 
     #status-bar {
-        bottom: 8px;
-        left: 8px;
-        right: 8px;
+        bottom: 0;
+        left: 0;
+        right: 0;
         transform: none;
+        border-radius: 12px 12px 0 0;
         padding: 6px 10px;
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
         font-size: 0.65rem;
-        gap: 6px;
+        gap: 4px 8px;
         max-width: 100%;
+        flex-wrap: wrap;
+        overflow: hidden;
+        transition: opacity 0.3s, filter 0.3s;
+    }
+
+    #status-bar .status-item {
+        flex-shrink: 0;
+    }
+
+    #status-bar .sim-controls {
+        border-left: none;
+        border-top: 1px solid var(--border-subtle);
+        margin-left: 0;
+        padding: 4px 0 0;
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 3px;
+    }
+
+    #status-bar .sim-label {
+        font-size: 10px;
+        margin-right: 2px;
+    }
+
+    #status-bar .sim-btn {
+        padding: 4px 8px;
+        font-size: 10px;
+        min-height: 28px;
+    }
+
+    #status-bar .sim-divider {
+        display: none;
+    }
+
+    #status-bar .sim-day,
+    #status-bar .sim-night {
+        font-size: 9px;
+        padding: 4px 6px;
+    }
+
+    #status-bar .sim-panel {
+        border-left: none;
+        border-top: 1px solid var(--border-subtle);
+        margin-left: 0;
+        padding: 4px 0 0;
+        width: 100%;
+        font-size: 9px;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    #status-bar .sim-panel::-webkit-scrollbar {
+        display: none;
+    }
+
+    #circuit-loops {
+        flex-wrap: wrap;
+        gap: 4px;
     }
 
     #instructions { display: none; }
@@ -760,6 +841,35 @@
     #sidebar { width: 260px; min-width: 260px; }
     #sidebar.open ~ .sidebar-toggle { left: 260px; }
 
+    .sidebar-toggle {
+        width: 38px;
+        height: 38px;
+        font-size: 16px;
+    }
+
+    #toolbar {
+        left: 38px;
+        height: 38px;
+        padding: 3px 6px;
+        gap: 2px;
+    }
+
+    .tb-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
+    }
+
+    .tb-sep {
+        height: 16px;
+        margin: 0 1px;
+    }
+
+    .tb-label {
+        font-size: 0.55rem;
+        padding: 0 2px;
+    }
+
     .sidebar-item { padding: 8px 10px; gap: 8px; }
     .item-icon { width: 36px; height: 36px; }
     .item-name { font-size: 0.72rem; }
@@ -771,5 +881,32 @@
     #sidebar-header { padding: 14px 14px 12px; }
     .title { font-size: 1rem; }
     .subtitle { font-size: 0.6rem; }
+
+    #status-bar {
+        padding: 4px 8px;
+        padding-bottom: max(4px, env(safe-area-inset-bottom));
+        font-size: 0.6rem;
+        gap: 3px 6px;
+    }
+
+    #status-bar .sim-controls {
+        gap: 2px;
+    }
+
+    #status-bar .sim-btn {
+        padding: 3px 6px;
+        font-size: 9px;
+        min-height: 26px;
+    }
+
+    #status-bar .sim-label {
+        font-size: 9px;
+    }
+
+    #status-bar .sim-day,
+    #status-bar .sim-night {
+        font-size: 8px;
+        padding: 3px 5px;
+    }
 }
 

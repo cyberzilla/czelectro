@@ -317,11 +317,13 @@
             if (CZ.activeWireDrag) {
                 const dx = m.x - CZ.activeWireDrag.startMouse.x;
                 const dy = m.y - CZ.activeWireDrag.startMouse.y;
+                const updatedWires = new Set();
                 if (CZ.activeWireDrag.allHandles && CZ.activeWireDrag.allHandles.length > 0) {
                     CZ.activeWireDrag.allHandles.forEach(h => {
                         const wire = CZ.wires[h.wireIdx];
                         if (wire && wire.controlPoints) {
                             wire.controlPoints[h.handleIdx] = { x: h.startOffset.x + dx, y: h.startOffset.y + dy };
+                            updatedWires.add(h.wireIdx);
                         }
                     });
                 } else {
@@ -331,9 +333,14 @@
                             x: CZ.activeWireDrag.startOffset.x + dx,
                             y: CZ.activeWireDrag.startOffset.y + dy
                         };
+                        updatedWires.add(CZ.activeWireDrag.wireIdx);
                     }
                 }
-                CZ.renderWires();
+
+                // In-place DOM update — preserves touch target during drag.
+                // CZ.renderWires() would destroy all SVG elements (innerHTML='')
+                // and recreate them, killing the touch target mid-drag.
+                updatedWires.forEach(wi => CZ.updateWire(wi));
                 return;
             }
 

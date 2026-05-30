@@ -238,6 +238,9 @@
             }
             if (!w.controlPoints) w.controlPoints = CZ.getDefaultControlPoints();
 
+            // Save spread for in-place updates during drag
+            w._lastSpread = wireSpread[idx];
+
             const { d, handlePositions } = CZ.makeWirePath(p1, dir1, p2, dir2, w.controlPoints, wireSpread[idx]);
 
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -299,6 +302,50 @@
 
             document.querySelector(`[data-cid="${w.c1}"][data-tidx="${w.i1}"]`)?.classList.add('connected');
             document.querySelector(`[data-cid="${w.c2}"][data-tidx="${w.i2}"]`)?.classList.add('connected');
+        });
+    };
+
+    // ── In-place wire update (preserves DOM elements for touch drag) ──
+    // Updates SVG attributes directly without destroying/recreating elements.
+    // This prevents touch targets from being lost during touchmove.
+    CZ.updateWire = function(idx) {
+        const w = CZ.wires[idx];
+        if (!w) return;
+
+        const c1 = CZ.deployed.find(c => c.id === w.c1);
+        const c2 = CZ.deployed.find(c => c.id === w.c2);
+        if (!c1 || !c2) return;
+
+        const p1 = CZ.getAbsPos(c1, c1.terminals[w.i1]);
+        const p2 = CZ.getAbsPos(c2, c2.terminals[w.i2]);
+        const dir1 = CZ.getTerminalDir(c1, w.i1);
+        const dir2 = CZ.getTerminalDir(c2, w.i2);
+
+        const spread = w._lastSpread || { x: 0, y: 0 };
+        const { d, handlePositions } = CZ.makeWirePath(p1, dir1, p2, dir2, w.controlPoints, spread);
+
+        // Find the existing SVG group by wire index
+        const g = CZ.wiresG.querySelector(`g.wire-group[data-widx="${idx}"]`);
+        if (!g) return;
+
+        // Update path data in-place — no DOM destruction
+        const hit = g.querySelector('.wire-hit-area');
+        if (hit) hit.setAttribute('d', d);
+
+        const vis = g.querySelector('.real-wire');
+        if (vis) vis.setAttribute('d', d);
+
+        const flow = g.querySelector('.wire-flow');
+        if (flow) flow.setAttribute('d', d);
+
+        // Update handle positions in-place
+        const handles = g.querySelectorAll('.wire-handle');
+        handles.forEach(h => {
+            const hIdx = parseInt(h.dataset.hidx);
+            if (handlePositions[hIdx]) {
+                h.setAttribute('cx', handlePositions[hIdx].x);
+                h.setAttribute('cy', handlePositions[hIdx].y);
+            }
         });
     };
 
