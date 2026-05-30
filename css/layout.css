@@ -298,6 +298,32 @@
     filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.9));
 }
 
+/* ── Touch devices: visual styling for large SVG touch targets ── */
+/* Handle geometry (r attribute) is set in wire.js for reliable hit-testing. */
+/* CSS only controls visual appearance — fill, opacity, stroke. */
+@media (pointer: coarse) {
+    .wire-handle {
+        opacity: 1;
+        fill: rgba(148, 163, 184, 0.12);
+        stroke: rgba(255, 255, 255, 0.08);
+        stroke-width: 1;
+    }
+    .wire-handle:active {
+        fill: rgba(74, 222, 128, 0.4);
+        stroke: rgba(255, 255, 255, 0.5);
+        filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.6));
+    }
+    .wire-handle.handle-selected {
+        fill: rgba(34, 211, 238, 0.25);
+        stroke: rgba(255, 255, 255, 0.3);
+        stroke-width: 1.5;
+        filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.5));
+    }
+    .wire-hit-area {
+        stroke-width: 24;
+    }
+}
+
 /* Pan mode cursor */
 #workspace-container.mode-pan {
     cursor: grab;

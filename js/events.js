@@ -11,7 +11,6 @@
 
         // ── Touch-to-Mouse adapter for mobile support ──
         // Converts single-finger touch events into synthetic MouseEvents.
-        // touchmove is RAF-throttled to prevent lag during drag/wire operations.
         let _touchRAF = null;
 
         ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(touchType => {
@@ -26,31 +25,28 @@
                     if (!CZ._sidebarDragging) return;
                 }
 
-                // Prevent scroll/zoom during active interactions
-                if (CZ.isDragging || CZ.isPanning || CZ.activeTerm || CZ.activeWireDrag || CZ.selRect) {
+                // Prevent scroll/zoom during ongoing interactions
+                if (e.cancelable && (CZ.isDragging || CZ.isPanning || CZ.activeTerm || CZ.activeWireDrag || CZ.selRect)) {
                     e.preventDefault();
                 }
 
-                // Throttle touchmove with RAF — always use latest coordinates
+                // ── touchmove: RAF-throttled, always dispatch to document ──
                 if (touchType === 'touchmove') {
-                    // Capture values immediately (Touch objects get recycled)
                     CZ._touchMoveX = touch.clientX;
                     CZ._touchMoveY = touch.clientY;
-                    CZ._touchMoveTarget = touch.target;
                     if (!_touchRAF) {
                         _touchRAF = requestAnimationFrame(() => {
                             _touchRAF = null;
-                            const moveEvent = new MouseEvent('mousemove', {
+                            document.dispatchEvent(new MouseEvent('mousemove', {
                                 bubbles: true, cancelable: true,
                                 clientX: CZ._touchMoveX, clientY: CZ._touchMoveY, button: 0
-                            });
-                            CZ._touchMoveTarget.dispatchEvent(moveEvent);
+                            }));
                         });
                     }
                     return;
                 }
 
-                // touchstart/end/cancel — fire immediately (no throttle)
+                // ── touchstart / touchend / touchcancel — fire immediately ──
                 const mouseType = {
                     touchstart: 'mousedown',
                     touchend: 'mouseup',
@@ -58,16 +54,49 @@
                 }[touchType];
 
                 let target = touch.target;
+
+                if (touchType === 'touchstart') {
+                    // Clean up stale selection rect from a previous gesture that
+                    // didn't complete properly (e.g. browser intercepted the scroll)
+                    if (CZ.selRect) {
+                        CZ.selRect.remove();
+                        CZ.selRect = null;
+                    }
+
+                    // SVG hit-testing fix: touch.target is unreliable for SVG children
+                    // inside a parent with pointer-events: none (wire-layer).
+                    // Use elementFromPoint as fallback specifically for wire elements.
+                    const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (elUnder) {
+                        const isWireEl = elUnder.closest && (
+                            elUnder.closest('.wire-handle') ||
+                            elUnder.closest('.wire-hit-area')
+                        );
+                        if (isWireEl) {
+                            target = elUnder;
+                        }
+                    }
+                }
+
                 if (touchType === 'touchend' || touchType === 'touchcancel') {
+                    // Use elementFromPoint — touch.target for touchend is where
+                    // touch STARTED (per spec), we need current element for wiring
                     const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
                     if (elUnder) target = elUnder;
                 }
 
-                const mouseEvent = new MouseEvent(mouseType, {
+                target.dispatchEvent(new MouseEvent(mouseType, {
                     bubbles: true, cancelable: true,
                     clientX: touch.clientX, clientY: touch.clientY, button: 0
-                });
-                target.dispatchEvent(mouseEvent);
+                }));
+
+                // After synthetic mousedown, a drag state may have been activated
+                // synchronously. preventDefault to stop browser scroll gesture.
+                if (touchType === 'touchstart' && e.cancelable) {
+                    if (CZ.activeWireDrag || CZ.isDragging || CZ.activeTerm || CZ.selRect) {
+                        e.preventDefault();
+                    }
+                }
             }, { passive: false });
         });
 
@@ -124,7 +153,7 @@
                         `;
                         document.body.appendChild(ghost);
                         touchState.ghost = ghost;
-                        e.preventDefault();
+                        if (e.cancelable) e.preventDefault();
                     }
                 }
 
@@ -132,7 +161,7 @@
                     const tmpl = touchState.tmpl;
                     touchState.ghost.style.left = (touch.clientX - tmpl.width/2) + 'px';
                     touchState.ghost.style.top = (touch.clientY - tmpl.height/2) + 'px';
-                    e.preventDefault();
+                    if (e.cancelable) e.preventDefault();
                 }
             }, { passive: false });
 
@@ -736,16 +765,25 @@
             const touch = e.touches[0];
             const startX = touch.clientX, startY = touch.clientY;
 
-            // Don't start long press on wire handles or terminals
+            // Don't start long press on terminals (they initiate wiring)
             const el = document.elementFromPoint(startX, startY);
-            if (el && (el.closest('.wire-handle') || el.closest('.terminal'))) return;
+            if (el && el.closest && el.closest('.terminal')) return;
 
             longPressTimer = setTimeout(() => {
-                // Abort if any drag operation is active
-                if (CZ.activeWireDrag || CZ.activeTerm || CZ.isDragging) {
+                // Abort only if finger actually moved (it's a drag, not a hold)
+                if (CZ.dragMoved) {
                     longPressTimer = null;
                     return;
                 }
+
+                // Finger held still for 500ms → this is a long press, not a drag.
+                // Clear any drag state that was set by the synthetic mousedown
+                // (touchstart → mousedown → isDragging/activeWireDrag set immediately)
+                CZ.activeWireDrag = null;
+                CZ.activeTerm = null;
+                CZ.isDragging = false;
+                CZ.dragEl = null;
+                CZ.dragMoved = false;
 
                 longPressTriggered = true;
                 if (navigator.vibrate) navigator.vibrate(30);
@@ -758,10 +796,6 @@
                     });
                     target.dispatchEvent(ctxEvent);
                 }
-
-                CZ.isDragging = false;
-                CZ.dragEl = null;
-                CZ.dragMoved = false;
             }, 500);
 
             // Cancel long press if finger moves too much

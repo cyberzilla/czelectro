@@ -6,6 +6,11 @@
 (function(CZ) {
     'use strict';
 
+    // Detect coarse pointer (touch device) once for SVG attribute sizing.
+    // CSS `r` property may not affect SVG hit-testing in all browsers,
+    // so we must set the SVG `r` attribute directly for reliable touch targets.
+    const _isCoarse = matchMedia('(pointer: coarse)').matches;
+
     // ── Rotation helper ──
     // Fast rotation with special cases for 0/90/180/270
     CZ.rotatePoint = function(px, py, cx, cy, angleDeg) {
@@ -72,7 +77,7 @@
     CZ.resolveControlPoints = function(p1, dir1, p2, dir2, controlPoints) {
         const dx = p2.x - p1.x, dy = p2.y - p1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const arm = Math.max(50, Math.min(dist * 0.5, 200));
+        const arm = Math.max(15, Math.min(dist * 0.4, 150));
 
         // Base cubic bezier — spread-independent so handles stay stable
         const bc1x = p1.x + dir1.dx * arm;
@@ -111,7 +116,7 @@
 
         const dx0 = p2.x - p1.x, dy0 = p2.y - p1.y;
         const dist0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
-        const arm = Math.max(50, Math.min(dist0 * 0.5, 200));
+        const arm = Math.max(15, Math.min(dist0 * 0.4, 150));
         const sox = spreadOffset?.x || 0, soy = spreadOffset?.y || 0;
 
         // Spread offset only affects tangent direction — not control point base positions
@@ -165,7 +170,7 @@
     CZ.makePreviewPath = function(p1, dir1, mx, my) {
         const dx = mx - p1.x, dy = my - p1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const arm = Math.max(40, Math.min(dist * 0.45, 160));
+        const arm = Math.max(15, Math.min(dist * 0.4, 150));
 
         const cp1x = p1.x + dir1.dx * arm;
         const cp1y = p1.y + dir1.dy * arm;
@@ -275,7 +280,10 @@
                 const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 handle.setAttribute('cx', hp.x);
                 handle.setAttribute('cy', hp.y);
-                handle.setAttribute('r', hIdx === 1 ? '5' : '4');
+                // On touch: set SVG attribute to large radius for reliable finger tapping.
+                // CSS controls visual appearance (fill, opacity) but SVG attribute
+                // determines hit-testing area in the browser's touch engine.
+                handle.setAttribute('r', _isCoarse ? (hIdx === 1 ? '16' : '14') : (hIdx === 1 ? '5' : '4'));
                 handle.classList.add('wire-handle');
                 if (hIdx !== 1) handle.classList.add('wire-handle-minor');
                 handle.dataset.widx = idx;
