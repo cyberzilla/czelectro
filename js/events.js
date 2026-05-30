@@ -442,6 +442,7 @@
                     if (indicator) indicator.textContent = comp.isClosed ? 'ON' : 'OFF';
                     CZ.SFX.switchClick();
                     CZ.evaluateCircuit();
+                    CZ.saveState();
                 }
 
                 // Toggle terminal visibility on tap (touch devices)
@@ -482,6 +483,7 @@
                             CZ.renderWires();
                             CZ.evaluateCircuit();
                             CZ.SFX.wireSnap();
+                            CZ.saveState();
                         }
                     }
                 }
@@ -579,6 +581,7 @@
                     // Desktop: instant delete
                     CZ.wires.splice(wIdx, 1);
                     CZ.renderWires(); CZ.evaluateCircuit();
+                    CZ.saveState();
                 } else {
                     // Touch: show confirmation menu
                     document.querySelector('.ctx-menu')?.remove();
@@ -609,6 +612,7 @@
                         if (action === 'delete') {
                             CZ.wires.splice(wIdx, 1);
                             CZ.renderWires(); CZ.evaluateCircuit();
+                            CZ.saveState();
                         }
                         menu.remove();
                     });
@@ -716,6 +720,7 @@
                     CZ.selectedIds.clear();
                     CZ.renderGroupLabels();
                     CZ.renderWires(); CZ.evaluateCircuit();
+                    CZ.saveState();
                 } else if (action === 'duplicate') {
                     CZ.duplicateSelected();
                 } else if (action === 'copytext') {
@@ -738,6 +743,7 @@
                     });
                 } else if (action === 'reset' && comp) {
                     CZ.resetComponent(comp.id);
+                    CZ.saveState();
                 } else if (action === 'resetbatt') {
                     const targets = isMulti ? [...CZ.selectedIds] : (comp ? [comp.id] : []);
                     targets.forEach(cid => {
@@ -748,8 +754,10 @@
                         if (t) c.voltage = t.voltage;
                     });
                     CZ.evaluateCircuit();
+                    CZ.saveState();
                 } else if (action === 'rotate') {
                     CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
+                    CZ.saveState();
                 } else if (action === 'group') {
                     CZ.groupSelected();
                 } else if (action === 'ungroup') {
@@ -844,6 +852,7 @@
                     CZ.selectedIds.clear();
                     CZ.renderGroupLabels();
                     CZ.renderWires(); CZ.evaluateCircuit();
+                    CZ.saveState();
                 }
             }
             if (e.key === 'Escape') {
@@ -881,9 +890,10 @@
         CZ.setupGridHandlers();
         CZ.setupToolbar();
         CZ.setupEvents();
-        // Grid button state now managed by setupGridHandlers
         CZ.restoreState();
         CZ.restoreSimState();
+        // Push initial state as baseline for undo stack (top = current state)
+        CZ.saveState();
         CZ.drawGrid();
         window.addEventListener('resize', CZ.drawGrid);
         CZ.applyTransform();

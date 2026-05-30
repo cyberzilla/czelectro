@@ -83,6 +83,7 @@
     };
 
     // ── Snapshot helpers for undo/redo ──
+    // NOTE: zoom/pan are excluded — undo should only affect data, not viewport.
     CZ.getSnapshot = function() {
         return JSON.stringify({
             deployed: CZ.deployed.map(c => ({
@@ -99,8 +100,17 @@
                 controlPoints: w.controlPoints || CZ.getDefaultControlPoints()
             })),
             groups: CZ.groups.map(g => ({ id: g.id, members: [...g.members], label: g.label || '' })),
-            counter: CZ.counter, zoom: CZ.zoom, panX: CZ.panX, panY: CZ.panY
+            counter: CZ.counter
         });
+    };
+
+    // Full snapshot including viewport — for localStorage persistence only
+    CZ.getFullSnapshot = function() {
+        const base = JSON.parse(CZ.getSnapshot());
+        base.zoom = CZ.zoom;
+        base.panX = CZ.panX;
+        base.panY = CZ.panY;
+        return JSON.stringify(base);
     };
 
     CZ.applySnapshot = function(json) {
@@ -111,9 +121,10 @@
         CZ.deployed = []; CZ.wires = [];
 
         CZ.counter = state.counter || 0;
-        CZ.zoom = state.zoom || 1;
-        CZ.panX = state.panX || 0;
-        CZ.panY = state.panY || 0;
+        // Only restore viewport if present (full snapshot from localStorage)
+        if (state.zoom !== undefined) CZ.zoom = state.zoom;
+        if (state.panX !== undefined) CZ.panX = state.panX;
+        if (state.panY !== undefined) CZ.panY = state.panY;
         CZ.groups = (state.groups || []).map(g => ({ id: g.id, members: [...g.members], label: g.label || '' }));
 
         // Rebuild components
@@ -199,51 +210,54 @@
     };
 
     CZ.updateUndoRedoButtons = function() {
-        document.getElementById('btn-undo').disabled = CZ.undoStack.length === 0;
+        document.getElementById('btn-undo').disabled = CZ.undoStack.length < 2;
         document.getElementById('btn-redo').disabled = CZ.redoStack.length === 0;
     };
 
+    // ── Save state after an action ──
+    // Stack model: undoStack top = current state.
+    // Undo pops current → redo, applies previous (peek).
     CZ.saveState = function() {
         if (CZ.isRestoring) return; // don't save during undo/redo
         try {
             const snap = CZ.getSnapshot();
-            // Avoid pushing duplicate consecutive states
+            // Avoid duplicate consecutive states
             if (CZ.undoStack.length > 0 && CZ.undoStack[CZ.undoStack.length - 1] === snap) return;
             CZ.undoStack.push(snap);
             if (CZ.undoStack.length > CZ.UNDO_MAX) CZ.undoStack.shift();
             CZ.redoStack = []; // any new action clears redo
             CZ.updateUndoRedoButtons();
-            localStorage.setItem(STORAGE_KEY, snap);
+            localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot());
         } catch (e) { /* quota exceeded, silently fail */ }
     };
 
     // Save view-only changes (zoom/pan) without pushing to undo stack
     CZ.persistView = function() {
         try {
-            localStorage.setItem(STORAGE_KEY, CZ.getSnapshot());
+            localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot());
         } catch (e) { /* silently fail */ }
     };
 
     CZ.performUndo = function() {
-        if (CZ.undoStack.length === 0) return;
-        CZ.redoStack.push(CZ.getSnapshot()); // save current state to redo
-        const snap = CZ.undoStack.pop();
+        if (CZ.undoStack.length < 2) return; // need current + at least one previous
+        CZ.redoStack.push(CZ.undoStack.pop()); // move current state to redo
+        const snap = CZ.undoStack[CZ.undoStack.length - 1]; // peek previous (keep as new "current")
         CZ.isRestoring = true;
         CZ.applySnapshot(snap);
         CZ.isRestoring = false;
         CZ.updateUndoRedoButtons();
-        try { localStorage.setItem(STORAGE_KEY, snap); } catch(e) {}
+        try { localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot()); } catch(e) {}
     };
 
     CZ.performRedo = function() {
         if (CZ.redoStack.length === 0) return;
-        CZ.undoStack.push(CZ.getSnapshot()); // save current state to undo
         const snap = CZ.redoStack.pop();
+        CZ.undoStack.push(snap); // push to undo as new "current"
         CZ.isRestoring = true;
         CZ.applySnapshot(snap);
         CZ.isRestoring = false;
         CZ.updateUndoRedoButtons();
-        try { localStorage.setItem(STORAGE_KEY, snap); } catch(e) {}
+        try { localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot()); } catch(e) {}
     };
 
     CZ.restoreState = function() {
