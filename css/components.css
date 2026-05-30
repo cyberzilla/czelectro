@@ -1,355 +1,9 @@
 /* ═══════════════════════════════════════════════════
-   CZElectro — Realistic Electronic Lab Simulator
-   Premium Dark Theme with Glassmorphism
+   CZElectro — Component Visual Styles
+   Board components, terminals, LED glow, motor spin,
+   buzzer, speaker, relay, AC appliances, sparks,
+   battery sim, groups, badges, animations
    ═══════════════════════════════════════════════════ */
-
-/* System fonts only — no external loading */
-
-/* ── Reset ── */
-*, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-:root {
-    --bg-primary: #0f0f1a;
-    --bg-secondary: rgba(20, 20, 35, 0.85);
-    --bg-card: rgba(0, 0, 0, 0.4);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-hover: rgba(74, 222, 128, 0.4);
-    --accent: #4ade80;
-    --accent-glow: rgba(74, 222, 128, 0.3);
-    --danger: #ef4444;
-    --warning: #f59e0b;
-    --info: #60a5fa;
-    --text-primary: #e2e8f0;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --glass-blur: 18px;
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --shadow-heavy: 0 20px 60px rgba(0, 0, 0, 0.8);
-    --transition-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background-color: var(--bg-primary);
-    background-image:
-        radial-gradient(rgba(74, 222, 128, 0.03) 1px, transparent 1px),
-        radial-gradient(rgba(96, 165, 250, 0.02) 1px, transparent 1px);
-    background-size: 20px 20px, 30px 30px;
-    background-position: 0 0, 15px 15px;
-    color: var(--text-primary);
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    user-select: none;
-}
-
-/* ── Sidebar ── */
-#sidebar {
-    width: 300px;
-    min-width: 300px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border-right: 1px solid var(--border-subtle);
-    display: flex;
-    flex-direction: column;
-    z-index: 10;
-    box-shadow: 5px 0 40px rgba(0, 0, 0, 0.6);
-}
-
-#sidebar-header {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid var(--border-subtle);
-    text-align: center;
-    background: linear-gradient(180deg, rgba(74, 222, 128, 0.06) 0%, transparent 100%);
-}
-
-.logo-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 6px;
-}
-
-.logo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, var(--accent), #22d3ee);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
-}
-
-.title {
-    font-size: 1.15rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--accent), #22d3ee);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-}
-
-.subtitle {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-
-/* Category tabs */
-.category-tabs {
-    display: flex;
-    gap: 4px;
-    padding: 12px 16px 0;
-}
-
-.cat-tab {
-    flex: 1;
-    padding: 7px 0;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    font-size: 0.7rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.25s var(--transition-smooth);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.cat-tab:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-secondary);
-}
-
-.cat-tab.active {
-    background: rgba(74, 222, 128, 0.12);
-    color: var(--accent);
-}
-
-/* Component list */
-#component-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-#component-list::-webkit-scrollbar { width: 5px; }
-#component-list::-webkit-scrollbar-track { background: transparent; }
-#component-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 4px;
-}
-
-.sidebar-item {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    cursor: grab;
-    transition: all 0.3s var(--transition-smooth);
-    position: relative;
-    overflow: hidden;
-    flex-shrink: 0;
-}
-
-.sidebar-item::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), transparent);
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.sidebar-item:hover {
-    border-color: var(--border-hover);
-    transform: translateX(4px);
-    box-shadow: 0 4px 20px rgba(74, 222, 128, 0.1);
-}
-
-.sidebar-item:hover::before { opacity: 1; }
-
-.sidebar-item:active { cursor: grabbing; transform: scale(0.97); }
-
-.item-icon {
-    width: 52px;
-    height: 52px;
-    flex-shrink: 0;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
-    position: relative;
-    z-index: 1;
-}
-
-.item-details {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    position: relative;
-    z-index: 1;
-}
-
-.item-name {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #fff;
-}
-
-.item-spec {
-    font-size: 0.68rem;
-    color: var(--text-muted);
-    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
-}
-
-/* ── Workspace ── */
-#workspace-container {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-}
-
-#workspace {
-    width: 5000px;
-    height: 5000px;
-    position: absolute;
-    top: 0;
-    left: 0;
-    transform-origin: 0 0;
-}
-
-/* Grid overlay */
-#grid-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 1;
-}
-
-/* Wire SVG layer — lives inside #workspace so coordinates match component positions */
-#wire-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 5;
-    pointer-events: none;
-    overflow: visible;
-}
-
-.wire-hit-area {
-    pointer-events: stroke;
-    cursor: grab;
-    stroke: transparent;
-    fill: none;
-    stroke-width: 18;
-}
-
-.wire-hit-area:active {
-    cursor: grabbing;
-}
-
-/* Draggable control-point handles — hidden by default, revealed on hover */
-.wire-handle {
-    pointer-events: all;
-    cursor: grab;
-    fill: rgba(148, 163, 184, 0);
-    stroke: rgba(255, 255, 255, 0);
-    stroke-width: 1.5;
-    transition: fill 0.25s ease, stroke 0.25s ease, r 0.15s ease, opacity 0.25s ease;
-    opacity: 0;
-}
-
-/* Minor handles (25% and 75%) — slightly smaller */
-.wire-handle-minor {
-    r: 4;
-}
-
-/* Show handles when hovering the wire group */
-.wire-group:hover .wire-handle {
-    fill: rgba(148, 163, 184, 0.5);
-    stroke: rgba(255, 255, 255, 0.25);
-    opacity: 1;
-}
-
-/* Individual handle hover — glow accent */
-.wire-handle:hover {
-    fill: var(--accent);
-    stroke: #fff;
-    opacity: 1;
-    r: 7;
-    filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.6));
-}
-
-/* Grabbing state */
-.wire-handle:active {
-    cursor: grabbing;
-    fill: #4ade80;
-    stroke: #fff;
-    r: 6;
-    filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.8));
-}
-
-.real-wire {
-    pointer-events: none;
-    fill: none;
-    transition: stroke 0.3s, filter 0.3s;
-}
-
-/* Subtle highlight on wire hover — not aggressive red */
-.wire-group:hover .real-wire {
-    filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.5));
-}
-
-.wire-group:hover .wire-hit-area {
-    stroke: rgba(148, 163, 184, 0.08);
-}
-
-/* Selected wire handles — always visible with accent glow */
-.wire-handle.handle-selected {
-    fill: #22d3ee;
-    stroke: #fff;
-    stroke-width: 2;
-    opacity: 1;
-    r: 6;
-    filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.7));
-}
-
-.wire-handle.handle-selected:hover {
-    fill: #67e8f9;
-    r: 7;
-    filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.9));
-}
-
-/* Pan mode cursor */
-#workspace-container.mode-pan {
-    cursor: grab;
-}
-#workspace-container.mode-pan:active {
-    cursor: grabbing;
-}
 
 /* ── Board Components ── */
 .board-component {
@@ -360,6 +14,7 @@ body {
     justify-content: center;
     align-items: center;
     transition: transform 0.15s;
+    overflow: visible !important;
 }
 
 .board-component:active {
@@ -371,19 +26,20 @@ body {
 }
 
 .board-component.selected {
-    outline: 2px dashed var(--accent);
-    outline-offset: 6px;
+    outline: .5px dashed var(--accent);
+    outline-offset: 4px;
+    filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.3));
 }
 
 /* Grouped component indicator */
 .board-component.grouped {
-    outline: 1.5px dashed rgba(139, 92, 246, 0.4);
+    /* outline: .5px dashed rgba(139, 92, 246, 0.4); */
     outline-offset: 4px;
 }
 
 .board-component.grouped.selected {
-    outline: 2px dashed #8b5cf6;
-    outline-offset: 6px;
+    outline: .5px dashed #8b5cf6;
+    outline-offset: 4px;
 }
 
 /* Group label badge — floats above group bounding box */
@@ -391,12 +47,12 @@ body {
     position: absolute;
     transform: translateX(-50%);
     z-index: 20;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 9px;
+    font-weight: 500;
     font-family: 'Inter', 'Segoe UI', sans-serif;
     color: #c4b5fd;
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(139, 92, 246, 0.09);
+    /* border: 1px solid rgba(139, 92, 246, 0.3); */
     border-radius: 6px;
     padding: 2px 8px;
     white-space: nowrap;
@@ -418,10 +74,10 @@ body {
     border: none;
     outline: none;
     color: #e9d5ff;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 9px;
+    font-weight: 500;
     font-family: 'Inter', 'Segoe UI', sans-serif;
-    width: 100px;
+    width: 100%;
     text-align: center;
     padding: 0;
     caret-color: #a78bfa;
@@ -677,8 +333,6 @@ body {
     filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.7));
 }
 
-/* Motor direction badge (FWD / REV) — defined once below in Motor Direction Badge section */
-
 @keyframes badgeFadeIn {
     from { opacity: 0; transform: translateX(-50%) translateY(4px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -803,230 +457,6 @@ body {
     100% { transform: scale(2.5) translateY(-40px); opacity: 0; }
 }
 
-/* ── Toolbar ── */
-#toolbar {
-    position: absolute;
-    top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 6px;
-    padding: 8px 12px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    z-index: 50;
-    box-shadow: var(--shadow-heavy);
-}
-
-.tb-btn {
-    width: 38px;
-    height: 38px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-secondary);
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.tb-btn:hover {
-    background: rgba(74, 222, 128, 0.15);
-    color: var(--accent);
-    border-color: var(--border-hover);
-}
-
-.tb-btn.active {
-    background: rgba(74, 222, 128, 0.2);
-    color: var(--accent);
-    border-color: var(--accent);
-}
-
-.tb-btn:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-    cursor: default;
-}
-
-.tb-sep {
-    width: 1px;
-    background: var(--border-subtle);
-    margin: 4px 2px;
-}
-
-.tb-label {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    padding: 0 6px;
-    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
-    font-weight: 600;
-}
-
-/* ── Status Bar (bottom) ── */
-#status-bar {
-    position: absolute;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 12px;
-    padding: 8px 16px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    z-index: 50;
-    box-shadow: var(--shadow-heavy);
-    font-size: 0.72rem;
-    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
-    flex-wrap: wrap;
-}
-
-#circuit-loops {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-#circuit-loops .status-item {
-    background: rgba(74, 222, 128, 0.06);
-    border: 1px solid rgba(74, 222, 128, 0.15);
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 0.68rem;
-}
-
-.status-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-muted);
-}
-
-.status-dot.live { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
-.status-dot.warn { background: var(--warning); box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
-.status-dot.danger { background: var(--danger); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
-
-/* ── Tooltip ── */
-.tooltip {
-    position: fixed;
-    padding: 8px 14px;
-    background: rgba(15, 15, 30, 0.95);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    pointer-events: none;
-    z-index: 200;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-    opacity: 0;
-    transition: opacity 0.15s;
-    white-space: nowrap;
-}
-
-.tooltip.visible { opacity: 1; }
-
-/* ── Context Menu ── */
-.ctx-menu {
-    position: fixed;
-    min-width: 180px;
-    background: rgba(20, 20, 35, 0.95);
-    backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 6px;
-    z-index: 300;
-    box-shadow: var(--shadow-heavy);
-    animation: ctxIn 0.15s ease-out;
-}
-
-@keyframes ctxIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-}
-
-.ctx-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.ctx-item:hover { background: rgba(74, 222, 128, 0.12); }
-.ctx-item.danger { color: var(--danger); }
-.ctx-item.danger:hover { background: rgba(239, 68, 68, 0.12); }
-.ctx-sep { height: 1px; background: var(--border-subtle); margin: 4px 8px; }
-
-/* Copy toast */
-.copy-toast {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(17, 24, 39, 0.95);
-    color: #4ade80;
-    padding: 10px 20px;
-    border-radius: 8px;
-    border: 1px solid rgba(74, 222, 128, 0.3);
-    font-size: 0.8rem;
-    font-family: 'Cascadia Code', monospace;
-    z-index: 9999;
-    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.2s forwards;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-@keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-@keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
-
-/* ── Instructions Panel ── */
-#instructions {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--border-subtle);
-    padding: 16px 20px;
-    border-radius: var(--radius-lg);
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    line-height: 1.7;
-    z-index: 40;
-    box-shadow: var(--shadow-heavy);
-    max-width: 300px;
-    transition: opacity 0.3s, transform 0.3s;
-}
-
-#instructions.hidden {
-    opacity: 0;
-    transform: translateY(10px);
-    pointer-events: none;
-}
-
-#instructions strong {
-    color: var(--accent);
-}
-
 /* ── Current flow animation on wires ── */
 .wire-flow {
     stroke-dasharray: 8 6;
@@ -1052,22 +482,6 @@ body {
     background: rgba(0, 0, 0, 0.6);
     padding: 2px 6px;
     border-radius: 4px;
-}
-
-/* ── Selection Rectangle ── */
-.selection-rect {
-    position: absolute;
-    border: 1.5px dashed var(--accent);
-    background: rgba(74, 222, 128, 0.06);
-    pointer-events: none;
-    z-index: 100;
-    border-radius: 2px;
-}
-
-.board-component.selected {
-    outline: 2px dashed var(--accent);
-    outline-offset: 6px;
-    filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.3));
 }
 
 /* ── Rotation angle badge ── */
@@ -1207,16 +621,7 @@ body {
     50% { opacity: 0.4; }
 }
 
-/* ── Responsive ── */
-@media (max-width: 768px) {
-    #sidebar { width: 240px; min-width: 240px; }
-    .item-icon { width: 40px; height: 40px; }
-}
-
 /* ── Battery Simulation ── */
-.board-component {
-    overflow: visible !important;
-}
 .battery-bar {
     position: absolute;
     bottom: 4px;
@@ -1366,4 +771,23 @@ body {
 }
 .sim-batt {
     color: #e2e8f0;
+}
+
+/* ── Mobile Touch — tap-to-show terminals ── */
+@media (max-width: 768px), (hover: none) {
+    /* Slightly larger touch target when revealed */
+    .terminal {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Show terminals when component has .show-terminals class (tap-toggled via JS) */
+    .board-component.show-terminals .terminal {
+        opacity: 1;
+    }
+
+    .board-component.show-terminals .terminal::after {
+        opacity: 1;
+        font-size: 9px;
+    }
 }

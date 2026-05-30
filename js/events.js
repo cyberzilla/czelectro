@@ -1,0 +1,854 @@
+// CZElectro — Events & Init Module
+// Handles: all mouse/keyboard event handlers + application initialization
+(function(CZ) {
+    'use strict';
+
+    CZ.setupEvents = function() {
+        const ws = CZ.ws;
+        const wCont = CZ.wCont;
+        const tmpWire = CZ.tmpWire;
+        const wireLayer = CZ.wireLayer;
+
+        // ── Touch-to-Mouse adapter for mobile support ──
+        // Converts single-finger touch events into synthetic MouseEvents.
+        // touchmove is RAF-throttled to prevent lag during drag/wire operations.
+        let _touchRAF = null;
+
+        ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(touchType => {
+            document.addEventListener(touchType, (e) => {
+                if (e.touches && e.touches.length > 1) return;
+                const touch = e.changedTouches[0];
+                if (!touch) return;
+
+                // Skip sidebar items — handled by smart touch handler
+                if (touch.target.closest && touch.target.closest('.sidebar-item')) return;
+                if (touch.target.closest && touch.target.closest('#component-list')) {
+                    if (!CZ._sidebarDragging) return;
+                }
+
+                // Prevent scroll/zoom during active interactions
+                if (CZ.isDragging || CZ.isPanning || CZ.activeTerm || CZ.activeWireDrag || CZ.selRect) {
+                    e.preventDefault();
+                }
+
+                // Throttle touchmove with RAF — always use latest coordinates
+                if (touchType === 'touchmove') {
+                    // Capture values immediately (Touch objects get recycled)
+                    CZ._touchMoveX = touch.clientX;
+                    CZ._touchMoveY = touch.clientY;
+                    CZ._touchMoveTarget = touch.target;
+                    if (!_touchRAF) {
+                        _touchRAF = requestAnimationFrame(() => {
+                            _touchRAF = null;
+                            const moveEvent = new MouseEvent('mousemove', {
+                                bubbles: true, cancelable: true,
+                                clientX: CZ._touchMoveX, clientY: CZ._touchMoveY, button: 0
+                            });
+                            CZ._touchMoveTarget.dispatchEvent(moveEvent);
+                        });
+                    }
+                    return;
+                }
+
+                // touchstart/end/cancel — fire immediately (no throttle)
+                const mouseType = {
+                    touchstart: 'mousedown',
+                    touchend: 'mouseup',
+                    touchcancel: 'mouseup'
+                }[touchType];
+
+                let target = touch.target;
+                if (touchType === 'touchend' || touchType === 'touchcancel') {
+                    const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (elUnder) target = elUnder;
+                }
+
+                const mouseEvent = new MouseEvent(mouseType, {
+                    bubbles: true, cancelable: true,
+                    clientX: touch.clientX, clientY: touch.clientY, button: 0
+                });
+                target.dispatchEvent(mouseEvent);
+            }, { passive: false });
+        });
+
+        // ── Smart sidebar touch: vertical = scroll, horizontal = drag component ──
+        CZ._sidebarDragging = false;
+        (function() {
+            const THRESHOLD = 15; // px before deciding direction
+            let touchState = null;
+
+            document.getElementById('component-list')?.addEventListener('touchstart', (e) => {
+                const sItem = e.target.closest('.sidebar-item');
+                if (!sItem || e.touches.length > 1) return;
+                const touch = e.touches[0];
+                touchState = {
+                    item: sItem,
+                    tmplId: sItem.dataset.id,
+                    startX: touch.clientX,
+                    startY: touch.clientY,
+                    decided: false, // 'scroll' or 'drag'
+                    ghost: null
+                };
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!touchState) return;
+                const touch = e.touches[0];
+                if (!touch) return;
+                const dx = Math.abs(touch.clientX - touchState.startX);
+                const dy = Math.abs(touch.clientY - touchState.startY);
+
+                if (!touchState.decided) {
+                    if (dx < THRESHOLD && dy < THRESHOLD) return; // Still deciding
+                    if (dy > dx) {
+                        // Vertical — it's a scroll, release control
+                        touchState.decided = 'scroll';
+                        return;
+                    } else {
+                        // Horizontal — it's a drag
+                        touchState.decided = 'drag';
+                        CZ._sidebarDragging = true;
+                        const tmpl = COMPONENTS.find(t => t.id === touchState.tmplId);
+                        if (!tmpl) { touchState = null; return; }
+                        touchState.tmpl = tmpl;
+                        const ghost = document.createElement('div');
+                        ghost.className = 'drag-ghost';
+                        ghost.innerHTML = tmpl.svg;
+                        ghost.style.cssText = `
+                            position:fixed; z-index:10000; pointer-events:none;
+                            width:${tmpl.width}px; height:${tmpl.height}px;
+                            left:${touch.clientX - tmpl.width/2}px;
+                            top:${touch.clientY - tmpl.height/2}px;
+                            opacity:0.85; transform:scale(1.05);
+                            filter:drop-shadow(0 4px 12px rgba(74,222,128,0.3));
+                        `;
+                        document.body.appendChild(ghost);
+                        touchState.ghost = ghost;
+                        e.preventDefault();
+                    }
+                }
+
+                if (touchState.decided === 'drag' && touchState.ghost) {
+                    const tmpl = touchState.tmpl;
+                    touchState.ghost.style.left = (touch.clientX - tmpl.width/2) + 'px';
+                    touchState.ghost.style.top = (touch.clientY - tmpl.height/2) + 'px';
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', (e) => {
+                if (!touchState) return;
+                const state = touchState;
+                touchState = null;
+                CZ._sidebarDragging = false;
+
+                if (state.decided === 'drag' && state.ghost) {
+                    state.ghost.remove();
+                    const touch = e.changedTouches[0];
+                    if (!touch) return;
+                    const wRect = wCont.getBoundingClientRect();
+                    if (touch.clientX >= wRect.left && touch.clientX <= wRect.right &&
+                        touch.clientY >= wRect.top && touch.clientY <= wRect.bottom) {
+                        const comp = CZ.spawnComponent(state.tmplId, touch.clientX, touch.clientY);
+                        if (comp) {
+                            CZ.saveState();
+                            if (CZ._closeMobileSidebar) CZ._closeMobileSidebar();
+                        }
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchcancel', () => {
+                if (touchState?.ghost) touchState.ghost.remove();
+                touchState = null;
+                CZ._sidebarDragging = false;
+            }, { passive: true });
+        })();
+
+        // ── Sidebar drag (mouse) — spawn component ──
+        document.addEventListener('mousedown', e => {
+            const sItem = e.target.closest('.sidebar-item');
+            if (sItem) {
+                e.preventDefault();
+                const tmplId = sItem.dataset.id;
+                const tmpl = COMPONENTS.find(t => t.id === tmplId);
+                if (!tmpl) return;
+
+                const ghost = document.createElement('div');
+                ghost.className = 'drag-ghost';
+                ghost.innerHTML = tmpl.svg;
+                ghost.style.cssText = `
+                    position: fixed; z-index: 10000; pointer-events: none;
+                    width: ${tmpl.width}px; height: ${tmpl.height}px;
+                    left: ${e.clientX - tmpl.width / 2}px;
+                    top: ${e.clientY - tmpl.height / 2}px;
+                    opacity: 0.85; transform: scale(1.05);
+                    filter: drop-shadow(0 4px 12px rgba(74,222,128,0.3));
+                    transition: transform 0.1s, opacity 0.1s;
+                `;
+                document.body.appendChild(ghost);
+
+                const onMove = (ev) => {
+                    ghost.style.left = (ev.clientX - tmpl.width / 2) + 'px';
+                    ghost.style.top = (ev.clientY - tmpl.height / 2) + 'px';
+                };
+
+                const onUp = (ev) => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    ghost.remove();
+
+                    const wRect = wCont.getBoundingClientRect();
+                    if (ev.clientX >= wRect.left && ev.clientX <= wRect.right &&
+                        ev.clientY >= wRect.top && ev.clientY <= wRect.bottom) {
+                        const comp = CZ.spawnComponent(tmplId, ev.clientX, ev.clientY);
+                        if (comp) {
+                            CZ.saveState();
+                            if (CZ._closeMobileSidebar) CZ._closeMobileSidebar();
+                        }
+                    }
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                return;
+            }
+
+            // Terminal — start wiring
+            const termEl = e.target.closest('.terminal');
+            if (termEl) {
+                e.stopPropagation();
+                const cid = termEl.dataset.cid, tidx = parseInt(termEl.dataset.tidx);
+                const comp = CZ.deployed.find(c => c.id === cid);
+                CZ.activeTerm = { cid, tidx, comp, el: termEl };
+                const pos = CZ.getAbsPos(comp, comp.terminals[tidx]);
+                tmpWire.setAttribute('d', `M ${pos.x} ${pos.y} L ${pos.x} ${pos.y}`);
+                tmpWire.style.display = 'inline';
+                return;
+            }
+
+            // Board component — potential drag OR click
+            const bComp = e.target.closest('.board-component');
+            if (bComp && e.button === 0) {
+                CZ.dragEl = bComp;
+                const comp = CZ.deployed.find(c => c.id === bComp.id);
+                const wPos = CZ.clientToWorkspace(e.clientX, e.clientY);
+                CZ.dragOX = comp ? wPos.x - comp.x : 0;
+                CZ.dragOY = comp ? wPos.y - comp.y : 0;
+                CZ.dragStartX = e.clientX;
+                CZ.dragStartY = e.clientY;
+                CZ.dragMoved = false;
+                CZ.isDragging = true;
+
+                const grp = CZ.groups.find(g => g.members.includes(bComp.id));
+                if (grp && !CZ.selectedIds.has(bComp.id)) {
+                    CZ.selectedIds.add(bComp.id);
+                    bComp.classList.add('selected');
+                }
+                CZ.expandSelectionToGroups();
+                CZ.renderGroupLabels();
+                return;
+            }
+
+            // Empty workspace click
+            if (e.button === 0 && (e.target === ws || e.target === CZ.gridCanvas || e.target === wCont)) {
+                const wantPan = CZ.workspaceMode === 'pan' ? !e.ctrlKey : e.ctrlKey;
+                if (wantPan) {
+                    e.preventDefault(); CZ.isPanning = true;
+                    CZ.panStartX = e.clientX; CZ.panStartY = e.clientY;
+                    CZ.panStartPX = CZ.panX; CZ.panStartPY = CZ.panY;
+                    wCont.style.cursor = 'grabbing';
+                } else {
+                    const m = CZ.clientToWorkspace(e.clientX, e.clientY);
+                    CZ.selStartX = m.x; CZ.selStartY = m.y;
+                    CZ.selRect = document.createElement('div');
+                    CZ.selRect.className = 'selection-rect';
+                    ws.appendChild(CZ.selRect);
+                    CZ.selectedIds.clear();
+                    CZ.selectedHandles.clear();
+                    document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                    document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+                    document.querySelectorAll('.board-component.show-terminals').forEach(el => el.classList.remove('show-terminals'));
+                }
+            }
+        });
+
+        // ── Mouse move ──
+        document.addEventListener('mousemove', e => {
+            if (CZ.isPanning) {
+                CZ.panX = CZ.panStartPX + (e.clientX - CZ.panStartX);
+                CZ.panY = CZ.panStartPY + (e.clientY - CZ.panStartY);
+                CZ.applyTransform();
+                return;
+            }
+
+            const m = CZ.clientToWorkspace(e.clientX, e.clientY);
+
+            // Wire control-point drag
+            if (CZ.activeWireDrag) {
+                const dx = m.x - CZ.activeWireDrag.startMouse.x;
+                const dy = m.y - CZ.activeWireDrag.startMouse.y;
+                if (CZ.activeWireDrag.allHandles && CZ.activeWireDrag.allHandles.length > 0) {
+                    CZ.activeWireDrag.allHandles.forEach(h => {
+                        const wire = CZ.wires[h.wireIdx];
+                        if (wire && wire.controlPoints) {
+                            wire.controlPoints[h.handleIdx] = { x: h.startOffset.x + dx, y: h.startOffset.y + dy };
+                        }
+                    });
+                } else {
+                    const w = CZ.wires[CZ.activeWireDrag.wireIdx];
+                    if (w && w.controlPoints) {
+                        w.controlPoints[CZ.activeWireDrag.handleIdx] = {
+                            x: CZ.activeWireDrag.startOffset.x + dx,
+                            y: CZ.activeWireDrag.startOffset.y + dy
+                        };
+                    }
+                }
+                CZ.renderWires();
+                return;
+            }
+
+            // Component drag
+            if (CZ.isDragging && CZ.dragEl) {
+                if (!CZ.dragMoved) {
+                    const dx = Math.abs(e.clientX - CZ.dragStartX);
+                    const dy = Math.abs(e.clientY - CZ.dragStartY);
+                    if (dx + dy < CZ.DRAG_THRESHOLD) return;
+                    CZ.dragMoved = true;
+                    ws.appendChild(CZ.dragEl);
+                }
+                let nx = Math.round((m.x - CZ.dragOX) / CZ.GRID) * CZ.GRID;
+                let ny = Math.round((m.y - CZ.dragOY) / CZ.GRID) * CZ.GRID;
+                CZ.dragEl.style.left = nx + 'px';
+                CZ.dragEl.style.top = ny + 'px';
+                const comp = CZ.deployed.find(c => c.id === CZ.dragEl.id);
+                if (comp) {
+                    const oldX = comp.x, oldY = comp.y;
+                    comp.x = nx; comp.y = ny;
+                    if (CZ.selectedIds.has(comp.id) && CZ.selectedIds.size > 1) {
+                        const dx = nx - oldX, dy = ny - oldY;
+                        CZ.deployed.forEach(c => {
+                            if (c.id !== comp.id && CZ.selectedIds.has(c.id)) {
+                                c.x += dx; c.y += dy;
+                                const el = document.getElementById(c.id);
+                                if (el) { el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; }
+                            }
+                        });
+                    }
+                    CZ.renderWires();
+                    CZ.renderGroupLabels();
+                }
+            }
+
+            // Selection rectangle
+            if (CZ.selRect) {
+                const x = Math.min(CZ.selStartX, m.x), y = Math.min(CZ.selStartY, m.y);
+                const w = Math.abs(m.x - CZ.selStartX), h = Math.abs(m.y - CZ.selStartY);
+                CZ.selRect.style.left = x + 'px'; CZ.selRect.style.top = y + 'px';
+                CZ.selRect.style.width = w + 'px'; CZ.selRect.style.height = h + 'px';
+                return;
+            }
+
+            // Wiring preview
+            if (CZ.activeTerm) {
+                const start = CZ.getAbsPos(CZ.activeTerm.comp, CZ.activeTerm.comp.terminals[CZ.activeTerm.tidx]);
+                const dir1 = CZ.getTerminalDir(CZ.activeTerm.comp, CZ.activeTerm.tidx);
+                tmpWire.setAttribute('d', CZ.makePreviewPath(start, dir1, m.x, m.y));
+            }
+        });
+
+        // ── Mouse up ──
+        document.addEventListener('mouseup', e => {
+            if (CZ.isPanning) { CZ.isPanning = false; wCont.style.cursor = ''; CZ.persistView(); return; }
+
+            if (CZ.activeWireDrag) { CZ.activeWireDrag = null; CZ.saveState(); return; }
+
+            // End selection rectangle
+            if (CZ.selRect) {
+                const rx = parseFloat(CZ.selRect.style.left) || 0;
+                const ry = parseFloat(CZ.selRect.style.top) || 0;
+                const rw = parseFloat(CZ.selRect.style.width) || 0;
+                const rh = parseFloat(CZ.selRect.style.height) || 0;
+                CZ.selRect.remove(); CZ.selRect = null;
+                if (rw > 5 || rh > 5) {
+                    CZ.deployed.forEach(c => {
+                        const tmpl = COMPONENTS.find(t => t.id === c.type);
+                        if (!tmpl) return;
+                        const cx = c.x + tmpl.width / 2, cy = c.y + tmpl.height / 2;
+                        if (cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh) {
+                            CZ.selectedIds.add(c.id);
+                            document.getElementById(c.id)?.classList.add('selected');
+                        }
+                    });
+                    document.querySelectorAll('.wire-handle').forEach(h => {
+                        const hx = parseFloat(h.getAttribute('cx'));
+                        const hy = parseFloat(h.getAttribute('cy'));
+                        if (hx >= rx && hx <= rx + rw && hy >= ry && hy <= ry + rh) {
+                            const key = `${h.dataset.widx}:${h.dataset.hidx}`;
+                            CZ.selectedHandles.add(key);
+                            h.classList.add('handle-selected');
+                        }
+                    });
+                }
+                CZ.expandSelectionToGroups();
+                CZ.renderGroupLabels();
+                return;
+            }
+
+            // Click (not drag) — handle switch toggle + show terminals on touch
+            if (CZ.isDragging && CZ.dragEl && !CZ.dragMoved) {
+                const comp = CZ.deployed.find(c => c.id === CZ.dragEl.id);
+                if (comp && comp.type === 'switch_toggle') {
+                    comp.isClosed = !comp.isClosed;
+                    comp.currentResistance = comp.isClosed ? 0 : Infinity;
+                    CZ.dragEl.classList.toggle('switch-closed');
+                    const indicator = CZ.dragEl.querySelector('.switch-state');
+                    if (indicator) indicator.textContent = comp.isClosed ? 'ON' : 'OFF';
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                }
+
+                // Toggle terminal visibility on tap (touch devices)
+                const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                if (isTouchDevice) {
+                    // Clear others, toggle tapped one
+                    document.querySelectorAll('.board-component.show-terminals').forEach(el => {
+                        if (el !== CZ.dragEl) el.classList.remove('show-terminals');
+                    });
+                    CZ.dragEl.classList.toggle('show-terminals');
+                }
+            }
+
+            if (CZ.dragEl) { CZ.dragEl.style.opacity = ''; CZ.dragEl.style.zIndex = ''; }
+            CZ.isDragging = false; CZ.dragEl = null;
+            if (CZ.dragMoved) { CZ.saveState(); }
+            CZ.dragMoved = false;
+
+            if (CZ.activeTerm) {
+                tmpWire.style.display = 'none';
+                const tgt = e.target.closest('.terminal');
+                if (tgt) {
+                    const tCid = tgt.dataset.cid, tIdx = parseInt(tgt.dataset.tidx);
+                    if (tCid !== CZ.activeTerm.cid) {
+                        const dup = CZ.wires.some(w =>
+                            (w.c1 === CZ.activeTerm.cid && w.i1 === CZ.activeTerm.tidx && w.c2 === tCid && w.i2 === tIdx) ||
+                            (w.c2 === CZ.activeTerm.cid && w.i2 === CZ.activeTerm.tidx && w.c1 === tCid && w.i1 === tIdx)
+                        );
+                        if (!dup) {
+                            const colors = ['#94a3b8','#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7'];
+                            CZ.wires.push({
+                                c1: CZ.activeTerm.cid, i1: CZ.activeTerm.tidx,
+                                c2: tCid, i2: tIdx,
+                                color: colors[CZ.wires.length % colors.length],
+                                energized: false,
+                                controlPoints: CZ.getDefaultControlPoints()
+                            });
+                            CZ.renderWires();
+                            CZ.evaluateCircuit();
+                            CZ.SFX.wireSnap();
+                        }
+                    }
+                }
+                CZ.activeTerm = null;
+            }
+        });
+
+        // ── Wire handle click (select) and drag ──
+        document.addEventListener('mousedown', e => {
+            const handle = e.target.closest('.wire-handle');
+            if (handle && e.button === 0) {
+                e.stopPropagation();
+                const wi = parseInt(handle.dataset.widx);
+                const hi = parseInt(handle.dataset.hidx);
+                const w = CZ.wires[wi];
+                if (!w) return;
+
+                const wireGroup = CZ.groups.find(g => g.members.includes(w.c1) && g.members.includes(w.c2));
+                if (wireGroup) return;
+
+                if (!w.controlPoints) w.controlPoints = CZ.getDefaultControlPoints();
+                const key = `${wi}:${hi}`;
+
+                if (e.ctrlKey || e.metaKey) {
+                    if (CZ.selectedHandles.has(key)) { CZ.selectedHandles.delete(key); handle.classList.remove('handle-selected'); }
+                    else { CZ.selectedHandles.add(key); handle.classList.add('handle-selected'); }
+                } else {
+                    if (!CZ.selectedHandles.has(key)) {
+                        CZ.selectedHandles.clear();
+                        document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+                        CZ.selectedHandles.add(key);
+                        handle.classList.add('handle-selected');
+                    }
+                }
+
+                const m = CZ.clientToWorkspace(e.clientX, e.clientY);
+                const dragHandles = [];
+                CZ.selectedHandles.forEach(k => {
+                    const [wIdx, hIdx] = k.split(':').map(Number);
+                    const wire = CZ.wires[wIdx];
+                    if (wire && wire.controlPoints) {
+                        dragHandles.push({ wireIdx: wIdx, handleIdx: hIdx, startOffset: { x: wire.controlPoints[hIdx].x, y: wire.controlPoints[hIdx].y } });
+                    }
+                });
+                CZ.activeWireDrag = {
+                    wireIdx: wi, handleIdx: hi,
+                    startMouse: { x: m.x, y: m.y },
+                    startOffset: { x: w.controlPoints[hi].x, y: w.controlPoints[hi].y },
+                    allHandles: dragHandles
+                };
+                return;
+            }
+
+            // ── Wire body drag — click anywhere on wire to drag center handle ──
+            const hitArea = e.target.closest('.wire-hit-area');
+            if (hitArea && e.button === 0) {
+                e.stopPropagation();
+                const wi = parseInt(hitArea.dataset.widx);
+                const w = CZ.wires[wi];
+                if (!w) return;
+
+                const wireGroup = CZ.groups.find(g => g.members.includes(w.c1) && g.members.includes(w.c2));
+                if (wireGroup) return;
+
+                if (!w.controlPoints) w.controlPoints = CZ.getDefaultControlPoints();
+                const hi = 1; // Center handle
+                const m = CZ.clientToWorkspace(e.clientX, e.clientY);
+
+                CZ.selectedHandles.clear();
+                document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+                const key = `${wi}:${hi}`;
+                CZ.selectedHandles.add(key);
+
+                CZ.activeWireDrag = {
+                    wireIdx: wi, handleIdx: hi,
+                    startMouse: { x: m.x, y: m.y },
+                    startOffset: { x: w.controlPoints[hi].x, y: w.controlPoints[hi].y },
+                    allHandles: [{ wireIdx: wi, handleIdx: hi, startOffset: { x: w.controlPoints[hi].x, y: w.controlPoints[hi].y } }]
+                };
+            }
+        }, true);
+
+        // ── Wire right-click / long-press ──
+        wireLayer.addEventListener('contextmenu', e => {
+            const wGroup = e.target.closest('.wire-group');
+            if (wGroup) {
+                e.preventDefault(); e.stopPropagation();
+                const wIdx = parseInt(wGroup.dataset.widx);
+                const w = CZ.wires[wIdx];
+                if (!w) return;
+
+                const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+                if (!isTouchDevice) {
+                    // Desktop: instant delete
+                    CZ.wires.splice(wIdx, 1);
+                    CZ.renderWires(); CZ.evaluateCircuit();
+                } else {
+                    // Touch: show confirmation menu
+                    document.querySelector('.ctx-menu')?.remove();
+                    const comp1 = CZ.deployed.find(c => c.id === w.c1);
+                    const comp2 = CZ.deployed.find(c => c.id === w.c2);
+                    const name1 = comp1 ? (COMPONENTS.find(t => t.id === comp1.type)?.name || comp1.type) : '?';
+                    const name2 = comp2 ? (COMPONENTS.find(t => t.id === comp2.type)?.name || comp2.type) : '?';
+
+                    const menu = document.createElement('div');
+                    menu.className = 'ctx-menu';
+                    menu.style.left = e.clientX + 'px';
+                    menu.style.top = e.clientY + 'px';
+                    menu.innerHTML = `
+                        <div class="ctx-item" data-action="info">🔌 ${name1} ↔ ${name2}</div>
+                        <div class="ctx-sep"></div>
+                        <div class="ctx-item danger" data-action="delete">🗑 Hapus Kabel</div>
+                    `;
+                    document.body.appendChild(menu);
+
+                    requestAnimationFrame(() => {
+                        const rect = menu.getBoundingClientRect();
+                        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+                        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+                    });
+
+                    menu.addEventListener('click', ev => {
+                        const action = ev.target.closest('.ctx-item')?.dataset.action;
+                        if (action === 'delete') {
+                            CZ.wires.splice(wIdx, 1);
+                            CZ.renderWires(); CZ.evaluateCircuit();
+                        }
+                        menu.remove();
+                    });
+
+                    const closeMenu = (ev) => {
+                        if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
+                    };
+                    setTimeout(() => document.addEventListener('mousedown', closeMenu), 10);
+                }
+            }
+        });
+
+        // ── Context menu: right-click component ──
+        wCont.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            const existing = document.querySelector('.ctx-menu');
+            if (existing) existing.remove();
+
+            const bComp = e.target.closest('.board-component');
+            if (!bComp) return;
+
+            const comp = CZ.deployed.find(c => c.id === bComp.id);
+            const tmpl = COMPONENTS.find(t => t.id === comp?.type);
+            const name = tmpl?.name || 'Komponen';
+            const isBroken = comp?.isBroken;
+
+            if (!CZ.selectedIds.has(bComp.id) && comp) {
+                CZ.selectedIds.add(comp.id);
+                bComp.classList.add('selected');
+            }
+
+            const isMulti = CZ.selectedIds.size > 1;
+            const menu = document.createElement('div');
+            menu.className = 'ctx-menu';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+
+            let menuItems = '';
+            if (isMulti) {
+                menuItems += `<div class="ctx-item" data-action="info">🔲 ${CZ.selectedIds.size} komponen dipilih</div>`;
+            } else {
+                menuItems += `<div class="ctx-item" data-action="info">ℹ️ ${name}${isBroken ? ' <span style="color:#ef4444">(RUSAK)</span>' : ''}</div>`;
+            }
+            menuItems += `<div class="ctx-sep"></div>`;
+
+            if (isBroken && !isMulti) {
+                menuItems += `<div class="ctx-item" data-action="reset">🔄 Reset / Perbaiki</div>`;
+            }
+
+            const allBatteries = isMulti && [...CZ.selectedIds].every(cid => {
+                const c = CZ.deployed.find(d => d.id === cid);
+                return c && c.batteryCapacity;
+            });
+
+            if ((!isMulti && comp?.batteryCapacity) || allBatteries) {
+                if (!isMulti) {
+                    const pct = ((comp.batteryLevel / comp.batteryCapacity) * 100).toFixed(0);
+                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Baterai (${pct}% → 100%)</div>`;
+                } else {
+                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Semua Baterai (${CZ.selectedIds.size}) → 100%</div>`;
+                }
+            }
+
+            menuItems += `<div class="ctx-item" data-action="duplicate">📋 Duplikat${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="rotate">🔄 Putar 90° (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="copytext">📝 Salin Teks Rangkaian</div>`;
+            menuItems += `<div class="ctx-sep"></div>`;
+
+            const anyInGroup = [...CZ.selectedIds].some(id => CZ.groups.some(g => g.members.includes(id)));
+            const allSameGroup = isMulti && CZ.groups.some(g => [...CZ.selectedIds].every(id => g.members.includes(id)));
+            if (isMulti && !allSameGroup) {
+                menuItems += `<div class="ctx-item" data-action="group">📦 Group (Ctrl+G)</div>`;
+            }
+            if (anyInGroup) {
+                menuItems += `<div class="ctx-item" data-action="ungroup">📭 Ungroup (Ctrl+Shift+G)</div>`;
+            }
+            if (isMulti || anyInGroup) {
+                menuItems += `<div class="ctx-sep"></div>`;
+            }
+
+            menuItems += `<div class="ctx-item danger" data-action="delete">🗑 Hapus${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+
+            menu.innerHTML = menuItems;
+            document.body.appendChild(menu);
+
+            requestAnimationFrame(() => {
+                const rect = menu.getBoundingClientRect();
+                if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+                if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+                if (rect.left < 0) menu.style.left = '8px';
+                if (rect.top < 0) menu.style.top = '8px';
+            });
+
+            menu.addEventListener('click', ev => {
+                const action = ev.target.closest('.ctx-item')?.dataset.action;
+                if (action === 'delete') {
+                    const idsToDelete = new Set(CZ.selectedIds);
+                    idsToDelete.forEach(cid => {
+                        CZ.deployed = CZ.deployed.filter(c => c.id !== cid);
+                        CZ.wires = CZ.wires.filter(w => w.c1 !== cid && w.c2 !== cid);
+                        document.getElementById(cid)?.remove();
+                        CZ.groups.forEach(g => { const idx = g.members.indexOf(cid); if (idx >= 0) g.members.splice(idx, 1); });
+                    });
+                    CZ.groups = CZ.groups.filter(g => g.members.length > 0);
+                    CZ.selectedIds.clear();
+                    CZ.renderGroupLabels();
+                    CZ.renderWires(); CZ.evaluateCircuit();
+                } else if (action === 'duplicate') {
+                    CZ.duplicateSelected();
+                } else if (action === 'copytext') {
+                    const counts = {};
+                    CZ.selectedIds.forEach(cid => {
+                        const c = CZ.deployed.find(d => d.id === cid);
+                        if (!c) return;
+                        const t = COMPONENTS.find(x => x.id === c.type);
+                        const key = t ? t.name : c.type;
+                        counts[key] = (counts[key] || 0) + 1;
+                    });
+                    const parts = Object.entries(counts).map(([name, qty]) => qty > 1 ? `${qty}×${name}` : name);
+                    const text = parts.join(' + ');
+                    navigator.clipboard.writeText(text).then(() => {
+                        const toast = document.createElement('div');
+                        toast.className = 'copy-toast';
+                        toast.textContent = `📋 "${text}" disalin!`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 2500);
+                    });
+                } else if (action === 'reset' && comp) {
+                    CZ.resetComponent(comp.id);
+                } else if (action === 'resetbatt') {
+                    const targets = isMulti ? [...CZ.selectedIds] : (comp ? [comp.id] : []);
+                    targets.forEach(cid => {
+                        const c = CZ.deployed.find(d => d.id === cid);
+                        if (!c || !c.batteryCapacity) return;
+                        c.batteryLevel = c.batteryCapacity;
+                        const t = COMPONENTS.find(x => x.id === c.type);
+                        if (t) c.voltage = t.voltage;
+                    });
+                    CZ.evaluateCircuit();
+                } else if (action === 'rotate') {
+                    CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
+                } else if (action === 'group') {
+                    CZ.groupSelected();
+                } else if (action === 'ungroup') {
+                    CZ.ungroupSelected();
+                }
+                menu.remove();
+            });
+
+            const closeMenu = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); } };
+            setTimeout(() => document.addEventListener('mousedown', closeMenu), 10);
+        });
+
+        // ── Long press for touch context menu ──
+        let longPressTimer = null;
+        let longPressTriggered = false;
+
+        wCont.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) return;
+            longPressTriggered = false;
+            const touch = e.touches[0];
+            const startX = touch.clientX, startY = touch.clientY;
+
+            // Don't start long press on wire handles or terminals
+            const el = document.elementFromPoint(startX, startY);
+            if (el && (el.closest('.wire-handle') || el.closest('.terminal'))) return;
+
+            longPressTimer = setTimeout(() => {
+                // Abort if any drag operation is active
+                if (CZ.activeWireDrag || CZ.activeTerm || CZ.isDragging) {
+                    longPressTimer = null;
+                    return;
+                }
+
+                longPressTriggered = true;
+                if (navigator.vibrate) navigator.vibrate(30);
+
+                const target = document.elementFromPoint(startX, startY);
+                if (target) {
+                    const ctxEvent = new MouseEvent('contextmenu', {
+                        bubbles: true, cancelable: true,
+                        clientX: startX, clientY: startY, button: 2
+                    });
+                    target.dispatchEvent(ctxEvent);
+                }
+
+                CZ.isDragging = false;
+                CZ.dragEl = null;
+                CZ.dragMoved = false;
+            }, 500);
+
+            // Cancel long press if finger moves too much
+            const onTouchMove = (ev) => {
+                const t = ev.touches[0];
+                if (t && (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10)) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                    wCont.removeEventListener('touchmove', onTouchMove);
+                }
+            };
+            wCont.addEventListener('touchmove', onTouchMove, { passive: true });
+        }, { passive: true });
+
+        wCont.addEventListener('touchend', () => {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            // Prevent click if long press was triggered
+            if (longPressTriggered) {
+                longPressTriggered = false;
+            }
+        }, { passive: true });
+
+        wCont.addEventListener('touchcancel', () => {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }, { passive: true });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (CZ.selectedIds.size > 0) {
+                    e.preventDefault();
+                    CZ.selectedIds.forEach(cid => {
+                        CZ.deployed = CZ.deployed.filter(c => c.id !== cid);
+                        CZ.wires = CZ.wires.filter(w => w.c1 !== cid && w.c2 !== cid);
+                        document.getElementById(cid)?.remove();
+                        CZ.groups.forEach(g => { const idx = g.members.indexOf(cid); if (idx >= 0) g.members.splice(idx, 1); });
+                    });
+                    CZ.groups = CZ.groups.filter(g => g.members.length > 0);
+                    CZ.selectedIds.clear();
+                    CZ.renderGroupLabels();
+                    CZ.renderWires(); CZ.evaluateCircuit();
+                }
+            }
+            if (e.key === 'Escape') {
+                CZ.selectedIds.clear();
+                CZ.selectedHandles.clear();
+                document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.wire-handle.handle-selected').forEach(el => el.classList.remove('handle-selected'));
+                CZ.renderGroupLabels();
+            }
+            if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) { CZ.setMode('select'); }
+            if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) { CZ.setMode('pan'); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); CZ.performUndo(); }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))) { e.preventDefault(); CZ.performRedo(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey) { e.preventDefault(); CZ.groupSelected(); }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'G' || (e.key === 'g' && e.shiftKey))) { e.preventDefault(); CZ.ungroupSelected(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); CZ.duplicateSelected(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); CZ.saveFile(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); CZ.openFile(); }
+            if (e.key === 'r' || e.key === 'R') {
+                if (CZ.selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                    CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
+                }
+            }
+            if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                document.getElementById('btn-mute').click();
+            }
+        });
+    };
+
+    // ── Application Initialization ──
+    CZ.init = function() {
+        CZ.initDOM();
+        CZ.setupCategoryTabs();
+        CZ.setupGridHandlers();
+        CZ.setupToolbar();
+        CZ.setupEvents();
+        // Grid button state now managed by setupGridHandlers
+        CZ.restoreState();
+        CZ.restoreSimState();
+        CZ.drawGrid();
+        window.addEventListener('resize', CZ.drawGrid);
+        CZ.applyTransform();
+    };
+
+    // ── Boot ──
+    document.addEventListener('DOMContentLoaded', CZ.init);
+
+})(window.CZ);

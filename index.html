@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="CZElectro - Simulasi Lab Elektronika interaktif dengan drag-drop komponen, kabel fleksibel, dan animasi realistis.">
     <title>CZElectro — Lab Elektronika</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
 </head>
 
 <body>
@@ -105,12 +107,37 @@
         <div id="component-list"></div>
     </aside>
 
+    <!-- Sidebar Toggle -->
+    <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Sidebar (Tab)">✕</button>
+    <script>
+        // Apply sidebar state BEFORE paint to prevent flash
+        (function(){
+            var sb = document.getElementById('sidebar');
+            var tb = document.getElementById('sidebar-toggle');
+            if (window.innerWidth > 768) {
+                var s = localStorage.getItem('czelectro_sidebar');
+                if (s === 'collapsed') {
+                    sb.classList.add('no-transition', 'collapsed');
+                    tb.textContent = '☰';
+                    // Re-enable transitions after first paint
+                    requestAnimationFrame(function(){ requestAnimationFrame(function(){ sb.classList.remove('no-transition'); }); });
+                }
+            } else {
+                tb.textContent = '☰';
+            }
+        })();
+    </script>
+
     <!-- Main Workspace -->
     <main id="workspace-container">
         <!-- Toolbar -->
         <div id="toolbar">
             <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
             <button class="tb-btn" id="btn-redo" title="Redo (Ctrl+Y)" disabled>↪</button>
+            <div class="tb-sep"></div>
+            <button class="tb-btn" id="btn-save" title="Simpan File (Ctrl+S)">💾</button>
+            <button class="tb-btn" id="btn-open" title="Buka File (Ctrl+O)">📂</button>
+            <input type="file" id="file-input" accept=".cze,.json" style="display:none">
             <div class="tb-sep"></div>
             <button class="tb-btn" id="btn-zoom-in" title="Zoom In">🔍+</button>
             <button class="tb-btn" id="btn-zoom-out" title="Zoom Out">🔍−</button>
@@ -172,7 +199,15 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script src="components.js"></script>
-    <script src="app.js"></script>
+    <!-- Modular architecture: state → audio → grid → wire → circuit → components → ui → events -->
+    <script src="js/state.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/grid.js"></script>
+    <script src="js/wire.js"></script>
+    <script src="js/circuit.js"></script>
+    <script src="js/components-ui.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/events.js"></script>
 </body>
 
 </html>
