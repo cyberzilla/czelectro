@@ -24,6 +24,12 @@
                 if (touch.target.closest && touch.target.closest('#component-list')) {
                     if (!CZ._sidebarDragging) return;
                 }
+                // Skip UI panels that handle their own click events
+                if (touch.target.closest && (
+                    touch.target.closest('.settings-panel') ||
+                    touch.target.closest('#toolbar') ||
+                    touch.target.closest('.sidebar-toggle')
+                )) return;
 
                 // Prevent scroll/zoom during ongoing interactions
                 if (e.cancelable && (CZ.isDragging || CZ.isPanning || CZ.activeTerm || CZ.activeWireDrag || CZ.selRect)) {
@@ -437,10 +443,11 @@
 
             // Click (not drag) — handle switch toggle + show terminals on touch
             if (CZ.isDragging && CZ.dragEl && !CZ.dragMoved) {
+                try {
                 const comp = CZ.deployed.find(c => c.id === CZ.dragEl.id);
                 if (comp && comp.type === 'switch_toggle') {
                     comp.isClosed = !comp.isClosed;
-                    comp.currentResistance = comp.isClosed ? 0 : Infinity;
+                    comp.currentResistance = comp.isClosed ? EL.SIM.SWITCH_ON_R : EL.SIM.SWITCH_OFF_R;
                     CZ.dragEl.classList.toggle('switch-closed');
                     const indicator = CZ.dragEl.querySelector('.switch-state');
                     if (indicator) indicator.textContent = comp.isClosed ? 'ON' : 'OFF';
@@ -452,7 +459,7 @@
                 // ── Multimeter mode cycling: V → Ω → A → V ──
                 if (comp && comp.type === 'voltmeter') {
                     const modes = ['V', 'Ω', 'A'];
-                    const modeRes = { V: 10000000, A: 0.001, 'Ω': 10000000 };
+                    const modeRes = { V: EL.SIM.METER_HIGH_Z, A: EL.SIM.METER_SHUNT_R, 'Ω': EL.SIM.METER_HIGH_Z };
                     const modeLabel = { V: 'VOLTAGE', A: 'CURRENT', 'Ω': 'RESIST' };
                     const modeColor = { V: '#22c55e', A: '#ef4444', 'Ω': '#f59e0b' };
                     // Arrow rotation: V=0° (top), Ω=120° (bottom-left), A=240° (bottom-right)
@@ -480,7 +487,7 @@
                     });
                     // Reset display
                     const rdg = CZ.dragEl.querySelector('.vm-reading');
-                    if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', modeColor[next]); }
+                    if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', modeColor[next]); rdg.setAttribute('font-size', '16'); }
                     const unt = CZ.dragEl.querySelector('.vm-unit');
                     if (unt) { unt.textContent = next; unt.setAttribute('fill', modeColor[next]); }
                     // Remove old badge
@@ -510,6 +517,7 @@
                     });
                     CZ.dragEl.classList.toggle('show-terminals');
                 }
+                } catch (err) { console.error('[CZ] Click handler error:', err); }
             }
 
             if (CZ.dragEl) { CZ.dragEl.style.opacity = ''; CZ.dragEl.style.zIndex = ''; }
@@ -643,8 +651,10 @@
                     document.querySelector('.ctx-menu')?.remove();
                     const comp1 = CZ.deployed.find(c => c.id === w.c1);
                     const comp2 = CZ.deployed.find(c => c.id === w.c2);
-                    const name1 = comp1 ? (COMPONENTS.find(t => t.id === comp1.type)?.name || comp1.type) : '?';
-                    const name2 = comp2 ? (COMPONENTS.find(t => t.id === comp2.type)?.name || comp2.type) : '?';
+                    const t1 = comp1 ? COMPONENTS.find(t => t.id === comp1.type) : null;
+                    const t2 = comp2 ? COMPONENTS.find(t => t.id === comp2.type) : null;
+                    const name1 = t1 ? CZ.getCompName(t1) : (comp1?.type || '?');
+                    const name2 = t2 ? CZ.getCompName(t2) : (comp2?.type || '?');
 
                     const menu = document.createElement('div');
                     menu.className = 'ctx-menu';
@@ -653,7 +663,7 @@
                     menu.innerHTML = `
                         <div class="ctx-item" data-action="info">🔌 ${name1} ↔ ${name2}</div>
                         <div class="ctx-sep"></div>
-                        <div class="ctx-item danger" data-action="delete">🗑 Hapus Kabel</div>
+                        <div class="ctx-item danger" data-action="delete">🗑 ${CZ.t('ctxDeleteWire')}</div>
                     `;
                     document.body.appendChild(menu);
 
@@ -692,7 +702,7 @@
 
             const comp = CZ.deployed.find(c => c.id === bComp.id);
             const tmpl = COMPONENTS.find(t => t.id === comp?.type);
-            const name = tmpl?.name || 'Komponen';
+            const name = tmpl ? CZ.getCompName(tmpl) : (CZ.lang === 'en' ? 'Component' : 'Komponen');
             const isBroken = comp?.isBroken;
 
             if (!CZ.selectedIds.has(bComp.id) && comp) {
@@ -712,14 +722,14 @@
 
             let menuItems = '';
             if (isMulti) {
-                menuItems += `<div class="ctx-item" data-action="info">🔲 ${CZ.selectedIds.size} komponen dipilih</div>`;
+                menuItems += `<div class="ctx-item" data-action="info">🔲 ${CZ.selectedIds.size} ${CZ.t('ctxSelected')}</div>`;
             } else {
-                menuItems += `<div class="ctx-item" data-action="info">ℹ️ ${name}${isBroken ? ' <span style="color:#ef4444">(RUSAK)</span>' : ''}</div>`;
+                menuItems += `<div class="ctx-item" data-action="info">ℹ️ ${name}${isBroken ? ` <span style="color:#ef4444">${CZ.t('ctxBroken')}</span>` : ''}</div>`;
             }
             menuItems += `<div class="ctx-sep"></div>`;
 
             if (isBroken && !isMulti) {
-                menuItems += `<div class="ctx-item" data-action="reset">🔄 Reset / Perbaiki</div>`;
+                menuItems += `<div class="ctx-item" data-action="reset">🔄 ${CZ.t('ctxRepair')}</div>`;
             }
 
             const allBatteries = isMulti && [...CZ.selectedIds].every(cid => {
@@ -729,31 +739,33 @@
 
             if ((!isMulti && comp?.batteryCapacity) || allBatteries) {
                 if (!isMulti) {
-                    const pct = ((comp.batteryLevel / comp.batteryCapacity) * 100).toFixed(0);
-                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Baterai (${pct}% → 100%)</div>`;
+                    const dl = CZ.getBattDeadLevel ? CZ.getBattDeadLevel(comp) : 0;
+                    const usable = comp.batteryCapacity - dl;
+                    const pct = usable > 0 ? Math.max(0, ((comp.batteryLevel - dl) / usable) * 100).toFixed(0) : '0';
+                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 ${CZ.t('ctxResetBatt')} (${pct}% → 100%)</div>`;
                 } else {
-                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 Reset Semua Baterai (${CZ.selectedIds.size}) → 100%</div>`;
+                    menuItems += `<div class="ctx-item" data-action="resetbatt">🔋 ${CZ.t('ctxResetAllBatt')} (${CZ.selectedIds.size}) → 100%</div>`;
                 }
             }
 
-            menuItems += `<div class="ctx-item" data-action="duplicate">📋 Duplikat${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
-            menuItems += `<div class="ctx-item" data-action="rotate">🔄 Putar 90° (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
-            menuItems += `<div class="ctx-item" data-action="copytext">📝 Salin Teks Rangkaian</div>`;
+            menuItems += `<div class="ctx-item" data-action="duplicate">📋 ${CZ.t('ctxDuplicate')}${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="rotate">🔄 ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="copytext">📝 ${CZ.t('ctxCopyText')}</div>`;
             menuItems += `<div class="ctx-sep"></div>`;
 
             const anyInGroup = [...CZ.selectedIds].some(id => CZ.groups.some(g => g.members.includes(id)));
             const allSameGroup = isMulti && CZ.groups.some(g => [...CZ.selectedIds].every(id => g.members.includes(id)));
             if (isMulti && !allSameGroup) {
-                menuItems += `<div class="ctx-item" data-action="group">📦 Group (Ctrl+G)</div>`;
+                menuItems += `<div class="ctx-item" data-action="group">📦 ${CZ.t('ctxGroup')} (Ctrl+G)</div>`;
             }
             if (anyInGroup) {
-                menuItems += `<div class="ctx-item" data-action="ungroup">📭 Ungroup (Ctrl+Shift+G)</div>`;
+                menuItems += `<div class="ctx-item" data-action="ungroup">📭 ${CZ.t('ctxUngroup')} (Ctrl+Shift+G)</div>`;
             }
             if (isMulti || anyInGroup) {
                 menuItems += `<div class="ctx-sep"></div>`;
             }
 
-            menuItems += `<div class="ctx-item danger" data-action="delete">🗑 Hapus${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item danger" data-action="delete">🗑 ${CZ.t('ctxDelete')}${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
 
             menu.innerHTML = menuItems;
             document.body.appendChild(menu);
@@ -792,7 +804,7 @@
                         const c = CZ.deployed.find(d => d.id === cid);
                         if (!c) return;
                         const t = COMPONENTS.find(x => x.id === c.type);
-                        const baseName = t ? t.name : c.type;
+                        const baseName = t ? CZ.getCompName(t) : c.type;
                         compNums[baseName] = (compNums[baseName] || 0) + 1;
                         compMap[cid] = { comp: c, tmpl: t, baseName };
                     });
@@ -812,7 +824,7 @@
                     });
 
                     // Component list
-                    let lines = ['📋 RANGKAIAN ELEKTRONIK', '═══════════════════════', '', '🔧 Komponen:'];
+                    let lines = [CZ.t('copyTitle'), '═══════════════════════', '', CZ.t('copyCompLabel')];
                     selIds.forEach(cid => {
                         const m = compMap[cid];
                         if (!m) return;
@@ -820,7 +832,7 @@
                         let info = m.shortName;
                         if (t?.voltage) info += ` (${t.voltage}V)`;
                         else if (t?.resistance) info += ` (${t.resistance}Ω)`;
-                        if (m.comp.isBroken) info += ' ⛔ RUSAK';
+                        if (m.comp.isBroken) info += ' ⛔ ' + CZ.t('ctxBroken');
                         if (m.comp.rotation) info += ` ↻${((m.comp.rotation % 360) + 360) % 360}°`;
                         lines.push(`  • ${info}`);
                     });
@@ -829,7 +841,7 @@
                     const selectedSet = new Set(selIds);
                     const relevantWires = CZ.wires.filter(w => selectedSet.has(w.c1) && selectedSet.has(w.c2));
                     if (relevantWires.length > 0) {
-                        lines.push('', '🔌 Koneksi:');
+                        lines.push('', CZ.t('copyConnLabel'));
                         relevantWires.forEach((w, i) => {
                             const m1 = compMap[w.c1], m2 = compMap[w.c2];
                             if (!m1 || !m2) return;
@@ -839,17 +851,17 @@
                             lines.push(`  ${i + 1}. ${m1.shortName} [${pin1}] ──→ [${pin2}] ${m2.shortName}`);
                         });
                     } else {
-                        lines.push('', '⚠ Tidak ada kabel antar komponen yang dipilih');
+                        lines.push('', `⚠ ${CZ.t('copyNoWires')}`);
                     }
 
                     // Summary
-                    lines.push('', `📊 Total: ${selIds.length} komponen, ${relevantWires.length} kabel`);
+                    lines.push('', `📊 ${CZ.t('copyTotal')}: ${selIds.length} ${CZ.t('copyComponents')}, ${relevantWires.length} ${CZ.t('copyWires')}`);
 
                     const text = lines.join('\n');
                     navigator.clipboard.writeText(text).then(() => {
                         const toast = document.createElement('div');
                         toast.className = 'copy-toast';
-                        toast.textContent = `📋 Teks rangkaian disalin! (${selIds.length} komponen, ${relevantWires.length} kabel)`;
+                        toast.textContent = `📋 ${CZ.t('copyCopied')} (${selIds.length} ${CZ.t('copyComponents')}, ${relevantWires.length} ${CZ.t('copyWires')})`;
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 2500);
                     });
@@ -864,8 +876,20 @@
                         c.batteryLevel = c.batteryCapacity;
                         const t = COMPONENTS.find(x => x.id === c.type);
                         if (t) c.voltage = t.voltage;
+                        // Clear dead visual state
+                        const el = document.getElementById(cid);
+                        if (el) {
+                            el.classList.remove('battery-dead');
+                            el.style.opacity = '';
+                            el.dataset.deadLabel = '';
+                        }
+                    });
+                    // Also reset any broken components in the circuit
+                    CZ.deployed.forEach(c => {
+                        if (c.isBroken) CZ.resetComponent(c.id);
                     });
                     CZ.evaluateCircuit();
+                    if (CZ.updateBatteryVisuals) CZ.updateBatteryVisuals();
                     CZ.saveState();
                 } else if (action === 'rotate') {
                     CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));

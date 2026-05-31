@@ -165,7 +165,7 @@
                 const amps = Math.abs(cr.current);
                 // Charge Controller
                 if (c.type === 'charge_controller' && tmpl.maxOutputCurrent && amps > tmpl.maxOutputCurrent) {
-                    const hasSolar = result.components.some(x => x.comp.type.startsWith('solar_') && Math.abs(x.current) > 0.0001);
+                    const hasSolar = result.components.some(x => x.comp.type.startsWith('solar_') && Math.abs(x.current) > EL.SIM.MIN_CURRENT);
                     if (hasSolar) {
                         // Increase resistance to limit current to maxOutputCurrent
                         const totalV = result.loops[0] ? result.loops[0].v : 0;
@@ -205,7 +205,7 @@
         result.components.forEach(cr => {
             const tmpl = cr.tmpl;
             if (!tmpl || !tmpl.isInverter) return;
-            if (Math.abs(cr.current) < 0.0001) return;
+            if (Math.abs(cr.current) < EL.SIM.MIN_CURRENT) return;
             // Input voltage = DC pin voltage relative to ground (node 0 = 0V)
             // Pin 0 (DC) is nodeP, connected to battery positive
             const inputV = Math.abs(cr.v1);
@@ -277,7 +277,7 @@
 
         // Debug logging
         if (hasLoop) {
-            const activeComps = result.components.filter(cr => Math.abs(cr.current) > 0.0001);
+            const activeComps = result.components.filter(cr => Math.abs(cr.current) > EL.SIM.MIN_CURRENT);
             console.log(`[MNA] Circuit: ${activeComps.length} active components, ${Object.keys(nodeDomain).filter(k => nodeDomain[k] === 'AC').length} AC nodes`);
             activeComps.forEach(cr => {
                 const tmpl = cr.tmpl;
@@ -288,7 +288,7 @@
         // Compute source/load power for display
         let srcPower = 0, loadPower = 0;
         result.components.forEach(cr => {
-            if (Math.abs(cr.current) < 0.0001) return;
+            if (Math.abs(cr.current) < EL.SIM.MIN_CURRENT) return;
             const t = cr.tmpl;
             if (!t) return;
             if (isSource(cr.comp) && t.ratedPower && !cr.comp.type.startsWith('battery')) srcPower += t.ratedPower;
@@ -428,14 +428,14 @@
                         }
                     }
                     c._vmProcessed = true;
-                    const threshold = mode === 'A' ? 0.0000001 : mode === 'Ω' ? 0.001 : 0.0005;
+                    const threshold = mode === 'A' ? 1e-7 : mode === 'Ω' ? EL.SIM.MIN_RESISTANCE : EL.SIM.MIN_VOLTAGE;
                     if (measured > threshold) {
                         const vmIndicator = el.querySelector('.vm-indicator');
                         if (vmIndicator) vmIndicator.style.fill = '#22c55e';
                         el.classList.add('vm-active');
                         const changeSig = mode === 'Ω'
                             ? Math.abs(measured - (c._vmTarget || 0)) > measured * 0.02  // 2% change
-                            : Math.abs(measured - (c._vmTarget || 0)) > (mode === 'A' ? 0.0001 : 0.01);
+                            : Math.abs(measured - (c._vmTarget || 0)) > (mode === 'A' ? EL.SIM.MIN_CURRENT : 0.01);
                         if (changeSig) {
                             mmAnimate(c, el, measured, mode);
                         } else if (!c._vmAnimId) {
@@ -449,7 +449,7 @@
                     return;
                 }
 
-                if (amps < 0.0001) return;
+                if (amps < EL.SIM.MIN_CURRENT) return;
 
                 // AC-only check: must be on AC domain with valid voltage
                 if (tmpl && tmpl.acOnly) {
@@ -459,8 +459,8 @@
                         el.classList.add('ac-no-inverter');
                         let badge = el.querySelector('.no-ac-badge');
                         if (!badge) { badge = document.createElement('div'); badge.className = 'no-ac-badge'; el.appendChild(badge); }
-                        if (!onAC) badge.textContent = '⚠ NO AC';
-                        else if (nodeDomain[cr.nodeP] === 'DC_UNDERVOLT' || nodeDomain[cr.nodeN] === 'DC_UNDERVOLT') badge.textContent = '⚠ INPUT KURANG';
+                        if (!onAC) badge.textContent = CZ.t('simNoAC');
+                        else if (nodeDomain[cr.nodeP] === 'DC_UNDERVOLT' || nodeDomain[cr.nodeN] === 'DC_UNDERVOLT') badge.textContent = CZ.t('simInputLow');
                         else badge.textContent = `⚠ AC ${acV}V < 200V`;
                         return;
                     }
@@ -472,7 +472,7 @@
                         el.classList.add('ac-no-inverter');
                         let lpBadge = el.querySelector('.no-ac-badge');
                         if (!lpBadge) { lpBadge = document.createElement('div'); lpBadge.className = 'no-ac-badge'; el.appendChild(lpBadge); }
-                        lpBadge.textContent = `⚠ DAYA KURANG (${srcPower}W < ${loadPower}W)`;
+                        lpBadge.textContent = `${CZ.t('simPowerLow')} (${srcPower}W < ${loadPower}W)`;
                         return;
                     }
                 }
@@ -558,13 +558,13 @@
                 // ── Charge Controller badge ──
                 if (c.type === 'charge_controller') {
                     const isProtecting = protectedComps.has(c.id);
-                    const hasBattery = result.components.some(x => x.comp.type.startsWith('battery') && Math.abs(x.current) > 0.0001);
+                    const hasBattery = result.components.some(x => x.comp.type.startsWith('battery') && Math.abs(x.current) > EL.SIM.MIN_CURRENT);
                     el.classList.add('scc-active');
                     if (isProtecting) el.classList.add('scc-protecting');
                     let badge = el.querySelector('.scc-status');
                     if (!badge) { badge = document.createElement('div'); badge.className = 'scc-status'; el.appendChild(badge); }
                     badge.textContent = isProtecting
-                        ? (hasBattery ? `⚡ PROTECT ${(amps*1000).toFixed(0)}mA` : `⚡ LIMIT ${(amps*1000).toFixed(0)}mA`)
+                        ? (hasBattery ? `${CZ.t('simProtect')} ${(amps*1000).toFixed(0)}mA` : `${CZ.t('simLimit')} ${(amps*1000).toFixed(0)}mA`)
                         : `✓ OK ${(amps*1000).toFixed(0)}mA`;
                 }
                 // ── Step-Down badge ──
@@ -587,7 +587,8 @@
                     const pReal = cr.power;
                     let pBadge = el.querySelector('.power-badge');
                     if (!pBadge) { pBadge = document.createElement('div'); pBadge.className = 'power-badge'; el.appendChild(pBadge); }
-                    pBadge.textContent = pReal >= 1 ? `${pReal.toFixed(1)}W` : `${(pReal * 1000).toFixed(0)}mW`;
+                    const fmt = EL.Units.autoFormat(pReal, 'W');
+                    pBadge.textContent = `${fmt.val}${fmt.unit}`;
                 }
             });
         }

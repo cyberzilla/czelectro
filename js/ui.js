@@ -26,7 +26,7 @@
         if (filtered.length === 0 && searchQuery) {
             const empty = document.createElement('div');
             empty.className = 'sidebar-empty';
-            empty.textContent = `Tidak ditemukan "${searchQuery}"`;
+            empty.textContent = `${CZ.t('searchEmpty')}: "${searchQuery}"`;
             CZ.listEl.appendChild(empty);
             return;
         }
@@ -36,10 +36,13 @@
             item.className = 'sidebar-item';
             item.dataset.id = tmpl.id;
             item.innerHTML = `<div class="item-icon">${tmpl.svg}</div>
-                <div class="item-details"><span class="item-name">${tmpl.name}</span><span class="item-spec">${tmpl.spec}</span></div>`;
+                <div class="item-details"><span class="item-name">${CZ.getCompName(tmpl)}</span><span class="item-spec">${CZ.getCompSpec(tmpl)}</span></div>`;
             CZ.listEl.appendChild(item);
         });
     };
+
+    // Alias for i18n language switch callback
+    CZ.renderComponentList = function() { CZ.renderSidebar(); };
 
     // ── Category Tabs ──
     CZ.setupCategoryTabs = function() {
@@ -218,7 +221,7 @@
             const blob = new Blob([JSON.stringify(fileData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            const name = prompt('Nama rangkaian:', 'rangkaian-' + new Date().toISOString().slice(0,10));
+            const name = prompt(CZ.t('savePrompt'), (CZ.lang === 'en' ? 'circuit-' : 'rangkaian-') + new Date().toISOString().slice(0,10));
             if (!name) return;
             a.href = url;
             a.download = name.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.cze';
@@ -228,7 +231,7 @@
             // Toast
             const toast = document.createElement('div');
             toast.className = 'copy-toast';
-            toast.textContent = `💾 "${name}" tersimpan! (${data.deployed.length} komponen, ${data.wires.length} kabel)`;
+            toast.textContent = `💾 "${name}" ${CZ.t('toastSaved')} (${data.deployed.length} ${CZ.t('copyComponents')}, ${data.wires.length} ${CZ.t('copyWires')})`;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 2500);
         };
@@ -256,7 +259,7 @@
                     const stateData = raw.state || raw;
 
                     if (!stateData.deployed || !Array.isArray(stateData.deployed)) {
-                        alert('❌ Format file tidak valid!');
+                        alert('❌ ' + CZ.t('toastInvalidFile'));
                         return;
                     }
 
@@ -267,11 +270,11 @@
                     // Toast
                     const toast = document.createElement('div');
                     toast.className = 'copy-toast';
-                    toast.textContent = `📂 "${file.name}" dimuat! (${stateData.deployed.length} komponen, ${stateData.wires.length} kabel)`;
+                    toast.textContent = `📂 "${file.name}" ${CZ.t('toastLoaded')} (${stateData.deployed.length} ${CZ.t('copyComponents')}, ${stateData.wires.length} ${CZ.t('copyWires')})`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 2500);
                 } catch (err) {
-                    alert('❌ Gagal membuka file: ' + err.message);
+                    alert('❌ ' + CZ.t('toastFileError') + ': ' + err.message);
                 }
             };
             reader.readAsText(file);
@@ -281,7 +284,7 @@
         // Clear all
         document.getElementById('btn-clear').addEventListener('click', () => {
             if (!CZ.deployed.length) return;
-            if (!confirm('Hapus semua komponen?')) return;
+            if (!confirm(CZ.t('confirmClearAll'))) return;
             CZ.deployed.forEach(c => document.getElementById(c.id)?.remove());
             CZ.deployed = []; CZ.wires = []; CZ.groups = [];
             document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
@@ -352,6 +355,22 @@
             CZ.drawGrid();
         });
 
+        // Language toggle in settings panel
+        const langToggle = document.getElementById('lang-toggle');
+        if (langToggle) {
+            // Restore saved language on load
+            document.querySelectorAll('.lang-opt').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === CZ.lang);
+            });
+            langToggle.addEventListener('click', (e) => {
+                const btn = e.target.closest('.lang-opt');
+                if (!btn) return;
+                CZ.setLanguage(btn.dataset.lang);
+            });
+        }
+        // Apply translations on initial load
+        CZ.applyTranslations();
+
         // Simulation event listeners
         document.addEventListener('sim-speed', (e) => CZ.startSim(e.detail));
         document.addEventListener('sim-reset', () => CZ.resetBatteries());
@@ -366,6 +385,38 @@
             CZ.evaluateCircuit();
             if (CZ.simSpeed > 0) CZ.simTick();
         });
+
+        // ── Toolbar drag-to-scroll (desktop) ──
+        const toolbar = document.getElementById('toolbar');
+        if (toolbar) {
+            let isDragScroll = false, startX = 0, scrollStart = 0;
+            toolbar.addEventListener('mousedown', (e) => {
+                // Only activate on empty area or separator, not buttons
+                if (e.target.closest('.tb-btn') || e.target.closest('.tb-label')) return;
+                isDragScroll = true;
+                startX = e.clientX;
+                scrollStart = toolbar.scrollLeft;
+                toolbar.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragScroll) return;
+                toolbar.scrollLeft = scrollStart - (e.clientX - startX);
+            });
+            document.addEventListener('mouseup', () => {
+                if (isDragScroll) {
+                    isDragScroll = false;
+                    toolbar.style.cursor = '';
+                }
+            });
+            // Wheel → horizontal scroll on toolbar
+            toolbar.addEventListener('wheel', (e) => {
+                if (toolbar.scrollWidth > toolbar.clientWidth) {
+                    e.preventDefault();
+                    toolbar.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+        }
 
         // ── Sidebar Toggle ──
         const sidebar = document.getElementById('sidebar');

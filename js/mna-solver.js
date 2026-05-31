@@ -18,7 +18,7 @@
                 [Z[i], Z[maxRow]] = [Z[maxRow], Z[i]];
             }
             const pivot = A[i][i];
-            if (Math.abs(pivot) < 1e-12) continue; // singular row — floating node
+            if (Math.abs(pivot) < EL.SIM.GAUSS_PIVOT_TOL) continue; // singular row — floating node
 
             // Eliminate all other rows
             for (let k = 0; k < n; k++) {
@@ -66,10 +66,26 @@
         // Merge ground components to a canonical ground key
         const GND_KEY = '__GND__';
         find(GND_KEY);
+        let hasExplicitGround = false;
         deployed.forEach(c => {
             const tmpl = COMPONENTS.find(t => t.id === c.type);
-            if (tmpl && tmpl.isGround) union(termKey(c.id, 0), GND_KEY);
+            if (tmpl && tmpl.isGround) {
+                union(termKey(c.id, 0), GND_KEY);
+                hasExplicitGround = true;
+            }
         });
+
+        // If no explicit ground, use first battery's negative terminal as ground reference
+        // This prevents singular conductance matrix for floating circuits
+        if (!hasExplicitGround) {
+            const firstSource = deployed.find(c => {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                return tmpl && (tmpl.voltage > 0 || tmpl.isSolar);
+            });
+            if (firstSource) {
+                union(termKey(firstSource.id, 1), GND_KEY); // pin 1 = negative terminal
+            }
+        }
 
         // Assign numeric node IDs (ground = 0)
         const rootToNode = {};
@@ -103,9 +119,8 @@
     function getEffectiveVoltage(c) {
         let v = c.voltage;
         if (c.batteryCapacity && c.batteryLevel !== undefined) {
-            const isRechargeable = c.type.includes('lifepo4') || c.type.includes('plts') || c.type === 'battery_32140';
             const isLiFePO4 = c.type.includes('lifepo4') || c.type === 'battery_32140' || c.type.includes('plts');
-            const minLevel = isRechargeable ? c.batteryCapacity * 0.10 : 0;
+            const minLevel = CZ.getBattDeadLevel ? CZ.getBattDeadLevel(c) : 0;
             if (c.batteryLevel <= minLevel) {
                 v = 0;
             } else {
@@ -207,9 +222,10 @@
             // Diode/LED reverse-bias check: terminal 0 = Anode, terminal 1 = Kathode
             // We'll do a first-pass solve, then check polarity in iteration
             let R = c.currentResistance;
-            if (R === Infinity || R <= 0) return;
+            if (R === Infinity) return;
+            if (R <= 0) R = EL.SIM.MIN_RESISTANCE; // clamp zero to tiny value (closed switch)
 
-            const G = 1.0 / R; // conductance
+            const G = EL.Ohm.conductance(R);
 
             // Stamp conductance into G matrix
             if (n1 > 0) A[nIdx(n1)][nIdx(n1)] += G;
@@ -287,11 +303,11 @@
                 } else if (R === Infinity || R <= 0) {
                     current = 0;
                 } else {
-                    current = vDrop / R;
+                    current = EL.Ohm.current(vDrop, R);
                 }
             }
 
-            const power = Math.abs(vDrop * current);
+            const power = EL.Power.fromVI(vDrop, current);
             compResults.push({ comp: c, tmpl, vDrop, current, power, nodeP: n1, nodeN: n2, v1, v2 });
         });
 
@@ -315,7 +331,7 @@
             // A wire is energized if any connected node has non-zero voltage or current flows
             const hasVoltage = Math.abs(v1) > 0.001 || Math.abs(v2) > 0.001;
             const hasCurrent = compResults.some(cr =>
-                Math.abs(cr.current) > 0.0001 &&
+                Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
                 ((cr.nodeP === n1 || cr.nodeP === n2) || (cr.nodeN === n1 || cr.nodeN === n2))
             );
             // Also energize wires connected to active voltmeter probes
@@ -325,7 +341,7 @@
 
         // Circuit is active if any non-source has significant current, OR a multimeter reads a value
         const hasCircuit = compResults.some(cr =>
-            (Math.abs(cr.current) > 0.0001 && !isSource(cr.comp)) ||
+            (Math.abs(cr.current) > EL.SIM.MIN_CURRENT && !isSource(cr.comp)) ||
             (cr.tmpl && (cr.tmpl.isVoltmeter || cr.tmpl.isMultimeter) && Math.abs(cr.v1 - cr.v2) > 0.001)
         );
 
@@ -338,14 +354,14 @@
             let totalV = 0, totalR = 0, totalI = 0;
 
             compResults.forEach(cr => {
-                if (isSource(cr.comp) && Math.abs(cr.current) > 0.0001) {
+                if (isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT) {
                     totalV += Math.abs(cr.vDrop);
                     if (cr.comp.batteryCapacity) battIds.push(cr.comp.id);
                     if (cr.tmpl.ratedPower && !cr.comp.type.startsWith('battery')) totalSrcW += cr.tmpl.ratedPower;
                 }
                 if (cr.comp.type === 'charge_controller') hasCC = true;
                 if (cr.tmpl.isInverter) hasInv = true;
-                if (!isSource(cr.comp) && cr.tmpl.ratedPower && Math.abs(cr.current) > 0.0001 &&
+                if (!isSource(cr.comp) && cr.tmpl.ratedPower && Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
                     cr.comp.type !== 'charge_controller' && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
                     totalLoadW += cr.tmpl.ratedPower;
                 }
@@ -377,6 +393,16 @@
     CZ.solveMNAWithDiodes = function() {
         const MAX_ITER = 5;
         let result;
+
+        // Reset all diode/LED resistances to template values before solving
+        // This prevents deadlock where a blocked diode stays blocked forever
+        CZ.deployed.forEach(c => {
+            if (c.isBroken) return;
+            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            if (tmpl && tmpl.isDiode && c.currentResistance === 1e12) {
+                c.currentResistance = tmpl.resistance;
+            }
+        });
 
         for (let iter = 0; iter < MAX_ITER; iter++) {
             result = CZ.solveMNA();

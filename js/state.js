@@ -145,6 +145,7 @@
                 maxCurrent: tmpl.maxCurrent || null,
                 glowGradient: tmpl.glowGradient || null,
                 isClosed: saved.isClosed || false,
+                mmMode: saved.mmMode || 'V',
                 isBroken: saved.isBroken || false,
                 rotation: saved.rotation || 0,
                 x: saved.x, y: saved.y,

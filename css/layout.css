@@ -384,7 +384,13 @@
     border-radius: var(--radius-lg);
     z-index: 50;
     box-shadow: var(--shadow-heavy);
+    align-items: center;
+    max-width: calc(100vw - 340px);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
 }
+#toolbar::-webkit-scrollbar { display: none; }
 
 .tb-btn {
     width: 38px;
@@ -399,6 +405,7 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .tb-btn:hover {
@@ -423,6 +430,7 @@
     width: 1px;
     background: var(--border-subtle);
     margin: 4px 2px;
+    flex-shrink: 0;
 }
 
 .tb-label {
@@ -433,6 +441,39 @@
     padding: 0 6px;
     font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
     font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* Desktop: scroll wrapper is transparent, settings is a normal button */
+.tb-scroll {
+    display: contents;
+}
+.tb-btn-settings {
+    flex-shrink: 0;
+}
+
+/* Language toggle — reuses theme toggle pattern */
+.lang-opt {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1;
+    font-weight: 600;
+}
+
+.lang-opt:hover {
+    background: rgba(128, 128, 128, 0.1);
+    color: var(--text-primary);
+}
+
+.lang-opt.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 /* ── Status Bar (bottom) ── */
@@ -685,11 +726,7 @@
     .sidebar-toggle { left: 280px; }
     #sidebar.collapsed ~ .sidebar-toggle { left: 0; }
     .item-icon { width: 44px; height: 44px; }
-
-    #toolbar {
-        padding: 6px 8px;
-        gap: 4px;
-    }
+    #toolbar { padding: 6px 8px; gap: 4px; }
     .tb-btn { width: 34px; height: 34px; font-size: 14px; }
 }
 
@@ -720,19 +757,27 @@
     .sidebar-toggle {
         left: 0;
         top: 0;
-        border-radius: 0;
         z-index: 101;
         width: 44px;
         height: 44px;
         font-size: 18px;
-        border-top: none;
-        border-left: none;
+        border: none;
         border-right: 1px solid var(--border-subtle);
         border-bottom: 1px solid var(--border-subtle);
+        border-radius: 0;
+        background: var(--bg-secondary);
+        backdrop-filter: blur(var(--glass-blur));
+        -webkit-backdrop-filter: blur(var(--glass-blur));
+        color: var(--text-secondary);
         box-shadow: none;
         transition: left 0.35s var(--transition-smooth),
                     border-radius 0.35s var(--transition-smooth),
                     background 0.2s, color 0.2s;
+    }
+    .sidebar-toggle:hover,
+    .sidebar-toggle:active {
+        background: rgba(74, 222, 128, 0.15);
+        color: var(--accent);
     }
 
     #sidebar.open ~ .sidebar-toggle {
@@ -759,23 +804,61 @@
         left: 44px;
         right: 0;
         transform: none;
-        padding: 4px 8px;
-        gap: 3px;
+        padding: 0;
+        gap: 0;
         flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
+        overflow: hidden;
         max-width: none;
         height: 44px;
-        border-radius: 0 0 var(--radius-md) 0;
+        border-radius: 0;
         border-top: none;
         border-left: none;
         z-index: 55;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
         align-items: center;
         transition: opacity 0.3s, filter 0.3s;
     }
     #toolbar::-webkit-scrollbar { display: none; }
+    .tb-scroll {
+        display: flex;
+        gap: 3px;
+        padding: 4px 8px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        align-items: center;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+        scrollbar-width: none;
+    }
+    .tb-scroll::-webkit-scrollbar { display: none; }
+    /* Settings stays fixed at right edge — mirrors sidebar toggle exactly */
+    #toolbar .tb-btn-settings {
+        border: none;
+        border-left: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+        border-radius: 0;
+        height: 44px;
+        width: 44px;
+        flex-shrink: 0;
+        background: var(--bg-secondary);
+        backdrop-filter: blur(var(--glass-blur));
+        -webkit-backdrop-filter: blur(var(--glass-blur));
+        color: var(--text-secondary);
+        font-size: 18px;
+        box-shadow: none;
+    }
+    #toolbar .tb-btn-settings:hover,
+    #toolbar .tb-btn-settings:active {
+        background: rgba(74, 222, 128, 0.15);
+        color: var(--accent);
+    }
+    #toolbar .tb-btn-settings.active {
+        background: rgba(74, 222, 128, 0.2);
+        color: var(--accent);
+    }
+    .tb-sep-settings { display: none; }
     .tb-btn {
         width: 34px;
         height: 34px;
@@ -882,12 +965,14 @@
         height: 38px;
         font-size: 16px;
     }
+    .tb-btn-settings {
+        height: 38px;
+        width: 38px;
+    }
 
     #toolbar {
         left: 38px;
         height: 38px;
-        padding: 3px 6px;
-        gap: 2px;
     }
 
     .tb-btn {

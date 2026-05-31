@@ -658,7 +658,7 @@
     filter: grayscale(0.8) brightness(0.5);
 }
 .battery-dead::after {
-    content: '💀 HABIS';
+    content: attr(data-dead-label);
     position: absolute;
     top: 50%;
     left: 50%;
