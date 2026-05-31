@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <link rel="shortcut icon" href="CZElectro.png" type="image/x-icon">
+    <link rel="shortcut icon" href="images/CZElectro.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" data-i18n-meta="metaDescription"
         content="CZElectro - Simulasi Lab Elektronika interaktif dengan drag-drop komponen, kabel fleksibel, dan animasi realistis.">
@@ -102,7 +102,7 @@
     <aside id="sidebar">
         <div id="sidebar-header">
             <div class="logo-row">
-            <div class="logo-icon">⚡</div>
+                <img class="logo-icon" src="images/CZElectro.png" alt="CZElectro Logo">
                 <div class="title">CZElectro</div>
             </div>
             <div class="subtitle" data-i18n="appSubtitle">Lab Elektronika Interaktif</div>
@@ -114,7 +114,8 @@
             <button class="cat-tab" data-cat="output" data-i18n="catOutput">Output</button>
         </div>
         <div class="sidebar-search">
-            <input type="text" id="comp-search" data-i18n="searchPlaceholder" placeholder="🔍 Cari komponen..." autocomplete="off" spellcheck="false">
+            <input type="text" id="comp-search" data-i18n="searchPlaceholder" placeholder="🔍 Cari komponen..."
+                autocomplete="off" spellcheck="false">
         </div>
         <div id="component-list"></div>
     </aside>
@@ -145,36 +146,42 @@
         <!-- Toolbar -->
         <div id="toolbar">
             <div class="tb-scroll">
-            <!-- File Group -->
-            <button class="tb-btn" id="btn-undo" data-i18n-title="tipUndo" title="Urungkan (Ctrl+Z)" disabled>↩</button>
-            <button class="tb-btn" id="btn-redo" data-i18n-title="tipRedo" title="Ulangi (Ctrl+Y)" disabled>↪</button>
-            <div class="tb-sep"></div>
-            <button class="tb-btn" id="btn-save" data-i18n-title="tipSave" title="Simpan File (Ctrl+S)">💾</button>
-            <button class="tb-btn" id="btn-open" data-i18n-title="tipOpen" title="Buka File (Ctrl+O)">📂</button>
-            <input type="file" id="file-input" accept=".cze,.json" style="display:none">
-            <div class="tb-sep"></div>
-            <!-- View Group -->
-            <button class="tb-btn" id="btn-zoom-in" data-i18n-title="tipZoomIn" title="Perbesar">🔍+</button>
-            <button class="tb-btn" id="btn-zoom-out" data-i18n-title="tipZoomOut" title="Perkecil">🔍−</button>
-            <span class="tb-label" id="zoom-label">100%</span>
-            <button class="tb-btn" id="btn-fit" data-i18n-title="tipFit" title="Sesuaikan Tampilan">⊞</button>
-            <div class="tb-sep"></div>
-            <!-- Mode Group -->
-            <button class="tb-btn active" id="btn-mode-select" data-i18n-title="tipSelect" title="Mode Seleksi (V)">🖱</button>
-            <button class="tb-btn" id="btn-mode-pan" data-i18n-title="tipPan" title="Mode Geser (H)">✋</button>
-            <div class="tb-sep"></div>
-            <!-- Component Tools -->
-            <button class="tb-btn" id="btn-rotate" data-i18n-title="tipRotate" title="Putar 90° (R)">🔄</button>
-            <button class="tb-btn" id="btn-group" data-i18n-title="tipGroup" title="Kelompokkan (Ctrl+G)">📦</button>
-            <button class="tb-btn" id="btn-ungroup" data-i18n-title="tipUngroup" title="Lepas Kelompok (Ctrl+Shift+G)">📭</button>
-            <div class="tb-sep"></div>
-            <!-- Audio & Clear -->
-            <button class="tb-btn" id="btn-mute" data-i18n-title="tipMute" title="Suara Aktif/Mati (M)">🔊</button>
-            <button class="tb-btn" id="btn-clear" data-i18n-title="tipClear" title="Hapus Semua">🗑</button>
+                <!-- File Group -->
+                <button class="tb-btn" id="btn-undo" data-i18n-title="tipUndo" title="Urungkan (Ctrl+Z)"
+                    disabled>↩</button>
+                <button class="tb-btn" id="btn-redo" data-i18n-title="tipRedo" title="Ulangi (Ctrl+Y)"
+                    disabled>↪</button>
+                <div class="tb-sep"></div>
+                <button class="tb-btn" id="btn-save" data-i18n-title="tipSave" title="Simpan File (Ctrl+S)">💾</button>
+                <button class="tb-btn" id="btn-open" data-i18n-title="tipOpen" title="Buka File (Ctrl+O)">📂</button>
+                <input type="file" id="file-input" accept=".cze,.json" style="display:none">
+                <div class="tb-sep"></div>
+                <!-- View Group -->
+                <button class="tb-btn" id="btn-zoom-in" data-i18n-title="tipZoomIn" title="Perbesar">🔍+</button>
+                <button class="tb-btn" id="btn-zoom-out" data-i18n-title="tipZoomOut" title="Perkecil">🔍−</button>
+                <span class="tb-label" id="zoom-label">100%</span>
+                <button class="tb-btn" id="btn-fit" data-i18n-title="tipFit" title="Sesuaikan Tampilan">⊞</button>
+                <div class="tb-sep"></div>
+                <!-- Mode Group -->
+                <button class="tb-btn active" id="btn-mode-select" data-i18n-title="tipSelect"
+                    title="Mode Seleksi (V)">🖱</button>
+                <button class="tb-btn" id="btn-mode-pan" data-i18n-title="tipPan" title="Mode Geser (H)">✋</button>
+                <div class="tb-sep"></div>
+                <!-- Component Tools -->
+                <button class="tb-btn" id="btn-rotate" data-i18n-title="tipRotate" title="Putar 90° (R)">🔄</button>
+                <button class="tb-btn" id="btn-group" data-i18n-title="tipGroup"
+                    title="Kelompokkan (Ctrl+G)">📦</button>
+                <button class="tb-btn" id="btn-ungroup" data-i18n-title="tipUngroup"
+                    title="Lepas Kelompok (Ctrl+Shift+G)">📭</button>
+                <div class="tb-sep"></div>
+                <!-- Audio & Clear -->
+                <button class="tb-btn" id="btn-mute" data-i18n-title="tipMute" title="Suara Aktif/Mati (M)">🔊</button>
+                <button class="tb-btn" id="btn-clear" data-i18n-title="tipClear" title="Hapus Semua">🗑</button>
             </div>
             <!-- Settings: fixed position, never scrolls -->
             <div class="tb-sep tb-sep-settings"></div>
-            <button class="tb-btn tb-btn-settings" id="btn-settings" data-i18n-title="tipSettings" title="Pengaturan">⚙️</button>
+            <button class="tb-btn tb-btn-settings" id="btn-settings" data-i18n-title="tipSettings"
+                title="Pengaturan">⚙️</button>
         </div>
 
         <!-- Settings Panel -->
@@ -256,7 +263,7 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script src="js/electrical-laws.js"></script>
-    <script src="components.js"></script>
+    <script src="js/components.js"></script>
     <!-- Modular architecture: laws → components → state → i18n → audio → grid → wire → effects → solver → circuit → evaluate → battery → ui → events -->
     <script src="js/state.js"></script>
     <script src="js/i18n.js"></script>

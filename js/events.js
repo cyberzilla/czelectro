@@ -796,7 +796,7 @@
                 } else if (action === 'duplicate') {
                     CZ.duplicateSelected();
                 } else if (action === 'copytext') {
-                    // Build full circuit topology text with polarity arrows
+                    // Build full circuit topology text — auto-separate independent circuits
                     const selIds = [...CZ.selectedIds];
                     const compMap = {}; // id -> {comp, tmpl, shortName}
                     const compNums = {}; // type -> counter for numbering
@@ -823,45 +823,75 @@
                         }
                     });
 
-                    // Component list
-                    let lines = [CZ.t('copyTitle'), '═══════════════════════', '', CZ.t('copyCompLabel')];
-                    selIds.forEach(cid => {
-                        const m = compMap[cid];
-                        if (!m) return;
-                        const t = m.tmpl;
-                        let info = m.shortName;
-                        if (t?.voltage) info += ` (${t.voltage}V)`;
-                        else if (t?.resistance) info += ` (${t.resistance}Ω)`;
-                        if (m.comp.isBroken) info += ' ⛔ ' + CZ.t('ctxBroken');
-                        if (m.comp.rotation) info += ` ↻${((m.comp.rotation % 360) + 360) % 360}°`;
-                        lines.push(`  • ${info}`);
-                    });
-
-                    // Connection list with polar arrows
+                    // Union-Find to group selected components into independent circuits
                     const selectedSet = new Set(selIds);
                     const relevantWires = CZ.wires.filter(w => selectedSet.has(w.c1) && selectedSet.has(w.c2));
-                    if (relevantWires.length > 0) {
-                        lines.push('', CZ.t('copyConnLabel'));
-                        relevantWires.forEach((w, i) => {
-                            const m1 = compMap[w.c1], m2 = compMap[w.c2];
-                            if (!m1 || !m2) return;
-                            const t1 = m1.tmpl, t2 = m2.tmpl;
-                            const pin1 = t1?.terminals?.[w.i1]?.label || w.i1;
-                            const pin2 = t2?.terminals?.[w.i2]?.label || w.i2;
-                            lines.push(`  ${i + 1}. ${m1.shortName} [${pin1}] ──→ [${pin2}] ${m2.shortName}`);
+                    const ufP = {};
+                    selIds.forEach(id => ufP[id] = id);
+                    function ufFind(x) { return ufP[x] === x ? x : (ufP[x] = ufFind(ufP[x])); }
+                    function ufUnion(a, b) { ufP[ufFind(a)] = ufFind(b); }
+                    relevantWires.forEach(w => ufUnion(w.c1, w.c2));
+
+                    // Group components by circuit root
+                    const circuitMap = {};
+                    selIds.forEach(cid => {
+                        if (!compMap[cid]) return;
+                        const root = ufFind(cid);
+                        if (!circuitMap[root]) circuitMap[root] = [];
+                        circuitMap[root].push(cid);
+                    });
+                    const circuits = Object.values(circuitMap);
+
+                    // Build text per circuit
+                    const allLines = [];
+                    circuits.forEach((circIds, cIdx) => {
+                        if (circuits.length > 1) {
+                            if (cIdx > 0) allLines.push('', '');
+                            allLines.push(`${CZ.t('copyTitle')} #${cIdx + 1}`, '═══════════════════════');
+                        } else {
+                            allLines.push(CZ.t('copyTitle'), '═══════════════════════');
+                        }
+
+                        // Component list
+                        allLines.push('', CZ.t('copyCompLabel'));
+                        circIds.forEach(cid => {
+                            const m = compMap[cid];
+                            if (!m) return;
+                            const t = m.tmpl;
+                            let info = m.shortName;
+                            if (t?.voltage) info += ` (${t.voltage}V)`;
+                            else if (t?.resistance) info += ` (${t.resistance}Ω)`;
+                            if (m.comp.isBroken) info += ' ⛔ ' + CZ.t('ctxBroken');
+                            if (m.comp.rotation) info += ` ↻${((m.comp.rotation % 360) + 360) % 360}°`;
+                            allLines.push(`  • ${info}`);
                         });
-                    } else {
-                        lines.push('', `⚠ ${CZ.t('copyNoWires')}`);
-                    }
 
-                    // Summary
-                    lines.push('', `📊 ${CZ.t('copyTotal')}: ${selIds.length} ${CZ.t('copyComponents')}, ${relevantWires.length} ${CZ.t('copyWires')}`);
+                        // Connection list
+                        const circSet = new Set(circIds);
+                        const circWires = relevantWires.filter(w => circSet.has(w.c1) && circSet.has(w.c2));
+                        if (circWires.length > 0) {
+                            allLines.push('', CZ.t('copyConnLabel'));
+                            circWires.forEach((w, i) => {
+                                const m1 = compMap[w.c1], m2 = compMap[w.c2];
+                                if (!m1 || !m2) return;
+                                const t1 = m1.tmpl, t2 = m2.tmpl;
+                                const pin1 = t1?.terminals?.[w.i1]?.label || w.i1;
+                                const pin2 = t2?.terminals?.[w.i2]?.label || w.i2;
+                                allLines.push(`  ${i + 1}. ${m1.shortName} [${pin1}] ──→ [${pin2}] ${m2.shortName}`);
+                            });
+                        } else {
+                            allLines.push('', `⚠ ${CZ.t('copyNoWires')}`);
+                        }
 
-                    const text = lines.join('\n');
+                        allLines.push('', `📊 ${CZ.t('copyTotal')}: ${circIds.length} ${CZ.t('copyComponents')}, ${circWires.length} ${CZ.t('copyWires')}`);
+                    });
+
+                    const text = allLines.join('\n');
                     navigator.clipboard.writeText(text).then(() => {
+                        const circLabel = circuits.length > 1 ? `, ${circuits.length} ${CZ.t('statusCircuits')}` : '';
                         const toast = document.createElement('div');
                         toast.className = 'copy-toast';
-                        toast.textContent = `📋 ${CZ.t('copyCopied')} (${selIds.length} ${CZ.t('copyComponents')}, ${relevantWires.length} ${CZ.t('copyWires')})`;
+                        toast.textContent = `📋 ${CZ.t('copyCopied')} (${selIds.length} ${CZ.t('copyComponents')}, ${relevantWires.length} ${CZ.t('copyWires')}${circLabel})`;
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 2500);
                     });

@@ -302,9 +302,9 @@
                 const label = loops.length > 1 ? `<span style="color:var(--accent);font-weight:700;">#${idx + 1}</span> ` : '';
                 const fmtW = EL.Units.autoFormat(l.w, 'W');
                 let realInfo = '';
-                if (l.srcW > 0 && l.loadW > 0) {
+                if (l.hasSolar && l.srcW > 0 && l.loadW > 0) {
                     const ok = l.srcW >= l.loadW;
-                    realInfo = `<div class="status-item" style="color:${ok ? '#4ade80' : '#f87171'};font-size:10px;">${ok ? '✅' : '⚠️'} ${CZ.t('statusSource')}: ${l.srcW}W | ${CZ.t('statusLoad')}: ${l.loadW}W ${ok ? CZ.t('statusEnough') : CZ.t('statusNotEnough')}</div>`;
+                    realInfo = `<div class="status-item" style="color:${ok ? '#4ade80' : '#f87171'};font-size:10px;">${ok ? '✅' : '⚠️'} ${CZ.t('statusSource')}: ${l.srcW.toFixed(1)}W | ${CZ.t('statusLoad')}: ${l.loadW.toFixed(1)}W ${ok ? CZ.t('statusEnough') : CZ.t('statusNotEnough')}</div>`;
                 }
                 return `<div class="status-item">${label}⚡${l.v.toFixed(1)}V &nbsp;🔌${(l.i * 1000).toFixed(1)}mA &nbsp;Ω${l.r.toFixed(0)} &nbsp;💡${fmtW.val}${fmtW.unit}</div>${realInfo}`;
             }).join('');

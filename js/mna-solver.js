@@ -161,16 +161,37 @@
 
         // Identify voltage sources (batteries, solar) and their effective voltages
         const vSources = [];
+        const deadSources = []; // track dead batteries to check series/parallel
         deployed.forEach(c => {
             if (!isSource(c)) return;
             const v = getEffectiveVoltage(c);
-            if (v <= 0) return;
+            if (v <= 0) {
+                deadSources.push(c);
+                return;
+            }
             const nP = getNode(c.id, 0); // pin 0 = positive
             const nN = getNode(c.id, 1); // pin 1 = negative
             if (nP < 0 || nN < 0 || nP === nN) return;
             const tmpl = COMPONENTS.find(t => t.id === c.type);
             const intR = tmpl?.internalResistance || tmpl?.resistance || 0.01;
             vSources.push({ comp: c, v, nP, nN, intR, tmpl });
+        });
+
+        // Dead batteries: only stamp as passive resistor if in SERIES (not parallel)
+        // Parallel dead battery = open circuit (realistic: doesn't short the circuit)
+        // Series dead battery = passive resistor (realistic: current still flows through)
+        const deadSourceIds = new Set();
+        deadSources.forEach(dc => {
+            const dP = getNode(dc.id, 0);
+            const dN = getNode(dc.id, 1);
+            // Check if this dead battery shares both terminal nodes with any active source
+            const isParallel = vSources.some(vs => 
+                (vs.nP === dP && vs.nN === dN) || (vs.nP === dN && vs.nN === dP)
+            );
+            if (!isParallel) {
+                deadSourceIds.add(dc.id); // series: stamp as passive resistor
+            }
+            // parallel: skip entirely (open circuit)
         });
 
         if (vSources.length === 0 || nodeCount <= 1) {
@@ -206,9 +227,9 @@
         const A = Array.from({ length: size }, () => new Float64Array(size));
         const Z = new Float64Array(size);
 
-        // Stamp passive components (resistors, etc.)
+        // Stamp passive components (resistors, etc.) + dead batteries as internal resistors
         deployed.forEach(c => {
-            if (isSource(c)) return; // handled as voltage sources
+            if (isSource(c) && !deadSourceIds.has(c.id)) return; // active sources handled separately
             const tmpl = COMPONENTS.find(t => t.id === c.type);
             if (!tmpl) return;
 
@@ -346,43 +367,70 @@
         );
 
         // Build loop-equivalent info for battery simulation compatibility
+        // Group by electrically connected circuits using Union-Find
         const loops = [];
         if (hasCircuit) {
-            let totalSrcW = 0, totalLoadW = 0;
-            const battIds = [];
-            let hasCC = false, hasInv = false;
-            let totalV = 0, totalR = 0, totalI = 0;
-
-            compResults.forEach(cr => {
-                if (isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT) {
-                    totalV += Math.abs(cr.vDrop);
-                    if (cr.comp.batteryCapacity) battIds.push(cr.comp.id);
-                    if (cr.tmpl.ratedPower && !cr.comp.type.startsWith('battery')) totalSrcW += cr.tmpl.ratedPower;
-                }
-                if (cr.comp.type === 'charge_controller') hasCC = true;
-                if (cr.tmpl.isInverter) hasInv = true;
-                if (!isSource(cr.comp) && cr.tmpl.ratedPower && Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
-                    cr.comp.type !== 'charge_controller' && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
-                    totalLoadW += cr.tmpl.ratedPower;
-                }
+            // Union-Find to identify connected circuits
+            const ufP = {};
+            function uf(x) { return ufP[x] === x ? x : (ufP[x] = uf(ufP[x])); }
+            function ufU(a, b) { ufP[uf(a)] = uf(b); }
+            deployed.forEach(c => ufP[c.id] = c.id);
+            wires.forEach(w => {
+                if (ufP[w.c1] !== undefined && ufP[w.c2] !== undefined) ufU(w.c1, w.c2);
             });
 
-            const maxI = compResults.reduce((mx, cr) => Math.max(mx, Math.abs(cr.current)), 0);
-            const loopV = vSources.reduce((s, vs) => s + vs.v, 0);
-            const loopR = maxI > 0 ? loopV / maxI : 0;
-            const loopW = loopV * maxI;
+            // Group components by their circuit root
+            const circuitGroups = {};
+            compResults.forEach(cr => {
+                const root = uf(cr.comp.id);
+                if (!circuitGroups[root]) circuitGroups[root] = [];
+                circuitGroups[root].push(cr);
+            });
 
-            loops.push({
-                key: 'mna_loop',
-                v: loopV,
-                r: loopR,
-                i: maxI,
-                w: loopW,
-                srcW: totalSrcW,
-                loadW: totalLoadW,
-                battIds,
-                hasCC,
-                hasInverter: hasInv
+            // Build one loop per independent circuit
+            Object.values(circuitGroups).forEach(group => {
+                let totalSrcW = 0, totalLoadW = 0;
+                const battIds = [];
+                let hasCC = false, hasInv = false, hasSolar = false;
+                let groupHasCurrent = false;
+
+                group.forEach(cr => {
+                    if (Math.abs(cr.current) > EL.SIM.MIN_CURRENT) groupHasCurrent = true;
+                    if (isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT) {
+                        if (cr.comp.batteryCapacity) battIds.push(cr.comp.id);
+                        if (cr.comp.type.startsWith('solar_')) hasSolar = true;
+                        if (cr.tmpl.ratedPower && !cr.comp.type.startsWith('battery')) totalSrcW += cr.tmpl.ratedPower;
+                    }
+                    if (cr.comp.type === 'charge_controller') hasCC = true;
+                    if (cr.tmpl.isInverter) hasInv = true;
+                    if (!isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
+                        cr.comp.type !== 'charge_controller' && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
+                        // Use actual power from MNA instead of ratedPower
+                        totalLoadW += cr.power || 0;
+                    }
+                });
+
+                if (!groupHasCurrent || battIds.length === 0) return;
+
+                // Calculate actual power from MNA results for this circuit
+                const maxI = group.reduce((mx, cr) => Math.max(mx, Math.abs(cr.current)), 0);
+                const circuitSources = group.filter(cr => isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT);
+                const loopV = circuitSources.reduce((s, cr) => s + Math.abs(cr.vDrop), 0);
+                const loopW = loopV * maxI;
+
+                loops.push({
+                    key: 'mna_loop_' + battIds[0],
+                    v: loopV,
+                    r: maxI > 0 ? loopV / maxI : 0,
+                    i: maxI,
+                    w: loopW,
+                    srcW: totalSrcW,
+                    loadW: totalLoadW,
+                    battIds,
+                    hasCC,
+                    hasSolar,
+                    hasInverter: hasInv
+                });
             });
         }
 
