@@ -922,8 +922,7 @@
                     if (CZ.updateBatteryVisuals) CZ.updateBatteryVisuals();
                     CZ.saveState();
                 } else if (action === 'rotate') {
-                    CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
-                    CZ.saveState();
+                    CZ.rotateSelection();
                 } else if (action === 'group') {
                     CZ.groupSelected();
                 } else if (action === 'ungroup') {
@@ -1040,7 +1039,7 @@
             if (e.key === 'r' || e.key === 'R') {
                 if (CZ.selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     e.preventDefault();
-                    CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
+                    CZ.rotateSelection();
                 }
             }
             if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {

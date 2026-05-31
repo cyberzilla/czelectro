@@ -293,7 +293,7 @@
 
         // Rotate selected
         document.getElementById('btn-rotate').addEventListener('click', () => {
-            CZ.selectedIds.forEach(cid => CZ.rotateComponent(cid));
+            CZ.rotateSelection();
         });
 
         // Mute

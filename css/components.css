@@ -484,24 +484,6 @@
     border-radius: 4px;
 }
 
-/* ── Rotation angle badge ── */
-.rotation-badge {
-    position: absolute;
-    top: -18px;
-    right: -8px;
-    font-size: 8px;
-    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Menlo', monospace;
-    font-weight: 800;
-    color: #a78bfa;
-    white-space: nowrap;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.75);
-    padding: 1px 5px;
-    border-radius: 3px;
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    z-index: 20;
-    animation: badgeFadeIn 0.25s ease-out;
-}
 
 /* ── Charge Controller States ── */
 .scc-active {

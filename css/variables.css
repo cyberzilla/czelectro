@@ -128,10 +128,6 @@ body {
     color: var(--text-secondary);
 }
 
-[data-theme="light"] .rotation-badge {
-    background: rgba(255, 255, 255, 0.85);
-    border-color: rgba(139, 92, 246, 0.2);
-}
 
 [data-theme="light"] .power-badge {
     background: rgba(255, 255, 255, 0.85);
@@ -162,4 +158,37 @@ body {
     color: #15803d;
     border-color: rgba(22, 163, 74, 0.3);
     text-shadow: none;
+}
+
+[data-theme="light"] .group-label-badge {
+    color: #7c3aed;
+    background: rgba(139, 92, 246, 0.1);
+    text-shadow: none;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+[data-theme="light"] .group-label-badge.group-selected {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 2px 12px rgba(139, 92, 246, 0.15);
+}
+
+[data-theme="light"] .group-label-input {
+    color: #6d28d9;
+    caret-color: #7c3aed;
+}
+
+[data-theme="light"] .group-label-input::placeholder {
+    color: rgba(109, 40, 217, 0.35);
+}
+
+[data-theme="light"] .motor-dir-badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: #7c3aed;
+    border-color: rgba(139, 92, 246, 0.2);
+}
+
+[data-theme="light"] .motor-dir-badge.reversed {
+    color: #ea580c;
+    border-color: rgba(234, 88, 12, 0.2);
 }

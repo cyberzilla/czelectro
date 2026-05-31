@@ -191,10 +191,6 @@
             }
             if (comp.rotation) {
                 el.style.transform = `rotate(${comp.rotation}deg)`;
-                const badge = document.createElement('div');
-                badge.className = 'rotation-badge';
-                badge.textContent = `${comp.rotation}°`;
-                el.appendChild(badge);
             }
             // Mark grouped components
             const grp = CZ.groups.find(g => g.members.includes(saved.id));
@@ -372,10 +368,6 @@
                 }
                 if (comp.rotation) {
                     el.style.transform = `rotate(${comp.rotation}deg)`;
-                    const badge = document.createElement('div');
-                    badge.className = 'rotation-badge';
-                    badge.textContent = `${comp.rotation}°`;
-                    el.appendChild(badge);
                 }
                 // Mark grouped components
                 const grp = CZ.groups.find(g => g.members.includes(saved.id));

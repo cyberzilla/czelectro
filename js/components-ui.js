@@ -113,19 +113,7 @@
         comp.rotation = (comp.rotation || 0) + 90;
         el.style.transform = `rotate(${comp.rotation}deg)`;
 
-        // Show/hide rotation badge (display angle mod 360)
         const displayAngle = ((comp.rotation % 360) + 360) % 360;
-        let badge = el.querySelector('.rotation-badge');
-        if (displayAngle) {
-            if (!badge) {
-                badge = document.createElement('div');
-                badge.className = 'rotation-badge';
-                el.appendChild(badge);
-            }
-            badge.textContent = `${displayAngle}°`;
-        } else if (badge) {
-            badge.remove();
-        }
 
         // Normalize after CSS transition completes to prevent unbounded growth
         // (270→360 animates forward, then silently resets to 0 with no visual change)
@@ -141,6 +129,123 @@
 
         CZ.renderWires();
         CZ.evaluateCircuit();
+    };
+
+    // ── Helper: immediately finalize any pending group rotation animation ──
+    CZ._finalizeGroupRot = function() {
+        if (!CZ._groupRotData) return;
+        clearTimeout(CZ._groupRotTimer);
+        CZ._groupRotData.entries.forEach(({ comp }) => {
+            const normalized = ((comp.rotation % 360) + 360) % 360;
+            comp.rotation = normalized;
+            const el = document.getElementById(comp.id);
+            if (el) {
+                el.style.transition = 'none';
+                el.style.left = comp.x + 'px';
+                el.style.top = comp.y + 'px';
+                el.style.transform = normalized ? `rotate(${normalized}deg)` : '';
+                el.offsetHeight;
+                el.style.transition = '';
+            }
+        });
+        CZ.renderWires();
+        CZ.renderGroupLabels();
+        CZ._groupRotData = null;
+        CZ._groupRotTimer = null;
+    };
+
+    // ── Rotate entire selection as a group around the selection center ──
+    CZ.rotateSelection = function() {
+        if (CZ.selectedIds.size === 0) return;
+
+        // Single component — rotate in-place (animated)
+        if (CZ.selectedIds.size === 1) {
+            const cid = CZ.selectedIds.values().next().value;
+            CZ.rotateComponent(cid);
+            CZ.saveState();
+            return;
+        }
+
+        // Finalize any pending group rotation so positions are clean
+        CZ._finalizeGroupRot();
+
+        // Gather selected components and compute bounding box
+        const entries = [];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        CZ.selectedIds.forEach(cid => {
+            const comp = CZ.deployed.find(c => c.id === cid);
+            if (!comp) return;
+            const tmpl = COMPONENTS.find(t => t.id === comp.type);
+            if (!tmpl) return;
+            entries.push({ comp, tmpl });
+            minX = Math.min(minX, comp.x);
+            minY = Math.min(minY, comp.y);
+            maxX = Math.max(maxX, comp.x + tmpl.width);
+            maxY = Math.max(maxY, comp.y + tmpl.height);
+        });
+
+        if (entries.length === 0) return;
+
+        // Pivot = center of bounding box
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        const ANIM_MS = 200;
+        const EASE = 'cubic-bezier(0.25, 0.8, 0.25, 1)';
+
+        // Store entries for finalize helper
+        CZ._groupRotData = { entries };
+
+        // ── Phase 1: Animate components via transform (keep old left/top) ──
+        entries.forEach(({ comp, tmpl }) => {
+            const oldX = comp.x, oldY = comp.y;
+            const compCX = comp.x + tmpl.width / 2;
+            const compCY = comp.y + tmpl.height / 2;
+
+            // 90° CW in screen coords: newOffset = (-dy, dx)
+            const newCX = cx - (compCY - cy);
+            const newCY = cy + (compCX - cx);
+
+            // Store final position — no grid snapping so rotation is perfectly
+            // reversible (4× 90° returns to exact original position, zero drift)
+            comp.x = newCX - tmpl.width / 2;
+            comp.y = newCY - tmpl.height / 2;
+
+            const cumulative = (comp.rotation || 0) + 90;
+            const normalized = ((cumulative % 360) + 360) % 360;
+            comp.rotation = cumulative;
+
+            const dx = comp.x - oldX;
+            const dy = comp.y - oldY;
+
+            const el = document.getElementById(comp.id);
+            if (el) {
+                el.style.transition = `transform ${ANIM_MS}ms ${EASE}`;
+                el.style.transform = `translate(${dx}px, ${dy}px) rotate(${cumulative}deg)`;
+            }
+        });
+
+        // ── Phase 2: Animate wire SVG groups around the same pivot ──
+        CZ.wires.forEach((w, idx) => {
+            if (!CZ.selectedIds.has(w.c1) || !CZ.selectedIds.has(w.c2)) return;
+            const g = CZ.wiresG.querySelector(`g.wire-group[data-widx="${idx}"]`);
+            if (g) {
+                g.style.transformOrigin = `${cx}px ${cy}px`;
+                g.style.transition = `transform ${ANIM_MS}ms ${EASE}`;
+                g.style.transform = 'rotate(90deg)';
+            }
+            if (w.controlPoints) {
+                w.controlPoints = w.controlPoints.map(cp => ({ x: -cp.y, y: cp.x }));
+            }
+        });
+
+        // ── Phase 3: Finalize after animation completes ──
+        CZ._groupRotTimer = setTimeout(() => {
+            CZ._finalizeGroupRot();
+            CZ.evaluateCircuit();
+        }, ANIM_MS + 20);
+
+        CZ.saveState();
     };
 
     // ── Duplicate selected components ──
@@ -179,10 +284,6 @@
             // Apply rotation CSS if source was rotated
             if (newComp.rotation) {
                 el.style.transform = `rotate(${newComp.rotation}deg)`;
-                const badge = document.createElement('div');
-                badge.className = 'rotation-badge';
-                badge.textContent = `${newComp.rotation}°`;
-                el.appendChild(badge);
             }
             newComp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
