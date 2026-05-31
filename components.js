@@ -10,6 +10,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 9,
         resistance: 0.5, // internal resistance
+        internalResistance: 0.5,
+        maxCurrent: 0.5,  // 500mA max discharge
         capacityWh: 4.5,
         ratedPower: 4.5,  // 9V battery ~4.5W capacity
         width: 70, height: 110,
@@ -32,6 +34,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 3,
         resistance: 0.3,
+        internalResistance: 0.3,
+        maxCurrent: 1.0,  // 1A max discharge
         capacityWh: 7.5,
         width: 80, height: 50,
         svg: `<svg width="100%" height="100%" viewBox="0 0 80 50">
@@ -53,6 +57,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 1.5,
         resistance: 0.5,
+        internalResistance: 0.5,
+        maxCurrent: 0.8,  // 800mA max discharge
         capacityWh: 3.75,
         width: 60, height: 40,
         svg: `<svg width="100%" height="100%" viewBox="0 0 60 40">
@@ -140,6 +146,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 100,
+        forwardVoltage: 2.0,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.04,
         width: 50, height: 80,
@@ -162,6 +170,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 90,
+        forwardVoltage: 1.8,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.036,
         width: 50, height: 80,
@@ -184,6 +194,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 105,
+        forwardVoltage: 2.1,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.042,
         width: 50, height: 80,
@@ -206,6 +218,7 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 72,
+        forwardVoltage: 0,
         maxCurrent: 0.1,
         ratedPower: 0.5,  // 6V 0.5W
         width: 60, height: 90,
@@ -325,6 +338,9 @@ const COMPONENTS = [
         category: 'passive',
         voltage: 0,
         resistance: 2,
+        forwardVoltage: 0.7,
+        maxReverseVoltage: 1000,
+        isDiode: true,
         width: 80, height: 36,
         svg: `<svg width="100%" height="100%" viewBox="0 0 80 36">
             <line x1="0" y1="18" x2="25" y2="18" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
@@ -409,6 +425,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 12,
         resistance: 0.08,
+        internalResistance: 0.08,
+        maxCurrent: 0.3,  // 300mA max discharge
         capacityWh: 1.2,
         width: 50, height: 80,
         svg: `<svg width="100%" height="100%" viewBox="0 0 50 80">
@@ -430,6 +448,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 160,
+        forwardVoltage: 3.2,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.064,
         glowGradient: 'ledGlowBlue',
@@ -452,6 +472,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 165,
+        forwardVoltage: 3.3,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.066,
         glowGradient: 'ledGlowWhite',
@@ -474,6 +496,8 @@ const COMPONENTS = [
         category: 'output',
         voltage: 0,
         resistance: 150,
+        forwardVoltage: 3.0,
+        isDiode: true,
         maxCurrent: 0.025,
         ratedPower: 0.06,
         glowGradient: 'ledGlowRGB',
@@ -792,6 +816,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 3.2,
         resistance: 0.02,
+        internalResistance: 0.02,
+        maxCurrent: 30.0,  // 30A max discharge (2C)
         capacityWh: 48,
         ratedPower: 24,  // 0.5C × 15A × 3.2V = 24W continuous
         width: 30, height: 55,
@@ -820,6 +846,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 3.2,
         resistance: 0.01,
+        internalResistance: 0.01,
+        maxCurrent: 100.0,  // 100A max (1C)
         capacityWh: 320,
         ratedPower: 150,  // ~150W per cell (16 cells = 2400W)
         width: 40, height: 55,
@@ -851,6 +879,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 48,
         resistance: 0.1,
+        internalResistance: 0.1,
+        maxCurrent: 50.0,  // 50A max discharge
         capacityWh: 4800,
         ratedPower: 2400,  // continuous discharge ~2400W
         width: 90, height: 70,
@@ -882,6 +912,8 @@ const COMPONENTS = [
         category: 'source',
         voltage: 48,
         resistance: 0.05,
+        internalResistance: 0.05,
+        maxCurrent: 100.0,  // 100A max discharge
         capacityWh: 9600,
         ratedPower: 4800,  // continuous discharge ~4800W
         width: 100, height: 80,
@@ -944,6 +976,9 @@ const COMPONENTS = [
         voltage: 0,
         resistance: 3,
         ratedPower: 1500,
+        inputVoltageMin: 44.0,
+        outputVoltageEf: 220,
+        isInverter: true,
         width: 100, height: 60,
         svg: `<svg width="100%" height="100%" viewBox="0 0 100 60">
             <line x1="0" y1="30" x2="12" y2="30" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
@@ -970,6 +1005,9 @@ const COMPONENTS = [
         voltage: 0,
         resistance: 2,
         ratedPower: 3000,
+        inputVoltageMin: 44.0,
+        outputVoltageEf: 220,
+        isInverter: true,
         width: 110, height: 65,
         svg: `<svg width="100%" height="100%" viewBox="0 0 110 65">
             <line x1="0" y1="32" x2="12" y2="32" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
@@ -996,6 +1034,9 @@ const COMPONENTS = [
         voltage: 0,
         resistance: 1.5,
         ratedPower: 5000,
+        inputVoltageMin: 44.0,
+        outputVoltageEf: 220,
+        isInverter: true,
         width: 120, height: 70,
         svg: `<svg width="100%" height="100%" viewBox="0 0 120 70">
             <line x1="0" y1="35" x2="12" y2="35" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>

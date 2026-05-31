@@ -105,21 +105,35 @@
         const el = document.getElementById(compId);
         if (!el) return;
 
-        comp.rotation = ((comp.rotation || 0) + 90) % 360;
-        el.style.transform = comp.rotation ? `rotate(${comp.rotation}deg)` : '';
+        // Use cumulative rotation (always +90°) so CSS transition never goes backwards
+        comp.rotation = (comp.rotation || 0) + 90;
+        el.style.transform = `rotate(${comp.rotation}deg)`;
 
-        // Show/hide rotation badge
+        // Show/hide rotation badge (display angle mod 360)
+        const displayAngle = ((comp.rotation % 360) + 360) % 360;
         let badge = el.querySelector('.rotation-badge');
-        if (comp.rotation) {
+        if (displayAngle) {
             if (!badge) {
                 badge = document.createElement('div');
                 badge.className = 'rotation-badge';
                 el.appendChild(badge);
             }
-            badge.textContent = `${comp.rotation}°`;
+            badge.textContent = `${displayAngle}°`;
         } else if (badge) {
             badge.remove();
         }
+
+        // Normalize after CSS transition completes to prevent unbounded growth
+        // (270→360 animates forward, then silently resets to 0 with no visual change)
+        clearTimeout(comp._rotNormTimer);
+        comp._rotNormTimer = setTimeout(() => {
+            comp.rotation = displayAngle;
+            el.style.transition = 'none';
+            el.style.transform = displayAngle ? `rotate(${displayAngle}deg)` : '';
+            el.offsetHeight; // force reflow
+            el.style.transition = '';
+            delete comp._rotNormTimer;
+        }, 180);
 
         CZ.renderWires();
         CZ.evaluateCircuit();

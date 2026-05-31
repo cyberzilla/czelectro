@@ -269,8 +269,12 @@
                 CZ.dragMoved = false;
                 CZ.isDragging = true;
 
-                const grp = CZ.groups.find(g => g.members.includes(bComp.id));
-                if (grp && !CZ.selectedIds.has(bComp.id)) {
+                // Selection logic: if NOT already selected, clear old selection (unless Ctrl held)
+                if (!CZ.selectedIds.has(bComp.id)) {
+                    if (!e.ctrlKey && !e.metaKey) {
+                        CZ.selectedIds.clear();
+                        document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                    }
                     CZ.selectedIds.add(bComp.id);
                     bComp.classList.add('selected');
                 }
@@ -640,8 +644,12 @@
             const isBroken = comp?.isBroken;
 
             if (!CZ.selectedIds.has(bComp.id) && comp) {
+                // Clear previous selection when right-clicking a new unselected component
+                CZ.selectedIds.clear();
+                document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
                 CZ.selectedIds.add(comp.id);
                 bComp.classList.add('selected');
+                CZ.expandSelectionToGroups();
             }
 
             const isMulti = CZ.selectedIds.size > 1;
@@ -724,20 +732,72 @@
                 } else if (action === 'duplicate') {
                     CZ.duplicateSelected();
                 } else if (action === 'copytext') {
-                    const counts = {};
-                    CZ.selectedIds.forEach(cid => {
+                    // Build full circuit topology text with polarity arrows
+                    const selIds = [...CZ.selectedIds];
+                    const compMap = {}; // id -> {comp, tmpl, shortName}
+                    const compNums = {}; // type -> counter for numbering
+                    selIds.forEach(cid => {
                         const c = CZ.deployed.find(d => d.id === cid);
                         if (!c) return;
                         const t = COMPONENTS.find(x => x.id === c.type);
-                        const key = t ? t.name : c.type;
-                        counts[key] = (counts[key] || 0) + 1;
+                        const baseName = t ? t.name : c.type;
+                        compNums[baseName] = (compNums[baseName] || 0) + 1;
+                        compMap[cid] = { comp: c, tmpl: t, baseName };
                     });
-                    const parts = Object.entries(counts).map(([name, qty]) => qty > 1 ? `${qty}×${name}` : name);
-                    const text = parts.join(' + ');
+                    // If multiple of same type, add numbering
+                    const typeCount = {};
+                    selIds.forEach(cid => { const m = compMap[cid]; if (m) typeCount[m.baseName] = (typeCount[m.baseName] || 0) + 1; });
+                    const typeIdx = {};
+                    selIds.forEach(cid => {
+                        const m = compMap[cid];
+                        if (!m) return;
+                        if (typeCount[m.baseName] > 1) {
+                            typeIdx[m.baseName] = (typeIdx[m.baseName] || 0) + 1;
+                            m.shortName = `${m.baseName} #${typeIdx[m.baseName]}`;
+                        } else {
+                            m.shortName = m.baseName;
+                        }
+                    });
+
+                    // Component list
+                    let lines = ['📋 RANGKAIAN ELEKTRONIK', '═══════════════════════', '', '🔧 Komponen:'];
+                    selIds.forEach(cid => {
+                        const m = compMap[cid];
+                        if (!m) return;
+                        const t = m.tmpl;
+                        let info = m.shortName;
+                        if (t?.voltage) info += ` (${t.voltage}V)`;
+                        else if (t?.resistance) info += ` (${t.resistance}Ω)`;
+                        if (m.comp.isBroken) info += ' ⛔ RUSAK';
+                        if (m.comp.rotation) info += ` ↻${((m.comp.rotation % 360) + 360) % 360}°`;
+                        lines.push(`  • ${info}`);
+                    });
+
+                    // Connection list with polar arrows
+                    const selectedSet = new Set(selIds);
+                    const relevantWires = CZ.wires.filter(w => selectedSet.has(w.c1) && selectedSet.has(w.c2));
+                    if (relevantWires.length > 0) {
+                        lines.push('', '🔌 Koneksi:');
+                        relevantWires.forEach((w, i) => {
+                            const m1 = compMap[w.c1], m2 = compMap[w.c2];
+                            if (!m1 || !m2) return;
+                            const t1 = m1.tmpl, t2 = m2.tmpl;
+                            const pin1 = t1?.terminals?.[w.i1]?.label || w.i1;
+                            const pin2 = t2?.terminals?.[w.i2]?.label || w.i2;
+                            lines.push(`  ${i + 1}. ${m1.shortName} [${pin1}] ──→ [${pin2}] ${m2.shortName}`);
+                        });
+                    } else {
+                        lines.push('', '⚠ Tidak ada kabel antar komponen yang dipilih');
+                    }
+
+                    // Summary
+                    lines.push('', `📊 Total: ${selIds.length} komponen, ${relevantWires.length} kabel`);
+
+                    const text = lines.join('\n');
                     navigator.clipboard.writeText(text).then(() => {
                         const toast = document.createElement('div');
                         toast.className = 'copy-toast';
-                        toast.textContent = `📋 "${text}" disalin!`;
+                        toast.textContent = `📋 Teks rangkaian disalin! (${selIds.length} komponen, ${relevantWires.length} kabel)`;
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 2500);
                     });

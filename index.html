@@ -3,8 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
+    <link rel="shortcut icon" href="CZElectro.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="CZElectro - Simulasi Lab Elektronika interaktif dengan drag-drop komponen, kabel fleksibel, dan animasi realistis.">
+    <meta name="description"
+        content="CZElectro - Simulasi Lab Elektronika interaktif dengan drag-drop komponen, kabel fleksibel, dan animasi realistis.">
     <title>CZElectro — Lab Elektronika</title>
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/layout.css">
@@ -111,7 +113,7 @@
     <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Sidebar (Tab)">✕</button>
     <script>
         // Apply sidebar state BEFORE paint to prevent flash
-        (function(){
+        (function () {
             var sb = document.getElementById('sidebar');
             var tb = document.getElementById('sidebar-toggle');
             if (window.innerWidth > 768) {
@@ -120,7 +122,7 @@
                     sb.classList.add('no-transition', 'collapsed');
                     tb.textContent = '☰';
                     // Re-enable transitions after first paint
-                    requestAnimationFrame(function(){ requestAnimationFrame(function(){ sb.classList.remove('no-transition'); }); });
+                    requestAnimationFrame(function () { requestAnimationFrame(function () { sb.classList.remove('no-transition'); }); });
                 }
             } else {
                 tb.textContent = '☰';
@@ -182,14 +184,21 @@
             </div>
             <div class="sim-controls">
                 <span class="sim-label">🔋 Simulasi:</span>
-                <button class="sim-btn active" data-speed="0" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:0}))">⏸</button>
-                <button class="sim-btn" data-speed="1" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:1}))">1x</button>
-                <button class="sim-btn" data-speed="10" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:10}))">10x</button>
-                <button class="sim-btn" data-speed="60" onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:60}))">60x</button>
-                <button class="sim-btn sim-reset" onclick="document.dispatchEvent(new CustomEvent('sim-reset'))">🔄</button>
+                <button class="sim-btn active" data-speed="0"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:0}))">⏸</button>
+                <button class="sim-btn" data-speed="1"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:1}))">1x</button>
+                <button class="sim-btn" data-speed="10"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:10}))">10x</button>
+                <button class="sim-btn" data-speed="60"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:60}))">60x</button>
+                <button class="sim-btn sim-reset"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-reset'))">🔄</button>
                 <span class="sim-divider">|</span>
-                <button class="sim-btn sim-day" onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'day'}))">☀️ →06:00</button>
-                <button class="sim-btn sim-night" onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'night'}))">🌙 →18:00</button>
+                <button class="sim-btn sim-day"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'day'}))">☀️ →06:00</button>
+                <button class="sim-btn sim-night"
+                    onclick="document.dispatchEvent(new CustomEvent('sim-jump',{detail:'night'}))">🌙 →18:00</button>
             </div>
             <div id="sim-panel" class="sim-panel"></div>
         </div>
@@ -204,7 +213,9 @@
     <script src="js/audio.js"></script>
     <script src="js/grid.js"></script>
     <script src="js/wire.js"></script>
+    <script src="js/mna-solver.js"></script>
     <script src="js/circuit.js"></script>
+    <script src="js/mna-evaluate.js"></script>
     <script src="js/components-ui.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/events.js"></script>
