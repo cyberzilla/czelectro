@@ -22,7 +22,7 @@
     padding: 20px 20px 16px;
     border-bottom: 1px solid var(--border-subtle);
     text-align: center;
-    background: linear-gradient(180deg, rgba(74, 222, 128, 0.06) 0%, transparent 100%);
+    background: linear-gradient(180deg, var(--sidebar-header-gradient) 0%, transparent 100%);
 }
 
 .logo-row {
@@ -96,6 +96,42 @@
     color: var(--accent);
 }
 
+/* Sidebar search */
+.sidebar-search {
+    padding: 10px 16px 4px;
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: 9px 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sidebar-search input::placeholder {
+    color: var(--text-muted);
+}
+
+.sidebar-search input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Empty search result */
+.sidebar-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
 /* Component list */
 #component-list {
     flex: 1;
@@ -132,7 +168,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), transparent);
+    background: linear-gradient(135deg, var(--accent-glow), transparent);
     opacity: 0;
     transition: opacity 0.3s;
 }
@@ -244,8 +280,8 @@
 
 /* Show handles when hovering the wire group */
 .wire-group:hover .wire-handle {
-    fill: rgba(148, 163, 184, 0.5);
-    stroke: rgba(255, 255, 255, 0.25);
+    fill: var(--wire-handle-fill);
+    stroke: var(--wire-handle-stroke);
     opacity: 1;
 }
 
@@ -455,7 +491,7 @@
 .tooltip {
     position: fixed;
     padding: 8px 14px;
-    background: rgba(15, 15, 30, 0.95);
+    background: var(--tooltip-bg);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
@@ -475,7 +511,7 @@
 .ctx-menu {
     position: fixed;
     min-width: 180px;
-    background: rgba(20, 20, 35, 0.95);
+    background: var(--ctx-bg);
     backdrop-filter: blur(var(--glass-blur));
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -513,16 +549,16 @@
     bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(17, 24, 39, 0.95);
-    color: #4ade80;
+    background: var(--toast-bg);
+    color: var(--accent);
     padding: 10px 20px;
     border-radius: 8px;
-    border: 1px solid rgba(74, 222, 128, 0.3);
+    border: 1px solid var(--accent-glow);
     font-size: 0.8rem;
     font-family: 'Cascadia Code', monospace;
     z-index: 9999;
     animation: toastIn 0.3s ease, toastOut 0.3s ease 2.2s forwards;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-heavy);
 }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 @keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
@@ -560,7 +596,7 @@
 .selection-rect {
     position: absolute;
     border: 1.5px dashed var(--accent);
-    background: rgba(74, 222, 128, 0.06);
+    background: var(--selection-bg);
     pointer-events: none;
     z-index: 100;
     border-radius: 2px;
@@ -910,3 +946,153 @@
     }
 }
 
+/* ═══════════════════════════════════════════════════
+   Settings Panel
+   ═══════════════════════════════════════════════════ */
+.settings-panel {
+    position: absolute;
+    top: 70px;
+    right: 16px;
+    width: 260px;
+    background: var(--bg-secondary);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    z-index: 200;
+    box-shadow: var(--shadow-heavy);
+    animation: settingsIn 0.2s ease-out;
+    overflow: hidden;
+}
+
+.settings-panel.hidden {
+    display: none;
+}
+
+@keyframes settingsIn {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.settings-header {
+    padding: 14px 18px 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    letter-spacing: 0.5px;
+}
+
+.settings-group {
+    padding: 12px 18px 16px;
+}
+
+.settings-group-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+}
+
+.settings-row + .settings-row {
+    border-top: 1px solid var(--border-subtle);
+}
+
+.settings-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+/* Theme toggle buttons */
+.settings-theme-toggle {
+    display: flex;
+    gap: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+}
+
+.theme-opt {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.theme-opt:hover {
+    background: rgba(128, 128, 128, 0.1);
+    color: var(--text-primary);
+}
+
+.theme-opt.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* Toggle switch */
+.settings-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.settings-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.settings-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--text-muted);
+    border-radius: 24px;
+    transition: background 0.25s;
+}
+
+.settings-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.25s;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.settings-switch input:checked + .settings-slider {
+    background: var(--accent);
+}
+
+.settings-switch input:checked + .settings-slider::before {
+    transform: translateX(18px);
+}
+
+/* Mobile settings panel */
+@media (max-width: 768px) {
+    .settings-panel {
+        top: 50px;
+        right: 8px;
+        width: 240px;
+    }
+}

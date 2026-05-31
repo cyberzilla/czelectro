@@ -17,7 +17,7 @@
         const offX = ((CZ.panX % step) + step) % step;
         const offY = ((CZ.panY % step) + step) % step;
         // Draw grid lines
-        ctx.strokeStyle = 'rgba(100, 140, 120, 0.15)';
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-minor').trim() || 'rgba(100, 140, 120, 0.15)';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
         for (let x = offX; x < CZ.gridCanvas.width; x += step) {
@@ -31,7 +31,7 @@
         const major = step * 5;
         const mOffX = ((CZ.panX % major) + major) % major;
         const mOffY = ((CZ.panY % major) + major) % major;
-        ctx.strokeStyle = 'rgba(100, 180, 140, 0.12)';
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-major').trim() || 'rgba(100, 180, 140, 0.12)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let x = mOffX; x < CZ.gridCanvas.width; x += major) {
@@ -74,21 +74,13 @@
         document.getElementById('btn-zoom-out').onclick = () => { CZ.zoom = Math.max(0.2, CZ.zoom - 0.1); CZ.applyTransform(); CZ.persistView(); };
         document.getElementById('btn-fit').onclick = () => { CZ.zoom = 1; CZ.panX = 0; CZ.panY = 0; CZ.applyTransform(); CZ.persistView(); };
 
-        // Grid toggle
+        // Grid toggle — state loaded from localStorage (UI control is in settings panel)
         const GRID_KEY = 'czelectro_grid';
         const savedGrid = localStorage.getItem(GRID_KEY);
         if (savedGrid !== null) {
             CZ.showGrid = savedGrid !== 'false';
         }
-        document.getElementById('btn-grid').classList.toggle('active', CZ.showGrid);
         CZ.drawGrid();
-
-        document.getElementById('btn-grid').onclick = (e) => {
-            CZ.showGrid = !CZ.showGrid;
-            e.currentTarget.classList.toggle('active', CZ.showGrid);
-            localStorage.setItem(GRID_KEY, CZ.showGrid);
-            CZ.drawGrid();
-        };
 
         // Select / Pan mode buttons
         document.getElementById('btn-mode-select').onclick = () => CZ.setMode('select');

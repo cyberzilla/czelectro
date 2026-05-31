@@ -104,7 +104,9 @@
             const tmpl = cr.tmpl;
             if (!tmpl || !tmpl.isInverter) return;
             if (Math.abs(cr.current) < 0.0001) return;
-            const inputV = Math.abs(cr.v1 - cr.v2);
+            // Input voltage = DC pin voltage relative to ground (node 0 = 0V)
+            // Pin 0 (DC) is nodeP, connected to battery positive
+            const inputV = Math.abs(cr.v1);
             const inputOk = inputV >= (tmpl.inputVoltageMin || 0);
             // Pin 1 = AC output side of inverter
             const acNode = cr.nodeN; // nodeN corresponds to pin 1 (terminal index 1)
@@ -114,11 +116,12 @@
             }
         });
 
-        // Propagate AC domain to all nodes sharing wires with AC-tagged nodes
-        // (nodes connected through non-inverter components are same domain)
+        // Propagate AC domain through wires AND through passive components
+        // (AC domain passes through terminal blocks, ground buses, etc.)
         let domainChanged = true;
         while (domainChanged) {
             domainChanged = false;
+            // Propagate through wires
             CZ.wires.forEach(w => {
                 const n1 = result.getNode ? result.getNode(w.c1, w.i1) : -1;
                 const n2 = result.getNode ? result.getNode(w.c2, w.i2) : -1;
@@ -138,6 +141,25 @@
                 if (nodeDomain[n2] === 'AC' && nodeDomain[n1] !== 'AC') {
                     nodeDomain[n1] = 'AC';
                     acNodeVoltage[n1] = acNodeVoltage[n2] || 220;
+                    domainChanged = true;
+                }
+            });
+            // Propagate through passive components (terminal blocks, outlets, ground, etc.)
+            // If one pin of a non-source, non-inverter component is AC, the other pin is also AC
+            result.components.forEach(cr => {
+                const tmpl = cr.tmpl;
+                if (!tmpl) return;
+                if (tmpl.isInverter || isSource(cr.comp)) return;
+                const nP = cr.nodeP, nN = cr.nodeN;
+                if (nP < 0 || nN < 0 || nP === nN) return;
+                if (nodeDomain[nP] === 'AC' && nodeDomain[nN] !== 'AC') {
+                    nodeDomain[nN] = 'AC';
+                    acNodeVoltage[nN] = acNodeVoltage[nP] || 220;
+                    domainChanged = true;
+                }
+                if (nodeDomain[nN] === 'AC' && nodeDomain[nP] !== 'AC') {
+                    nodeDomain[nP] = 'AC';
+                    acNodeVoltage[nP] = acNodeVoltage[nN] || 220;
                     domainChanged = true;
                 }
             });

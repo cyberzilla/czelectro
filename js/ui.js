@@ -5,12 +5,32 @@
 
     // ── Sidebar rendering ──
     let activeCategory = 'all';
+    let searchQuery = '';
 
     CZ.renderSidebar = function() {
         CZ.listEl.innerHTML = '';
         const catOrder = { source: 0, passive: 1, control: 2, output: 3 };
         const sorted = [...COMPONENTS].sort((a, b) => (catOrder[a.category] ?? 9) - (catOrder[b.category] ?? 9) || a.name.localeCompare(b.name));
-        const filtered = activeCategory === 'all' ? sorted : sorted.filter(c => c.category === activeCategory);
+        let filtered = activeCategory === 'all' ? sorted : sorted.filter(c => c.category === activeCategory);
+
+        // Apply search filter
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            filtered = filtered.filter(c =>
+                c.name.toLowerCase().includes(q) ||
+                c.spec.toLowerCase().includes(q) ||
+                c.id.toLowerCase().includes(q)
+            );
+        }
+
+        if (filtered.length === 0 && searchQuery) {
+            const empty = document.createElement('div');
+            empty.className = 'sidebar-empty';
+            empty.textContent = `Tidak ditemukan "${searchQuery}"`;
+            CZ.listEl.appendChild(empty);
+            return;
+        }
+
         filtered.forEach(tmpl => {
             const item = document.createElement('div');
             item.className = 'sidebar-item';
@@ -31,6 +51,26 @@
                 CZ.renderSidebar();
             });
         });
+
+        // Search input
+        const searchInput = document.getElementById('comp-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                searchQuery = searchInput.value.trim();
+                CZ.renderSidebar();
+            });
+            // Prevent keyboard shortcuts while typing in search
+            searchInput.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Escape') {
+                    searchInput.value = '';
+                    searchQuery = '';
+                    CZ.renderSidebar();
+                    searchInput.blur();
+                }
+            });
+        }
+
         CZ.renderSidebar();
     };
 
@@ -259,6 +299,57 @@
             this.textContent = CZ.isMuted ? '🔇' : '🔊';
             this.classList.toggle('muted', CZ.isMuted);
             if (CZ.isMuted) CZ.SFX.stopAll();
+        });
+
+        // ── Settings Panel ──
+        const settingsPanel = document.getElementById('settings-panel');
+        const btnSettings = document.getElementById('btn-settings');
+        const THEME_KEY = 'czelectro_theme';
+
+        // Apply saved theme on load
+        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+        CZ.applyTheme = function(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            // Update theme toggle buttons
+            document.querySelectorAll('.theme-opt').forEach(b => {
+                b.classList.toggle('active', b.dataset.theme === theme);
+            });
+            localStorage.setItem(THEME_KEY, theme);
+            CZ.drawGrid();
+        };
+        CZ.applyTheme(savedTheme);
+
+        // Settings toggle
+        btnSettings.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsPanel.classList.toggle('hidden');
+            btnSettings.classList.toggle('active', !settingsPanel.classList.contains('hidden'));
+        });
+
+        // Close settings when clicking outside
+        document.addEventListener('mousedown', (e) => {
+            if (!settingsPanel.classList.contains('hidden') &&
+                !settingsPanel.contains(e.target) &&
+                e.target !== btnSettings) {
+                settingsPanel.classList.add('hidden');
+                btnSettings.classList.remove('active');
+            }
+        });
+
+        // Theme toggle
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            const btn = e.target.closest('.theme-opt');
+            if (!btn) return;
+            CZ.applyTheme(btn.dataset.theme);
+        });
+
+        // Grid toggle in settings panel
+        const settingsGrid = document.getElementById('settings-grid');
+        settingsGrid.checked = CZ.showGrid;
+        settingsGrid.addEventListener('change', () => {
+            CZ.showGrid = settingsGrid.checked;
+            localStorage.setItem('czelectro_grid', CZ.showGrid);
+            CZ.drawGrid();
         });
 
         // Simulation event listeners
