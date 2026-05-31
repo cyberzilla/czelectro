@@ -89,6 +89,7 @@
             deployed: CZ.deployed.map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y,
                 isBroken: c.isBroken, isClosed: c.isClosed,
+                mmMode: c.mmMode || undefined,
                 currentResistance: c.currentResistance,
                 rotation: c.rotation || 0,
                 batteryLevel: c.batteryLevel,
@@ -169,6 +170,24 @@
                 if (comp.type === 'fuse') el.classList.add('fuse-blown');
             }
             if (comp.isClosed && comp.type === 'switch_toggle') el.classList.add('switch-closed');
+            // Restore multimeter mode visual
+            if (comp.type === 'voltmeter' && comp.mmMode && comp.mmMode !== 'V') {
+                const modeColor = { V: '#22c55e', A: '#ef4444', 'Ω': '#f59e0b' };
+                const modeLabel = { V: 'VOLTAGE', A: 'CURRENT', 'Ω': 'RESIST' };
+                const modeArrowAngle = { V: 0, A: 120, 'Ω': 240 };
+                const m = comp.mmMode;
+                const arrow = el.querySelector('.mm-dial-arrow');
+                if (arrow) arrow.setAttribute('transform', `rotate(${modeArrowAngle[m]}, 40, 58)`);
+                const mLbl = el.querySelector('.mm-mode-label');
+                if (mLbl) { mLbl.textContent = modeLabel[m]; mLbl.setAttribute('fill', modeColor[m]); }
+                ['V','A','Ω'].forEach(mode => {
+                    const cls = mode === 'V' ? '.mm-label-v' : mode === 'A' ? '.mm-label-a' : '.mm-label-o';
+                    const lbl = el.querySelector(cls);
+                    if (lbl) lbl.setAttribute('fill', mode === m ? modeColor[mode] : '#6b7280');
+                });
+                const unt = el.querySelector('.vm-unit');
+                if (unt) { unt.textContent = m; unt.setAttribute('fill', modeColor[m]); }
+            }
             if (comp.rotation) {
                 el.style.transform = `rotate(${comp.rotation}deg)`;
                 const badge = document.createElement('div');
@@ -298,6 +317,7 @@
                     maxCurrent: tmpl.maxCurrent || null,
                     glowGradient: tmpl.glowGradient || null,
                     isClosed: saved.isClosed || false,
+                    mmMode: saved.mmMode || 'V',
                     isBroken: saved.isBroken || false,
                     rotation: saved.rotation || 0,
                     x: saved.x, y: saved.y,
@@ -331,7 +351,24 @@
                 if (comp.isClosed && comp.type === 'switch_toggle') {
                     el.classList.add('switch-closed');
                 }
-                // Restore rotation
+                // Restore multimeter mode visual
+                if (comp.type === 'voltmeter' && comp.mmMode && comp.mmMode !== 'V') {
+                    const modeColor = { V: '#22c55e', A: '#ef4444', 'Ω': '#f59e0b' };
+                    const modeLabel = { V: 'VOLTAGE', A: 'CURRENT', 'Ω': 'RESIST' };
+                    const modeArrowAngle = { V: 0, A: 120, 'Ω': 240 };
+                    const m = comp.mmMode;
+                    const arrow = el.querySelector('.mm-dial-arrow');
+                    if (arrow) arrow.setAttribute('transform', `rotate(${modeArrowAngle[m]}, 40, 58)`);
+                    const mLbl = el.querySelector('.mm-mode-label');
+                    if (mLbl) { mLbl.textContent = modeLabel[m]; mLbl.setAttribute('fill', modeColor[m]); }
+                    ['V','A','Ω'].forEach(mode => {
+                        const cls = mode === 'V' ? '.mm-label-v' : mode === 'A' ? '.mm-label-a' : '.mm-label-o';
+                        const lbl = el.querySelector(cls);
+                        if (lbl) lbl.setAttribute('fill', mode === m ? modeColor[mode] : '#6b7280');
+                    });
+                    const unt = el.querySelector('.vm-unit');
+                    if (unt) { unt.textContent = m; unt.setAttribute('fill', modeColor[m]); }
+                }
                 if (comp.rotation) {
                     el.style.transform = `rotate(${comp.rotation}deg)`;
                     const badge = document.createElement('div');

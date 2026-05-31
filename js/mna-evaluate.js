@@ -7,12 +7,110 @@
     const isInverterType = t => t === 'inverter' || t === 'inverter_3k' || t === 'inverter_5k';
     const AC_TYPES = ['iron','fridge','blender','ricecooker','ac_05pk','ac_1pk','tv_led','lamp_30w','computer','pump_125','pump_250'];
 
+    // ── Multimeter display helpers ──
+    function mmFormatValue(v, mode) {
+        if (mode === 'A') {
+            if (v >= 10)    return { val: v.toFixed(2), unit: 'A' };
+            if (v >= 1)     return { val: v.toFixed(3), unit: 'A' };
+            if (v >= 0.001)  return { val: (v * 1000).toFixed(1), unit: 'mA' };
+            if (v >= 0.000001) return { val: (v * 1000000).toFixed(0), unit: 'µA' };
+            return { val: '0.00', unit: 'A' };
+        }
+        if (mode === 'Ω') {
+            if (v >= 1000000) return { val: (v / 1000000).toFixed(2), unit: 'MΩ' };
+            if (v >= 1000)    return { val: (v / 1000).toFixed(2), unit: 'kΩ' };
+            if (v >= 1)       return { val: v.toFixed(1), unit: 'Ω' };
+            if (v >= 0.001)   return { val: (v * 1000).toFixed(1), unit: 'mΩ' };
+            return { val: 'OL', unit: 'Ω' };
+        }
+        // V mode
+        if (v >= 1000) return { val: (v / 1000).toFixed(2), unit: 'kV' };
+        if (v >= 100)  return { val: v.toFixed(1), unit: 'V' };
+        if (v >= 1)    return { val: v.toFixed(2), unit: 'V' };
+        if (v >= 0.001) return { val: (v * 1000).toFixed(1), unit: 'mV' };
+        return { val: '0.00', unit: 'V' };
+    }
+    function mmColor(v, mode) {
+        if (mode === 'A') {
+            if (v > 5) return '#ef4444';      // red: near fuse limit
+            if (v > 1) return '#f59e0b';      // amber
+            return '#ef4444';                  // red theme for current
+        }
+        if (mode === 'Ω') return '#f59e0b';    // amber theme for resistance
+        // V mode
+        if (v > 50) return '#ef4444';
+        if (v > 12) return '#f59e0b';
+        return '#22c55e';
+    }
+    function mmUpdateDisplay(el, v, mode) {
+        const fmt = mmFormatValue(v, mode);
+        const color = mmColor(v, mode);
+        const rdg = el.querySelector('.vm-reading');
+        const unt = el.querySelector('.vm-unit');
+        if (rdg) {
+            rdg.textContent = fmt.val;
+            rdg.setAttribute('fill', color);
+            // Auto-scale font to fit 56px-wide screen
+            const len = fmt.val.length;
+            const fontSize = len <= 4 ? 16 : len <= 5 ? 13 : 11;
+            rdg.setAttribute('font-size', fontSize);
+        }
+        if (unt) {
+            unt.textContent = fmt.unit;
+            unt.setAttribute('fill', color);
+            unt.setAttribute('opacity', '0.8');
+            // Adjust unit font size for long units like 'mΩ', 'MΩ', 'µA'
+            unt.setAttribute('font-size', fmt.unit.length > 2 ? 6 : 8);
+        }
+        // Badge
+        let badge = el.querySelector('.vm-badge');
+        if (!badge) { badge = document.createElement('div'); badge.className = 'vm-badge'; el.appendChild(badge); }
+        badge.textContent = `${fmt.val} ${fmt.unit}`;
+        badge.style.color = color;
+        badge.style.borderColor = color + '66';
+    }
+    function mmAnimate(comp, el, targetV, mode) {
+        if (comp._vmAnimId) { cancelAnimationFrame(comp._vmAnimId); comp._vmAnimId = null; }
+        const startV = comp._vmDisplayV || 0;
+        if (Math.abs(targetV - startV) < 0.005) {
+            comp._vmDisplayV = targetV;
+            comp._vmTarget = targetV;
+            mmUpdateDisplay(el, targetV, mode);
+            return;
+        }
+        const startTime = performance.now();
+        const duration = 600;
+        comp._vmTarget = targetV;
+
+        const tick = (now) => {
+            const elapsed = now - startTime;
+            const t = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - t, 3);
+            let current = startV + (targetV - startV) * eased;
+            if (t < 0.8 && targetV > 0.01) {
+                const jitterAmt = targetV * 0.06 * (1 - t);
+                current += (Math.random() - 0.5) * jitterAmt;
+                current = Math.max(0, current);
+            }
+            comp._vmDisplayV = current;
+            mmUpdateDisplay(el, current, mode);
+            if (t < 1) {
+                comp._vmAnimId = requestAnimationFrame(tick);
+            } else {
+                comp._vmDisplayV = targetV;
+                mmUpdateDisplay(el, targetV, mode);
+                comp._vmAnimId = null;
+            }
+        };
+        comp._vmAnimId = requestAnimationFrame(tick);
+    }
+
     CZ.evaluateCircuit = function() {
         // ── RESET all output states ──
         CZ.deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter');
+            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active');
             el.style.removeProperty('--glow-intensity');
             const bulb = el.querySelector('.led-bulb');
             if (bulb && !c.isBroken) { bulb.style.fill = ''; bulb.style.filter = ''; }
@@ -21,6 +119,10 @@
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
             el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status').forEach(b => b.remove());
+            // Voltmeter: only remove CSS class; preserve animation state for smooth transitions
+            // (vm-badge is managed by the animation system, not by the general reset)
+            const vmIndicator = el.querySelector('.vm-indicator');
+            if (vmIndicator) vmIndicator.style.fill = '';
             const cones = el.querySelectorAll('.speaker-cone');
             cones.forEach(cone => cone.style.animation = 'none');
             // Reset AC appliance indicators
@@ -193,41 +295,50 @@
             else if (t.ratedPower && !isSource(cr.comp) && cr.comp.type !== 'charge_controller' && !isInverterType(cr.comp.type) && cr.comp.type !== 'switch_toggle') loadPower += t.ratedPower;
         });
 
-        // ── PASS 1: Overcurrent — break components & sources ──
+        // ── PASS 1: Overcurrent — break WEAKEST component first (lowest maxCurrent) ──
+        // Like real circuits: a 10A fuse blows before a 100A battery is damaged
         let anyBroken = false;
+        const overcurrentList = [];
         result.components.forEach(cr => {
             const c = cr.comp, el = document.getElementById(c.id);
             if (!el || c.isBroken) return;
             const amps = Math.abs(cr.current);
             const tmpl = cr.tmpl;
-            // Source overcurrent (battery short circuit protection)
+            // Source overcurrent
             if (isSource(c) && tmpl && tmpl.maxCurrent && amps > tmpl.maxCurrent) {
-                anyBroken = true;
-                c.isBroken = true;
-                c.currentResistance = Infinity;
-                el.classList.add('comp-broken');
-                CZ.spawnSparks(el);
-                CZ.showBurnNotice(el, amps, tmpl.maxCurrent);
-                CZ.SFX.burn();
-                return;
+                overcurrentList.push({ cr, maxCurrent: tmpl.maxCurrent, amps, isSource: true });
             }
-            // Output overcurrent
+            // Output overcurrent (LEDs, AC, motors, fuses, etc.)
             const isLed = c.type.startsWith('led_') || c.type === 'bulb';
             const isOutput = isLed || AC_TYPES.includes(c.type) || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || c.type === 'fuse';
             if (isOutput && c.maxCurrent && amps > c.maxCurrent) {
+                overcurrentList.push({ cr, maxCurrent: c.maxCurrent, amps, isSource: false, isLed });
+            }
+            // Multimeter fuse (ammeter mode)
+            if (c.type === 'voltmeter' && c.mmMode === 'A' && tmpl && tmpl.maxCurrent && amps > tmpl.maxCurrent) {
+                overcurrentList.push({ cr, maxCurrent: tmpl.maxCurrent, amps, isSource: false, isMeter: true });
+            }
+        });
+        // Sort: weakest (lowest maxCurrent) first — that's what blows in reality
+        overcurrentList.sort((a, b) => a.maxCurrent - b.maxCurrent);
+        // Break only the weakest link
+        if (overcurrentList.length > 0) {
+            const weak = overcurrentList[0];
+            const c = weak.cr.comp, el = document.getElementById(c.id);
+            if (el) {
                 anyBroken = true;
                 c.isBroken = true;
                 c.currentResistance = Infinity;
                 el.classList.add('comp-broken');
-                if (isLed) el.classList.add('led-broken');
+                if (weak.isLed) el.classList.add('led-broken');
                 if (c.type === 'fuse') el.classList.add('fuse-blown');
                 if (c.type === 'motor_dc') { el.classList.remove('motor-active'); const s = el.querySelector('.motor-spin'); if (s) s.style.animation = 'none'; }
                 if (c.type === 'bulb') { const f = el.querySelector('.bulb-filament'); if (f) f.style.stroke = 'transparent'; }
                 CZ.spawnSparks(el);
-                CZ.showBurnNotice(el, amps, c.maxCurrent);
+                CZ.showBurnNotice(el, weak.amps, weak.maxCurrent);
                 if (c.type === 'fuse') CZ.SFX.fuseSnap(); else CZ.SFX.burn();
             }
-        });
+        }
 
         // ── PASS 2: Activate outputs ──
         if (!anyBroken) {
@@ -237,6 +348,107 @@
                 const amps = Math.abs(cr.current);
                 const vComp = Math.abs(cr.vDrop);
                 const tmpl = cr.tmpl;
+
+                // ── Multimeter — mode-aware measurement, handle before amps threshold ──
+                if (tmpl && (tmpl.isMultimeter || tmpl.isVoltmeter)) {
+                    const mode = c.mmMode || 'V';
+                    let measured = 0;
+                    if (mode === 'V') {
+                        measured = Math.abs(cr.vDrop);
+                    } else if (mode === 'A') {
+                        measured = Math.abs(cr.current);
+                    } else if (mode === 'Ω') {
+                        // Ohmmeter: compute equivalent resistance between probes
+                        // by building a conductance network (works without battery)
+                        const nP = cr.nodeP, nN = cr.nodeN;
+                        if (nP >= 0 && nN >= 0 && nP !== nN) {
+                            // Build conductance adjacency (exclude self)
+                            const nodes = new Set();
+                            const edges = [];
+                            result.components.forEach(other => {
+                                if (other === cr) return;
+                                if (other.nodeP < 0 || other.nodeN < 0 || other.nodeP === other.nodeN) return;
+                                let R;
+                                if (isSource(other.comp)) {
+                                    // For batteries: use internal resistance
+                                    const otmpl = other.tmpl || COMPONENTS.find(t => t.id === other.comp.type);
+                                    R = otmpl?.internalResistance || otmpl?.resistance || 0.01;
+                                } else {
+                                    R = other.comp.currentResistance;
+                                }
+                                if (!R || R <= 0 || R >= Infinity) return;
+                                edges.push({ a: other.nodeP, b: other.nodeN, g: 1 / R });
+                                nodes.add(other.nodeP); nodes.add(other.nodeN);
+                            });
+                            if (nodes.has(nP) && nodes.has(nN)) {
+                                // Build Y matrix, inject 1A at nP, sink at nN, solve for V → R=V/1
+                                const nodeArr = [...nodes];
+                                const idx = {}; nodeArr.forEach((n, i) => idx[n] = i);
+                                const sz = nodeArr.length;
+                                const Y = Array.from({length: sz}, () => Array(sz).fill(0));
+                                edges.forEach(e => {
+                                    const i = idx[e.a], j = idx[e.b];
+                                    Y[i][i] += e.g; Y[j][j] += e.g;
+                                    Y[i][j] -= e.g; Y[j][i] -= e.g;
+                                });
+                                // Remove nN row/col (ground ref), build reduced system
+                                const ref = idx[nN];
+                                const map = []; // reduced index → original index
+                                for (let i = 0; i < sz; i++) if (i !== ref) map.push(i);
+                                const n = map.length;
+                                const A = Array.from({length: n}, (_, ri) =>
+                                    map.map(ci => Y[map[ri]][ci])
+                                );
+                                const b = map.map(ri => nodeArr[ri] === nP ? 1 : 0); // inject 1A at nP
+                                // Gauss elimination
+                                for (let col = 0; col < n; col++) {
+                                    let pivot = col;
+                                    for (let row = col + 1; row < n; row++)
+                                        if (Math.abs(A[row][col]) > Math.abs(A[pivot][col])) pivot = row;
+                                    [A[col], A[pivot]] = [A[pivot], A[col]];
+                                    [b[col], b[pivot]] = [b[pivot], b[col]];
+                                    if (Math.abs(A[col][col]) < 1e-15) continue;
+                                    for (let row = col + 1; row < n; row++) {
+                                        const f = A[row][col] / A[col][col];
+                                        for (let k = col; k < n; k++) A[row][k] -= f * A[col][k];
+                                        b[row] -= f * b[col];
+                                    }
+                                }
+                                // Back substitution
+                                const x = Array(n).fill(0);
+                                for (let i = n - 1; i >= 0; i--) {
+                                    let sum = b[i];
+                                    for (let j = i + 1; j < n; j++) sum -= A[i][j] * x[j];
+                                    x[i] = Math.abs(A[i][i]) > 1e-15 ? sum / A[i][i] : 0;
+                                }
+                                // V at nP = R_eq (since I=1A, R=V/I=V)
+                                const pIdx = map.indexOf(idx[nP]);
+                                if (pIdx >= 0) measured = Math.abs(x[pIdx]);
+                            }
+                        }
+                    }
+                    c._vmProcessed = true;
+                    const threshold = mode === 'A' ? 0.0000001 : mode === 'Ω' ? 0.001 : 0.0005;
+                    if (measured > threshold) {
+                        const vmIndicator = el.querySelector('.vm-indicator');
+                        if (vmIndicator) vmIndicator.style.fill = '#22c55e';
+                        el.classList.add('vm-active');
+                        const changeSig = mode === 'Ω'
+                            ? Math.abs(measured - (c._vmTarget || 0)) > measured * 0.02  // 2% change
+                            : Math.abs(measured - (c._vmTarget || 0)) > (mode === 'A' ? 0.0001 : 0.01);
+                        if (changeSig) {
+                            mmAnimate(c, el, measured, mode);
+                        } else if (!c._vmAnimId) {
+                            mmUpdateDisplay(el, measured, mode);
+                            c._vmDisplayV = measured;
+                            c._vmTarget = measured;
+                        }
+                    } else if ((c._vmTarget || 0) > threshold) {
+                        mmAnimate(c, el, 0, mode);
+                    }
+                    return;
+                }
+
                 if (amps < 0.0001) return;
 
                 // AC-only check: must be on AC domain with valid voltage
@@ -368,6 +580,7 @@
                     if (ind) ind.style.fill = isProtecting ? '#f59e0b' : '#22c55e';
                 }
 
+
                 // ── Power badge (REAL power, not ratedPower) ──
                 const isOutputComp = c.type.startsWith('led_') || c.type === 'bulb' || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || AC_TYPES.includes(c.type);
                 if (isOutputComp) {
@@ -378,6 +591,24 @@
                 }
             });
         }
+
+        // ── Handle disconnected multimeters (not in MNA results) ──
+        CZ.deployed.forEach(c => {
+            if (!c.type.includes('meter')) return;
+            if (c._vmProcessed) { c._vmProcessed = false; return; }
+            const el = document.getElementById(c.id);
+            if (!el) return;
+            const mode = c.mmMode || 'V';
+            if ((c._vmTarget || 0) > 0.01) {
+                mmAnimate(c, el, 0, mode);
+            } else if (!c._vmAnimId) {
+                c._vmTarget = 0;
+                c._vmDisplayV = 0;
+                const rdg = el.querySelector('.vm-reading');
+                if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', '#22c55e'); }
+                el.querySelectorAll('.vm-badge').forEach(b => b.remove());
+            }
+        });
 
         // ── Energize wires ──
         result.energizedWires.forEach(idx => { if (CZ.wires[idx]) CZ.wires[idx].energized = true; });

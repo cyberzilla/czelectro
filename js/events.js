@@ -449,6 +449,58 @@
                     CZ.saveState();
                 }
 
+                // ── Multimeter mode cycling: V → Ω → A → V ──
+                if (comp && comp.type === 'voltmeter') {
+                    const modes = ['V', 'Ω', 'A'];
+                    const modeRes = { V: 10000000, A: 0.001, 'Ω': 10000000 };
+                    const modeLabel = { V: 'VOLTAGE', A: 'CURRENT', 'Ω': 'RESIST' };
+                    const modeColor = { V: '#22c55e', A: '#ef4444', 'Ω': '#f59e0b' };
+                    // Arrow rotation: V=0° (top), Ω=120° (bottom-left), A=240° (bottom-right)
+                    const modeArrowAngle = { V: 0, 'Ω': 120, A: 240 };
+                    const cur = comp.mmMode || 'V';
+                    const next = modes[(modes.indexOf(cur) + 1) % 3];
+                    comp.mmMode = next;
+                    comp.currentResistance = modeRes[next];
+                    // Cancel any running voltmeter animation
+                    if (comp._vmAnimId) { cancelAnimationFrame(comp._vmAnimId); comp._vmAnimId = null; }
+                    comp._vmTarget = 0; comp._vmDisplayV = 0;
+                    // Update SVG dial
+                    const arrow = CZ.dragEl.querySelector('.mm-dial-arrow');
+                    if (arrow) {
+                        const angle = modeArrowAngle[next];
+                        arrow.setAttribute('transform', `rotate(${angle}, 40, 58)`);
+                    }
+                    const mLabel = CZ.dragEl.querySelector('.mm-mode-label');
+                    if (mLabel) { mLabel.textContent = modeLabel[next]; mLabel.setAttribute('fill', modeColor[next]); }
+                    // Highlight active mode label, dim others
+                    modes.forEach(m => {
+                        const cls = m === 'V' ? '.mm-label-v' : m === 'A' ? '.mm-label-a' : '.mm-label-o';
+                        const lbl = CZ.dragEl.querySelector(cls);
+                        if (lbl) lbl.setAttribute('fill', m === next ? modeColor[m] : '#6b7280');
+                    });
+                    // Reset display
+                    const rdg = CZ.dragEl.querySelector('.vm-reading');
+                    if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', modeColor[next]); }
+                    const unt = CZ.dragEl.querySelector('.vm-unit');
+                    if (unt) { unt.textContent = next; unt.setAttribute('fill', modeColor[next]); }
+                    // Remove old badge
+                    CZ.dragEl.querySelectorAll('.vm-badge').forEach(b => b.remove());
+                    CZ.dragEl.classList.remove('vm-active');
+                    CZ.SFX.switchClick();
+                    // A mode: debounce evaluation (800ms) to let user click through safely
+                    // V and Ω modes are safe (high impedance) — evaluate immediately
+                    if (comp._mmDebounce) { clearTimeout(comp._mmDebounce); comp._mmDebounce = null; }
+                    if (next === 'A') {
+                        comp._mmDebounce = setTimeout(() => {
+                            comp._mmDebounce = null;
+                            CZ.evaluateCircuit();
+                        }, 800);
+                    } else {
+                        CZ.evaluateCircuit();
+                    }
+                    CZ.saveState();
+                }
+
                 // Toggle terminal visibility on tap (touch devices)
                 const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
                 if (isTouchDevice) {

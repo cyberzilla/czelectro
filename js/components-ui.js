@@ -45,6 +45,10 @@
             comp.batteryCapacity = tmplCap.capacityWh;
             comp.batteryLevel = comp.batteryLevel ?? tmplCap.capacityWh;
         }
+        // Initialize multimeter mode
+        if (tmplCap?.isMultimeter) {
+            comp.mmMode = 'V';
+        }
         CZ.deployed.push(comp);
         CZ.updateStatus();
         return comp;

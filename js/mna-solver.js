@@ -99,13 +99,34 @@
         return c.type.startsWith('battery') || c.type.startsWith('solar_');
     }
 
-    // ── Get effective voltage of a source ──
+    // ── Get effective voltage of a source (accounts for battery depletion) ──
     function getEffectiveVoltage(c) {
         let v = c.voltage;
-        if (c.batteryCapacity) {
+        if (c.batteryCapacity && c.batteryLevel !== undefined) {
             const isRechargeable = c.type.includes('lifepo4') || c.type.includes('plts') || c.type === 'battery_32140';
+            const isLiFePO4 = c.type.includes('lifepo4') || c.type === 'battery_32140' || c.type.includes('plts');
             const minLevel = isRechargeable ? c.batteryCapacity * 0.10 : 0;
-            if (c.batteryLevel <= minLevel) v = 0;
+            if (c.batteryLevel <= minLevel) {
+                v = 0;
+            } else {
+                const pct = (c.batteryLevel - minLevel) / (c.batteryCapacity - minLevel);
+                let vScale;
+                if (isLiFePO4) {
+                    // LiFePO4 discharge curve: extremely flat (famous characteristic)
+                    // Real LiFePO4 holds ~3.2V from 95% down to ~10% capacity
+                    // Only drops steeply in the last ~10%
+                    vScale = pct > 0.10
+                        ? 0.96 + 0.04 * ((pct - 0.10) / 0.90)  // 96%-100% above 10%
+                        : pct / 0.10 * 0.96;                      // drops to 0 below 10%
+                } else {
+                    // Alkaline/generic: more gradual decline
+                    // Voltage drops ~15% across full discharge, then steep below 20%
+                    vScale = pct > 0.2
+                        ? 0.85 + 0.15 * ((pct - 0.2) / 0.8)    // 85%-100% above 20%
+                        : pct / 0.2 * 0.85;                       // drops to 0 below 20%
+                }
+                v *= vScale;
+            }
         }
         if (c.type.startsWith('solar_')) {
             const hod = (CZ.simElapsedMin / 60) % 24;
@@ -138,7 +159,20 @@
         });
 
         if (vSources.length === 0 || nodeCount <= 1) {
-            return { nodeVoltages: [], branchCurrents: [], components: [], energizedWires: new Set(), hasCircuit: false, loops: [] };
+            // Even without sources, multimeter in Ω mode needs component topology
+            const hasOhmMeter = deployed.some(c => c.type === 'voltmeter' && (c.mmMode === 'Ω'));
+            if (!hasOhmMeter) {
+                return { nodeVoltages: [], branchCurrents: [], components: [], energizedWires: new Set(), hasCircuit: false, loops: [], getNode };
+            }
+            // Build minimal component results for Ω mode (all zero V/I)
+            const compResults = [];
+            deployed.forEach(c => {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const n1 = getNode(c.id, 0), n2 = getNode(c.id, 1);
+                if (n1 < 0 || n2 < 0) return;
+                compResults.push({ comp: c, tmpl, vDrop: 0, current: 0, power: 0, nodeP: n1, nodeN: n2, v1: 0, v2: 0 });
+            });
+            return { nodeVoltages: [], branchCurrents: [], components: compResults, energizedWires: new Set(), hasCircuit: false, loops: [], getNode };
         }
 
         // System size: N nodes (minus ground=0) + M voltage sources
@@ -261,6 +295,16 @@
             compResults.push({ comp: c, tmpl, vDrop, current, power, nodeP: n1, nodeN: n2, v1, v2 });
         });
 
+        // Collect multimeter nodes in V mode (high-impedance instruments that measure voltage)
+        const voltmeterNodes = new Set();
+        compResults.forEach(cr => {
+            const isVmMode = cr.tmpl && (cr.tmpl.isVoltmeter || cr.tmpl.isMultimeter) && (cr.comp.mmMode || 'V') === 'V';
+            if (isVmMode && Math.abs(cr.v1 - cr.v2) > 0.001) {
+                voltmeterNodes.add(cr.nodeP);
+                voltmeterNodes.add(cr.nodeN);
+            }
+        });
+
         // Determine energized wires
         wires.forEach((w, idx) => {
             const n1 = getNode(w.c1, w.i1);
@@ -274,10 +318,16 @@
                 Math.abs(cr.current) > 0.0001 &&
                 ((cr.nodeP === n1 || cr.nodeP === n2) || (cr.nodeN === n1 || cr.nodeN === n2))
             );
-            if (hasVoltage && hasCurrent) energizedWires.add(idx);
+            // Also energize wires connected to active voltmeter probes
+            const hasVoltmeter = voltmeterNodes.has(n1) || voltmeterNodes.has(n2);
+            if (hasVoltage && (hasCurrent || hasVoltmeter)) energizedWires.add(idx);
         });
 
-        const hasCircuit = compResults.some(cr => Math.abs(cr.current) > 0.0001 && !isSource(cr.comp));
+        // Circuit is active if any non-source has significant current, OR a multimeter reads a value
+        const hasCircuit = compResults.some(cr =>
+            (Math.abs(cr.current) > 0.0001 && !isSource(cr.comp)) ||
+            (cr.tmpl && (cr.tmpl.isVoltmeter || cr.tmpl.isMultimeter) && Math.abs(cr.v1 - cr.v2) > 0.001)
+        );
 
         // Build loop-equivalent info for battery simulation compatibility
         const loops = [];

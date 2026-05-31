@@ -156,3 +156,10 @@ body {
 [data-theme="light"] .no-ac-badge {
     background: rgba(255, 255, 255, 0.9);
 }
+
+[data-theme="light"] .vm-badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: #15803d;
+    border-color: rgba(22, 163, 74, 0.3);
+    text-shadow: none;
+}
