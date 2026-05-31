@@ -66,9 +66,9 @@
     // ── Default control points ──
     CZ.getDefaultControlPoints = function() {
         return [
-            { x: 0, y: 0 },  // handle at ~25%
+            { x: 0, y: 0 },  // handle at ~35%
             { x: 0, y: 0 },  // handle at ~50%
-            { x: 0, y: 0 }   // handle at ~75%
+            { x: 0, y: 0 }   // handle at ~65%
         ];
     };
 
@@ -95,7 +95,7 @@
         }
 
         const cps = controlPoints || CZ.getDefaultControlPoints();
-        const tValues = [0.25, 0.5, 0.75];
+        const tValues = [0.35, 0.5, 0.65];
         return tValues.map((t, i) => {
             const base = baseBezier(t);
             const offset = cps[i] || { x: 0, y: 0 };
@@ -286,9 +286,9 @@
                 // On touch: set SVG attribute to large radius for reliable finger tapping.
                 // CSS controls visual appearance (fill, opacity) but SVG attribute
                 // determines hit-testing area in the browser's touch engine.
-                handle.setAttribute('r', _isCoarse ? (hIdx === 1 ? '16' : '14') : (hIdx === 1 ? '5' : '4'));
+                // All handles get the same size for consistent drag targets.
+                handle.setAttribute('r', _isCoarse ? '16' : '5');
                 handle.classList.add('wire-handle');
-                if (hIdx !== 1) handle.classList.add('wire-handle-minor');
                 handle.dataset.widx = idx;
                 handle.dataset.hidx = hIdx;
                 // Re-apply selected state if this handle was previously selected

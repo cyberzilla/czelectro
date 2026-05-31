@@ -274,11 +274,6 @@
     opacity: 0;
 }
 
-/* Minor handles (25% and 75%) — slightly smaller */
-.wire-handle-minor {
-    r: 4;
-}
-
 /* Show handles when hovering the wire group */
 .wire-group:hover .wire-handle {
     fill: var(--wire-handle-fill);
