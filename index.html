@@ -160,6 +160,8 @@
                 <button class="tb-btn" id="btn-save" data-i18n-title="tipSave" title="Simpan File (Ctrl+S)">💾</button>
                 <button class="tb-btn" id="btn-open" data-i18n-title="tipOpen" title="Buka File (Ctrl+O)">📂</button>
                 <input type="file" id="file-input" accept=".cze,.json" style="display:none">
+                <button class="tb-btn" id="btn-import-json" title="Import JSON">📋</button>
+                <button class="tb-btn" id="btn-export-json" title="Export JSON">📤</button>
                 <div class="tb-sep"></div>
                 <!-- View Group -->
                 <button class="tb-btn" id="btn-zoom-in" data-i18n-title="tipZoomIn" title="Perbesar">🔍+</button>
@@ -284,6 +286,18 @@
     <script src="js/components-ui.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/events.js"></script>
+
+    <!-- Import JSON Modal -->
+    <div id="import-modal" class="import-modal-overlay hidden">
+        <div class="import-modal">
+            <div class="import-modal-header">📋 Import Circuit JSON</div>
+            <textarea id="import-json-input" class="import-json-textarea" placeholder="Paste circuit JSON here..." spellcheck="false"></textarea>
+            <div class="import-modal-actions">
+                <button id="import-json-cancel" class="import-btn import-btn-cancel">Cancel</button>
+                <button id="import-json-confirm" class="import-btn import-btn-confirm">Import</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

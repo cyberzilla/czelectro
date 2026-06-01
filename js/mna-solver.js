@@ -238,7 +238,7 @@
             if (n1 < 0 || n2 < 0 || n1 === n2) return;
 
             // Switch handling
-            if (c.type === 'switch_toggle' && !c.isClosed) return; // open switch = no connection
+            if ((c.type === 'switch_toggle' || c.type === 'timer_555') && !c.isClosed) return; // open switch/timer = no connection
 
             // Diode/LED reverse-bias check: terminal 0 = Anode, terminal 1 = Kathode
             // We'll do a first-pass solve, then check polarity in iteration
@@ -319,7 +319,7 @@
             } else {
                 vDrop = v1 - v2;
                 const R = c.currentResistance;
-                if (c.type === 'switch_toggle' && !c.isClosed) {
+                if ((c.type === 'switch_toggle' || c.type === 'timer_555') && !c.isClosed) {
                     current = 0;
                 } else if (R === Infinity || R <= 0) {
                     current = 0;

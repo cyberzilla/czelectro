@@ -313,6 +313,8 @@
         pump_125: '125W Water Pump',
         pump_250: '250W Water Pump',
         voltmeter: 'Multimeter',
+        timer_555: 'Timer 555',
+        led_strip_rgb: 'LED Strip RGB',
     };
 
     // English spec translations (only for specs containing Indonesian text)

@@ -71,6 +71,11 @@
             comp.currentResistance = Infinity;
             el.classList.remove('switch-closed');
         }
+        if (comp.type === 'timer_555') {
+            if (comp._timerInterval) { clearInterval(comp._timerInterval); comp._timerInterval = null; }
+            comp.isClosed = false;
+            comp.currentResistance = tmpl.resistance;
+        }
 
         // Restore visual — re-inject SVG
         el.innerHTML = tmpl.svg;

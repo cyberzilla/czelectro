@@ -486,6 +486,64 @@
                 }
             };
         }
+
+        // ── Import / Export JSON ──
+        const importModal = document.getElementById('import-modal');
+        const importInput = document.getElementById('import-json-input');
+        const importConfirm = document.getElementById('import-json-confirm');
+        const importCancel = document.getElementById('import-json-cancel');
+        const btnImport = document.getElementById('btn-import-json');
+        const btnExport = document.getElementById('btn-export-json');
+
+        if (btnExport) {
+            btnExport.addEventListener('click', () => {
+                try {
+                    const json = CZ.getFullSnapshot();
+                    navigator.clipboard.writeText(json).then(() => {
+                        btnExport.textContent = '✓';
+                        setTimeout(() => btnExport.textContent = '📤', 1500);
+                    });
+                } catch (e) {
+                    alert('Export failed: ' + e.message);
+                }
+            });
+        }
+
+        if (btnImport && importModal) {
+            btnImport.addEventListener('click', () => {
+                importInput.value = '';
+                importModal.classList.remove('hidden');
+                importInput.focus();
+            });
+
+            importCancel.addEventListener('click', () => {
+                importModal.classList.add('hidden');
+            });
+
+            importModal.addEventListener('click', (e) => {
+                if (e.target === importModal) importModal.classList.add('hidden');
+            });
+
+            importConfirm.addEventListener('click', () => {
+                const raw = importInput.value.trim();
+                if (!raw) return;
+                try {
+                    const state = JSON.parse(raw);
+                    if (!state.deployed || !Array.isArray(state.deployed)) {
+                        alert('Invalid circuit JSON: missing "deployed" array');
+                        return;
+                    }
+                    if (!state.wires) state.wires = [];
+                    if (!state.groups) state.groups = [];
+                    if (!state.counter) state.counter = state.deployed.length;
+                    CZ.applySnapshot(JSON.stringify(state));
+                    CZ.saveState();
+                    importModal.classList.add('hidden');
+                } catch (e) {
+                    alert('Invalid JSON: ' + e.message);
+                }
+            });
+        }
     };
 
 })(window.CZ);

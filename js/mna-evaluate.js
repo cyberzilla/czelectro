@@ -110,8 +110,11 @@
         CZ.deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active');
+            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active');
             if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
+            if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
+            // Clear timer intervals only during full reset (not during timer-triggered re-eval)
+            if (c._timerInterval && !CZ._timerEvalLock) { clearInterval(c._timerInterval); c._timerInterval = null; }
             el.style.removeProperty('--glow-intensity');
             const bulb = el.querySelector('.led-bulb');
             if (bulb && !c.isBroken) { bulb.style.fill = ''; bulb.style.filter = ''; }
@@ -479,7 +482,7 @@
                 }
 
                 // ── LED / Bulb ──
-                const isLed = c.type.startsWith('led_') || c.type === 'bulb';
+                const isLed = (c.type.startsWith('led_') || c.type === 'bulb') && !tmpl?.isBlinkingLed;
                 if (isLed && c.maxCurrent) {
                     const ratio = Math.min(amps / c.maxCurrent, 1);
                     const vi = Math.pow(ratio, 0.85);
@@ -530,6 +533,40 @@
                     if (ratio >= 0.8) el.classList.add('led-bright');
                     else if (ratio >= 0.3) el.classList.add('led-on');
                     else if (ratio > 0) el.classList.add('led-dim');
+                }
+
+                // ── LED Strip RGB (self-blinking) ──
+                if (tmpl && tmpl.isBlinkingLed && amps > EL.SIM.MIN_CURRENT) {
+                    el.classList.add('strip-active');
+                    if (!c._stripAnimId) {
+                        const leds = el.querySelectorAll('.strip-led');
+                        const hz = tmpl.blinkHz || 2;
+                        const tick = () => {
+                            if (!el.classList.contains('strip-active')) {
+                                c._stripAnimId = null;
+                                leds.forEach(led => { led.style.fill = '#475569'; led.style.filter = ''; });
+                                return;
+                            }
+                            const t = Date.now();
+                            const phase = (t / (1000 / hz)) % 1;
+                            leds.forEach((led, i) => {
+                                const offset = i / leds.length;
+                                const wave = Math.sin((phase + offset) * Math.PI * 2);
+                                const on = wave > -0.2;
+                                const hue = ((t / 20) + i * 72) % 360;
+                                if (on) {
+                                    const brightness = (0.5 + wave * 0.5).toFixed(2);
+                                    led.style.fill = `hsl(${hue}, 100%, ${50 + wave * 20}%)`;
+                                    led.style.filter = `drop-shadow(0 0 ${4 + wave * 6}px hsla(${hue}, 100%, 55%, ${brightness}))`;
+                                } else {
+                                    led.style.fill = '#475569';
+                                    led.style.filter = '';
+                                }
+                            });
+                            c._stripAnimId = requestAnimationFrame(tick);
+                        };
+                        c._stripAnimId = requestAnimationFrame(tick);
+                    }
                 }
 
                 // ── Motor DC ──
@@ -667,6 +704,57 @@
             });
             loop.battIds = [...expanded];
         });
+
+        // ── Timer 555 Oscillation ──
+        if (!CZ._timerEvalLock) {
+            CZ.deployed.forEach(c => {
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                if (!tmpl || !tmpl.isTimer) return;
+                const el = document.getElementById(c.id);
+                // Check connectivity: timer must have wires on both terminals
+                const wiresOnT0 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0));
+                const wiresOnT1 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 1) || (w.c2 === c.id && w.i2 === 1));
+                const isConnected = wiresOnT0 && wiresOnT1 && !c.isBroken;
+                const indicator = el ? el.querySelector('.timer-indicator') : null;
+                const wave = el ? el.querySelector('.timer-wave') : null;
+
+                if (isConnected) {
+                    // Start oscillation if not already running
+                    if (!c._timerInterval) {
+                        const hz = tmpl.timerHz || 1;
+                        const intervalMs = Math.round(1000 / (hz * 2)); // half-period
+                        // Bootstrap: start closed so current can flow
+                        c.isClosed = true;
+                        c.currentResistance = tmpl.resistance;
+                        c._timerInterval = setInterval(() => {
+                            c.isClosed = !c.isClosed;
+                            c.currentResistance = c.isClosed ? tmpl.resistance : 1e9;
+                            // Visual feedback
+                            if (indicator) indicator.style.fill = c.isClosed ? '#4ade80' : '#6b7280';
+                            // Re-evaluate without retriggering timer setup
+                            CZ._timerEvalLock = true;
+                            CZ.evaluateCircuit();
+                            CZ._timerEvalLock = false;
+                        }, intervalMs);
+                        // Initial evaluation with timer closed
+                        CZ._timerEvalLock = true;
+                        CZ.evaluateCircuit();
+                        CZ._timerEvalLock = false;
+                    }
+                    // Visual: active state
+                    if (indicator) indicator.style.fill = c.isClosed ? '#4ade80' : '#6b7280';
+                    if (wave) wave.style.opacity = '1';
+                    if (el) el.classList.add('scc-active');
+                } else {
+                    // Stop oscillation
+                    if (c._timerInterval) { clearInterval(c._timerInterval); c._timerInterval = null; }
+                    c.isClosed = false;
+                    c.currentResistance = 1e9;
+                    if (indicator) indicator.style.fill = '#6b7280';
+                    if (wave) wave.style.opacity = '0.4';
+                }
+            });
+        }
 
         window._activeLoops = activeLoops;
         CZ.updateStatusValues(hasLoop, activeLoops);

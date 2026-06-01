@@ -1572,5 +1572,74 @@ const COMPONENTS = [
             { x: 20, y: 100, label: '+' },
             { x: 60, y: 100, label: '−' }
         ]
+    },
+    // ═══════════════════════════════════════════════════
+    // Timer / Oscillator
+    // ═══════════════════════════════════════════════════
+    {
+        id: 'timer_555',
+        name: 'Timer 555',
+        spec: 'Astable ~1Hz',
+        category: 'passive',
+        voltage: 0,
+        resistance: 0.01,
+        isTimer: true,
+        timerHz: 1,
+        maxCurrent: 0.5,
+        width: 80, height: 50,
+        svg: `<svg width="100%" height="100%" viewBox="0 0 80 50">
+            <line x1="0" y1="25" x2="10" y2="25" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+            <line x1="70" y1="25" x2="80" y2="25" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+            <rect x="10" y="5" width="60" height="40" rx="3" fill="#1a1a2e" stroke="#374151" stroke-width="1.5"/>
+            <rect x="10" y="5" width="60" height="40" rx="3" fill="url(#motorBody)" opacity="0.3"/>
+            <circle cx="18" cy="12" r="3" fill="none" stroke="#6b7280" stroke-width="0.8"/>
+            <rect x="15" y="20" width="50" height="2" rx="1" fill="#374151"/>
+            <rect x="15" y="28" width="50" height="2" rx="1" fill="#374151"/>
+            <circle cx="18" cy="25" r="2" fill="#94a3b8"/>
+            <circle cx="28" cy="25" r="2" fill="#94a3b8"/>
+            <circle cx="38" cy="25" r="2" fill="#94a3b8"/>
+            <circle cx="48" cy="25" r="2" fill="#94a3b8"/>
+            <circle cx="58" cy="25" r="2" fill="#94a3b8"/>
+            <text x="25" y="16" fill="#a78bfa" font-size="9" font-weight="900" font-family="monospace">555</text>
+            <circle class="timer-indicator" cx="62" cy="12" r="3" fill="#6b7280" style="transition: fill 0.15s;"/>
+            <polyline class="timer-wave" points="20,38 24,38 24,34 28,34 28,38 32,38 32,34 36,34 36,38 40,38 40,34 44,34 44,38" fill="none" stroke="#4ade80" stroke-width="1" opacity="0.4"/>
+        </svg>`,
+        terminals: [
+            { x: 0, y: 25, label: 'IN' },
+            { x: 80, y: 25, label: 'OUT' }
+        ]
+    },
+    {
+        id: 'led_strip_rgb',
+        name: 'LED Strip RGB',
+        spec: '3-12V, Built-in Controller',
+        category: 'output',
+        voltage: 0,
+        resistance: 500,
+        forwardVoltage: 2.5,
+        isDiode: true,
+        isBlinkingLed: true,
+        blinkHz: 2,
+        maxCurrent: 0.06,
+        ratedPower: 0.5,
+        width: 120, height: 30,
+        svg: `<svg width="100%" height="100%" viewBox="0 0 120 30">
+            <line x1="0" y1="15" x2="10" y2="15" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="110" y1="15" x2="120" y2="15" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+            <rect x="10" y="4" width="100" height="22" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+            <rect x="10" y="4" width="100" height="22" rx="4" fill="url(#motorBody)" opacity="0.15"/>
+            <line x1="10" y1="9" x2="110" y2="9" stroke="#334155" stroke-width="0.5"/>
+            <line x1="10" y1="21" x2="110" y2="21" stroke="#334155" stroke-width="0.5"/>
+            <circle class="strip-led strip-led-0" cx="25" cy="15" r="5" fill="#475569" stroke="#6b7280" stroke-width="0.8" style="transition: fill 0.15s, filter 0.15s;"/>
+            <circle class="strip-led strip-led-1" cx="42" cy="15" r="5" fill="#475569" stroke="#6b7280" stroke-width="0.8" style="transition: fill 0.15s, filter 0.15s;"/>
+            <circle class="strip-led strip-led-2" cx="59" cy="15" r="5" fill="#475569" stroke="#6b7280" stroke-width="0.8" style="transition: fill 0.15s, filter 0.15s;"/>
+            <circle class="strip-led strip-led-3" cx="76" cy="15" r="5" fill="#475569" stroke="#6b7280" stroke-width="0.8" style="transition: fill 0.15s, filter 0.15s;"/>
+            <circle class="strip-led strip-led-4" cx="93" cy="15" r="5" fill="#475569" stroke="#6b7280" stroke-width="0.8" style="transition: fill 0.15s, filter 0.15s;"/>
+            <text x="28" y="28" fill="#64748b" font-size="5" font-family="monospace" opacity="0.6">R G B  S T R I P</text>
+        </svg>`,
+        terminals: [
+            { x: 0, y: 15, label: '+' },
+            { x: 120, y: 15, label: '−' }
+        ]
     }
 ];
