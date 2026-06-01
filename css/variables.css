@@ -34,8 +34,8 @@
     --radius-lg: 16px;
     --shadow-heavy: 0 20px 60px rgba(0, 0, 0, 0.8);
     --transition-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
-    --grid-minor: rgba(100, 140, 120, 0.15);
-    --grid-major: rgba(100, 180, 140, 0.12);
+    --grid-minor: rgba(74, 222, 128, 0.12);
+    --grid-major: rgba(74, 222, 128, 0.25);
     --ctx-bg: rgba(20, 20, 35, 0.95);
     --tooltip-bg: rgba(15, 15, 30, 0.95);
     --toast-bg: rgba(17, 24, 39, 0.95);
@@ -65,8 +65,8 @@
     --text-muted: #94a3b8;
     --glass-blur: 12px;
     --shadow-heavy: 0 10px 40px rgba(0, 0, 0, 0.12);
-    --grid-minor: rgba(0, 80, 60, 0.08);
-    --grid-major: rgba(0, 100, 80, 0.06);
+    --grid-minor: rgba(0, 80, 60, 0.12);
+    --grid-major: rgba(0, 100, 60, 0.25);
     --ctx-bg: rgba(255, 255, 255, 0.97);
     --tooltip-bg: rgba(255, 255, 255, 0.97);
     --toast-bg: rgba(255, 255, 255, 0.97);

@@ -13,11 +13,11 @@
         CZ.gridCanvas.height = CZ.wCont.clientHeight;
         if (!CZ.showGrid) { ctx.clearRect(0, 0, CZ.gridCanvas.width, CZ.gridCanvas.height); return; }
         ctx.clearRect(0, 0, CZ.gridCanvas.width, CZ.gridCanvas.height);
-        const step = 20 * CZ.zoom;
+        // Draw minor grid lines (every 10px — matches GRID snap)
+        const step = CZ.GRID * CZ.zoom;
         const offX = ((CZ.panX % step) + step) % step;
         const offY = ((CZ.panY % step) + step) % step;
-        // Draw grid lines
-        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-minor').trim() || 'rgba(100, 140, 120, 0.15)';
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-minor').trim() || 'rgba(74, 222, 128, 0.12)';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
         for (let x = offX; x < CZ.gridCanvas.width; x += step) {
@@ -27,12 +27,12 @@
             ctx.moveTo(0, y); ctx.lineTo(CZ.gridCanvas.width, y);
         }
         ctx.stroke();
-        // Major grid every 5 steps
-        const major = step * 5;
+        // Major grid every 10 steps (100px) — thicker for clear distinction
+        const major = step * 10;
         const mOffX = ((CZ.panX % major) + major) % major;
         const mOffY = ((CZ.panY % major) + major) % major;
-        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-major').trim() || 'rgba(100, 180, 140, 0.12)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-major').trim() || 'rgba(74, 222, 128, 0.25)';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         for (let x = mOffX; x < CZ.gridCanvas.width; x += major) {
             ctx.moveTo(x, 0); ctx.lineTo(x, CZ.gridCanvas.height);
