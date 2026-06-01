@@ -115,6 +115,68 @@
                 CZ.wCont.style.cursor = 'move';
             }
         });
+
+        // ── Two-finger touch: pinch-zoom + drag-pan ──
+        let _touchState = null;
+
+        CZ.wCont.addEventListener('touchstart', e => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                CZ._touchGesture = true; // flag to block single-finger adapter
+                const t0 = e.touches[0], t1 = e.touches[1];
+                const dx = t1.clientX - t0.clientX;
+                const dy = t1.clientY - t0.clientY;
+                _touchState = {
+                    dist: Math.hypot(dx, dy),
+                    midX: (t0.clientX + t1.clientX) / 2,
+                    midY: (t0.clientY + t1.clientY) / 2,
+                    zoom: CZ.zoom,
+                    panX: CZ.panX,
+                    panY: CZ.panY
+                };
+            }
+        }, { passive: false });
+
+        CZ.wCont.addEventListener('touchmove', e => {
+            if (!_touchState || e.touches.length < 2) return;
+            e.preventDefault();
+            const t0 = e.touches[0], t1 = e.touches[1];
+            const dx = t1.clientX - t0.clientX;
+            const dy = t1.clientY - t0.clientY;
+            const newDist = Math.hypot(dx, dy);
+            const newMidX = (t0.clientX + t1.clientX) / 2;
+            const newMidY = (t0.clientY + t1.clientY) / 2;
+
+            // ── Pinch zoom (focused on midpoint) ──
+            const scale = newDist / _touchState.dist;
+            const newZoom = Math.min(3, Math.max(0.2, _touchState.zoom * scale));
+            const rect = CZ.wCont.getBoundingClientRect();
+            // Workspace point under original midpoint
+            const mx = _touchState.midX - rect.left;
+            const my = _touchState.midY - rect.top;
+            const wx = (mx - _touchState.panX) / _touchState.zoom;
+            const wy = (my - _touchState.panY) / _touchState.zoom;
+            // Pan so same workspace point stays under new midpoint, plus drag offset
+            const panDx = newMidX - _touchState.midX;
+            const panDy = newMidY - _touchState.midY;
+            CZ.panX = (mx - wx * newZoom) + panDx;
+            CZ.panY = (my - wy * newZoom) + panDy;
+            CZ.zoom = newZoom;
+
+            CZ.applyTransform();
+        }, { passive: false });
+
+        const _touchEnd = () => {
+            if (_touchState) {
+                _touchState = null;
+                CZ.persistView();
+                // Delay clearing the gesture flag so the touchend from
+                // lifting the second finger doesn't fire a synthetic mouseup
+                setTimeout(() => { CZ._touchGesture = false; }, 50);
+            }
+        };
+        CZ.wCont.addEventListener('touchend', _touchEnd, { passive: true });
+        CZ.wCont.addEventListener('touchcancel', _touchEnd, { passive: true });
     };
 
 })(window.CZ);

@@ -296,11 +296,21 @@
             CZ.rotateSelection();
         });
 
-        // Mute
-        document.getElementById('btn-mute').addEventListener('click', function() {
+        // Mute — restore saved preference
+        const MUTE_KEY = 'czelectro_muted';
+        const btnMute = document.getElementById('btn-mute');
+        const savedMute = localStorage.getItem(MUTE_KEY);
+        if (savedMute === 'true') {
+            CZ.isMuted = true;
+            btnMute.textContent = '🔇';
+            btnMute.classList.add('muted');
+        }
+
+        btnMute.addEventListener('click', function() {
             CZ.isMuted = !CZ.isMuted;
             this.textContent = CZ.isMuted ? '🔇' : '🔊';
             this.classList.toggle('muted', CZ.isMuted);
+            localStorage.setItem(MUTE_KEY, CZ.isMuted);
             if (CZ.isMuted) CZ.SFX.stopAll();
         });
 

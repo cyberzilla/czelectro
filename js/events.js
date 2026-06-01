@@ -15,6 +15,8 @@
 
         ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(touchType => {
             document.addEventListener(touchType, (e) => {
+                // Skip during/after two-finger gesture (pinch-zoom / pan)
+                if (CZ._touchGesture) return;
                 if (e.touches && e.touches.length > 1) return;
                 const touch = e.changedTouches[0];
                 if (!touch) return;

@@ -180,37 +180,38 @@
             </div>
             <!-- Settings: fixed position, never scrolls -->
             <div class="tb-sep tb-sep-settings"></div>
-            <button class="tb-btn tb-btn-settings" id="btn-settings" data-i18n-title="tipSettings"
-                title="Pengaturan">⚙️</button>
-        </div>
-
-        <!-- Settings Panel -->
-        <div id="settings-panel" class="settings-panel hidden">
-            <div class="settings-header" data-i18n="settingsTitle">⚙️ Pengaturan</div>
-            <div class="settings-group">
-                <div class="settings-group-title" data-i18n="settingsAppearance">🎨 Tampilan</div>
-                <div class="settings-row">
-                    <span class="settings-label" data-i18n="settingsTheme">Tema</span>
-                    <div class="settings-theme-toggle" id="theme-toggle">
-                        <button class="theme-opt active" data-theme="dark" title="Dark">🌙</button>
-                        <button class="theme-opt" data-theme="light" title="Light">☀️</button>
+            <div class="settings-anchor">
+                <button class="tb-btn tb-btn-settings" id="btn-settings" data-i18n-title="tipSettings"
+                    title="Pengaturan">⚙️</button>
+                <!-- Settings Panel -->
+                <div id="settings-panel" class="settings-panel hidden">
+                    <div class="settings-header" data-i18n="settingsTitle">⚙️ Pengaturan</div>
+                    <div class="settings-group">
+                        <div class="settings-group-title" data-i18n="settingsAppearance">🎨 Tampilan</div>
+                        <div class="settings-row">
+                            <span class="settings-label" data-i18n="settingsTheme">Tema</span>
+                            <div class="settings-theme-toggle" id="theme-toggle">
+                                <button class="theme-opt active" data-theme="dark" title="Dark">🌙</button>
+                                <button class="theme-opt" data-theme="light" title="Light">☀️</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label" data-i18n="settingsGrid">Grid</span>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settings-grid" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
                     </div>
-                </div>
-                <div class="settings-row">
-                    <span class="settings-label" data-i18n="settingsGrid">Grid</span>
-                    <label class="settings-switch">
-                        <input type="checkbox" id="settings-grid" checked>
-                        <span class="settings-slider"></span>
-                    </label>
-                </div>
-            </div>
-            <div class="settings-group">
-                <div class="settings-group-title" data-i18n="settingsLang">🌐 Bahasa</div>
-                <div class="settings-row">
-                    <span class="settings-label" data-i18n="settingsLangLabel">Bahasa</span>
-                    <div class="settings-theme-toggle" id="lang-toggle">
-                        <button class="lang-opt active" data-lang="id" title="Bahasa Indonesia">🇮🇩 ID</button>
-                        <button class="lang-opt" data-lang="en" title="English">🇬🇧 EN</button>
+                    <div class="settings-group">
+                        <div class="settings-group-title" data-i18n="settingsLang">🌐 Bahasa</div>
+                        <div class="settings-row">
+                            <span class="settings-label" data-i18n="settingsLangLabel">Bahasa</span>
+                            <div class="settings-theme-toggle" id="lang-toggle">
+                                <button class="lang-opt active" data-lang="id" title="Bahasa Indonesia">🇮🇩 ID</button>
+                                <button class="lang-opt" data-lang="en" title="English">🇬🇧 EN</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -230,15 +231,15 @@
         <div id="status-bar">
             <div class="status-item">
                 <span class="status-dot" id="circuit-dot"></span>
-                <span id="circuit-status">No Circuit</span>
+                <span id="circuit-status" data-i18n="statusNoCircuit">Belum Ada Rangkaian</span>
             </div>
             <div id="circuit-loops"></div>
             <div class="status-item">
                 <span>🧩</span>
-                <span id="comp-count">0 parts</span>
+                <span id="comp-count">0 komponen</span>
             </div>
             <div class="sim-controls">
-                <span class="sim-label">🔋 Simulasi:</span>
+                <span class="sim-label" data-i18n="simLabel">🔋 Simulasi:</span>
                 <button class="sim-btn active" data-speed="0"
                     onclick="document.dispatchEvent(new CustomEvent('sim-speed',{detail:0}))">⏸</button>
                 <button class="sim-btn" data-speed="1"

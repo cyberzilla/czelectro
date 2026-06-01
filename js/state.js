@@ -36,6 +36,7 @@
         GRID: 10,
         DRAG_THRESHOLD: 5,
         isMuted: false,
+        _touchGesture: false,
         workspaceMode: 'select',
 
         // ── Undo/Redo History ──

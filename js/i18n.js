@@ -54,6 +54,7 @@
             statusLoad: 'Beban',
             statusEnough: '(Cukup)',
             statusNotEnough: '(Kurang!)',
+            simLabel: '🔋 Simulasi:',
 
             // Context menu
             ctxRotate: 'Putar 90°',
@@ -156,6 +157,7 @@
             statusLoad: 'Load',
             statusEnough: '(OK)',
             statusNotEnough: '(Insufficient!)',
+            simLabel: '🔋 Simulation:',
 
             // Context menu
             ctxRotate: 'Rotate 90°',
@@ -363,6 +365,13 @@
         // Re-render component sidebar with translated names
         if (typeof CZ.renderComponentList === 'function') {
             CZ.renderComponentList();
+        }
+        // Refresh dynamic status bar text (uses CZ.t() internally)
+        if (typeof CZ.evaluateCircuit === 'function') {
+            CZ.evaluateCircuit();
+        }
+        if (typeof CZ.updateStatus === 'function') {
+            CZ.updateStatus();
         }
     };
 
