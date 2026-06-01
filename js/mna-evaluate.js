@@ -111,6 +111,7 @@
             const el = document.getElementById(c.id);
             if (!el) return;
             el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active');
+            if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
             el.style.removeProperty('--glow-intensity');
             const bulb = el.querySelector('.led-bulb');
             if (bulb && !c.isBroken) { bulb.style.fill = ''; bulb.style.filter = ''; }
@@ -490,8 +491,27 @@
                     let glowColor;
                     if (c.type === 'led_rgb') {
                         el.classList.add('led-rgb-active');
-                        el.style.setProperty('--rgb-glow-size', glowSize + 'px');
-                        el.style.setProperty('--rgb-alpha', glowAlpha);
+                        // Dynamic gradient color cycling — updates ledGlowRGB stop-colors
+                        if (!c._rgbAnimId) {
+                            const grad = document.getElementById('ledGlowRGB');
+                            if (grad) {
+                                const stops = grad.querySelectorAll('stop');
+                                const tick = () => {
+                                    if (!el.classList.contains('led-rgb-active')) {
+                                        c._rgbAnimId = null;
+                                        return;
+                                    }
+                                    const hue = (Date.now() / 30) % 360;
+                                    if (stops[0]) stops[0].setAttribute('stop-color', `hsl(${hue}, 100%, 85%)`);
+                                    if (stops[1]) stops[1].setAttribute('stop-color', `hsl(${hue}, 95%, 55%)`);
+                                    if (stops[2]) stops[2].setAttribute('stop-color', `hsl(${hue}, 90%, 30%)`);
+                                    // Sync drop-shadow glow color
+                                    if (bulbEl) bulbEl.style.filter = `drop-shadow(0 0 ${glowSize}px hsla(${hue}, 100%, 55%, ${glowAlpha}))${vi > 0.75 ? ` brightness(${(1 + vi * 0.3).toFixed(1)})` : ''}`;
+                                    c._rgbAnimId = requestAnimationFrame(tick);
+                                };
+                                c._rgbAnimId = requestAnimationFrame(tick);
+                            }
+                        }
                     } else if (c.glowGradient) {
                         if (bulbEl) bulbEl.style.fill = `url(#${c.glowGradient})`;
                         glowColor = c.type.includes('red') ? `rgba(239,68,68,${glowAlpha})`

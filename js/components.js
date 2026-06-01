@@ -506,7 +506,7 @@ const COMPONENTS = [
             <line x1="18" y1="55" x2="18" y2="78" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
             <line x1="32" y1="55" x2="32" y2="78" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
             <circle class="led-glow-ring" cx="25" cy="30" r="24" fill="rgba(168,85,247,0.15)" fill-opacity="0" style="transition: fill-opacity 0.4s"/>
-            <path class="led-bulb" d="M 8 32 Q 8 4, 25 4 Q 42 4, 42 32 L 44 55 L 6 55 Z" fill="url(#ledGlass)" stroke="rgba(168,85,247,0.35)" stroke-width="1.5" style="transition: filter 0.3s;"/>
+            <path class="led-bulb" d="M 8 32 Q 8 4, 25 4 Q 42 4, 42 32 L 44 55 L 6 55 Z" fill="url(#ledGlass)" stroke="rgba(168,85,247,0.35)" stroke-width="1.5" style="transition: fill 0.3s, filter 0.3s;"/>
         </svg>`,
         terminals: [
             { x: 18, y: 78, label: '+' },

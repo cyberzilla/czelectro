@@ -207,44 +207,13 @@
     to { fill-opacity: 1; }
 }
 
-/* RGB LED — smooth color cycling */
-@keyframes rgbCycleFill {
-    0%   { fill: hsl(0, 90%, 55%);   }
-    16%  { fill: hsl(60, 90%, 55%);  }
-    33%  { fill: hsl(120, 90%, 55%); }
-    50%  { fill: hsl(180, 90%, 55%); }
-    66%  { fill: hsl(240, 90%, 55%); }
-    83%  { fill: hsl(300, 90%, 55%); }
-    100% { fill: hsl(360, 90%, 55%); }
-}
-
-@keyframes rgbCycleRing {
-    0%   { fill: hsla(0, 90%, 55%, 0.25);   }
-    16%  { fill: hsla(60, 90%, 55%, 0.25);  }
-    33%  { fill: hsla(120, 90%, 55%, 0.25); }
-    50%  { fill: hsla(180, 90%, 55%, 0.25); }
-    66%  { fill: hsla(240, 90%, 55%, 0.25); }
-    83%  { fill: hsla(300, 90%, 55%, 0.25); }
-    100% { fill: hsla(360, 90%, 55%, 0.25); }
-}
-
-@keyframes rgbCycleGlow {
-    0%   { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(0, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1);   }
-    16%  { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(60, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1);  }
-    33%  { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(120, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1); }
-    50%  { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(180, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1); }
-    66%  { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(240, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1); }
-    83%  { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(300, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1); }
-    100% { filter: drop-shadow(0 0 var(--rgb-glow-size, 15px) hsla(360, 90%, 55%, var(--rgb-alpha, 0.7))) brightness(1.1); }
-}
-
+/* RGB LED — same gradient glow as other LEDs, color cycles via JS */
 .board-component.led-rgb-active .led-bulb {
-    animation: rgbCycleFill 3s linear infinite, rgbCycleGlow 3s linear infinite;
+    fill: url(#ledGlowRGB) !important;
 }
 
 .board-component.led-rgb-active .led-glow-ring {
-    animation: rgbCycleRing 3s linear infinite;
-    fill-opacity: 0.9 !important;
+    fill-opacity: 0 !important;
 }
 
 /* Broken — shake + dark */
