@@ -58,6 +58,7 @@
 
             // Context menu
             ctxRotate: 'Putar 90°',
+            ctxRotateRev: 'Putar -90°',
             ctxReset: 'Reset Komponen',
             ctxDelete: 'Hapus',
             ctxGroup: 'Kelompokkan',
@@ -163,6 +164,7 @@
 
             // Context menu
             ctxRotate: 'Rotate 90°',
+            ctxRotateRev: 'Rotate -90°',
             ctxReset: 'Reset Component',
             ctxDelete: 'Delete',
             ctxGroup: 'Group',
@@ -382,6 +384,10 @@
         if (typeof CZ.updateStatus === 'function') {
             CZ.updateStatus();
         }
+        // Update broken badges with new language
+        document.querySelectorAll('.broken-badge').forEach(badge => {
+            badge.textContent = `⛔ ${CZ.t('ctxBroken')}`;
+        });
     };
 
 })(window.CZ);

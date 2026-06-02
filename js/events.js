@@ -852,7 +852,8 @@
             }
 
             menuItems += `<div class="ctx-item" data-action="duplicate">📋 ${CZ.t('ctxDuplicate')}${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
-            menuItems += `<div class="ctx-item" data-action="rotate">🔄 ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="rotate">↻ ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
+            menuItems += `<div class="ctx-item" data-action="rotaterev">↺ ${CZ.t('ctxRotateRev')} (Shift+R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="copytext">📝 ${CZ.t('ctxCopyText')}</div>`;
             menuItems += `<div class="ctx-sep"></div>`;
 
@@ -1036,6 +1037,8 @@
                     CZ.saveState();
                 } else if (action === 'rotate') {
                     CZ.rotateSelection();
+                } else if (action === 'rotaterev') {
+                    CZ.rotateSelection(-90);
                 } else if (action === 'group') {
                     CZ.groupSelected();
                 } else if (action === 'ungroup') {
@@ -1149,10 +1152,16 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); CZ.duplicateSelected(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); CZ.saveFile(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); CZ.openFile(); }
-            if (e.key === 'r' || e.key === 'R') {
+            if (e.key === 'r' && !e.shiftKey) {
                 if (CZ.selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     e.preventDefault();
                     CZ.rotateSelection();
+                }
+            }
+            if (e.key === 'R' && e.shiftKey) {
+                if (CZ.selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                    CZ.rotateSelection(-90);
                 }
             }
             if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {

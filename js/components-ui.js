@@ -100,6 +100,9 @@
         // Restore electrical properties
         comp.isBroken = false;
         comp.currentResistance = tmpl.resistance;
+        el.classList.remove('comp-broken', 'led-broken', 'fuse-blown', 'restoring');
+        const brokenBadge = el.querySelector('.broken-badge');
+        if (brokenBadge) brokenBadge.remove();
         if (comp.type === 'switch_toggle') {
             comp.isClosed = false;
             comp.currentResistance = Infinity;
@@ -148,14 +151,16 @@
     };
 
     // ── Rotate a component by 90 degrees ──
-    CZ.rotateComponent = function(compId) {
+    // direction: +90 (CW, default) or -90 (CCW)
+    CZ.rotateComponent = function(compId, direction) {
+        const deg = direction || 90;
         const comp = CZ.deployed.find(c => c.id === compId);
         if (!comp) return;
         const el = document.getElementById(compId);
         if (!el) return;
 
-        // Use cumulative rotation (always +90°) so CSS transition never goes backwards
-        comp.rotation = (comp.rotation || 0) + 90;
+        // Use cumulative rotation so CSS transition never goes backwards
+        comp.rotation = (comp.rotation || 0) + deg;
 
         // Disable CSS transition so rotation + wire render happen simultaneously
         el.style.transition = 'none';
@@ -207,13 +212,14 @@
     };
 
     // ── Rotate entire selection as a group around the selection center ──
-    CZ.rotateSelection = function() {
+    CZ.rotateSelection = function(direction) {
+        const deg = direction || 90;
         if (CZ.selectedIds.size === 0) return;
 
         // Single component — rotate in-place (animated)
         if (CZ.selectedIds.size === 1) {
             const cid = CZ.selectedIds.values().next().value;
-            CZ.rotateComponent(cid);
+            CZ.rotateComponent(cid, deg);
             CZ.saveState();
             return;
         }
@@ -254,16 +260,19 @@
             const compCX = comp.x + tmpl.width / 2;
             const compCY = comp.y + tmpl.height / 2;
 
-            // 90° CW in screen coords: newOffset = (-dy, dx)
-            const newCX = cx - (compCY - cy);
-            const newCY = cy + (compCX - cx);
+            // Rotate around pivot: CW (+90) or CCW (-90)
+            const rad = (deg * Math.PI) / 180;
+            const cos = Math.round(Math.cos(rad));
+            const sin = Math.round(Math.sin(rad));
+            const newCX = cx + cos * (compCX - cx) - sin * (compCY - cy);
+            const newCY = cy + sin * (compCX - cx) + cos * (compCY - cy);
 
             // Store final position — no grid snapping so rotation is perfectly
             // reversible (4× 90° returns to exact original position, zero drift)
             comp.x = newCX - tmpl.width / 2;
             comp.y = newCY - tmpl.height / 2;
 
-            const cumulative = (comp.rotation || 0) + 90;
+            const cumulative = (comp.rotation || 0) + deg;
             const normalized = ((cumulative % 360) + 360) % 360;
             comp.rotation = cumulative;
 
@@ -284,10 +293,16 @@
             if (g) {
                 g.style.transformOrigin = `${cx}px ${cy}px`;
                 g.style.transition = `transform ${ANIM_MS}ms ${EASE}`;
-                g.style.transform = 'rotate(90deg)';
+                g.style.transform = `rotate(${deg}deg)`;
             }
             if (w.controlPoints) {
-                w.controlPoints = w.controlPoints.map(cp => ({ x: -cp.y, y: cp.x }));
+                if (deg > 0) {
+                    // CW: (x, y) → (-y, x)
+                    w.controlPoints = w.controlPoints.map(cp => ({ x: -cp.y, y: cp.x }));
+                } else {
+                    // CCW: (x, y) → (y, -x)
+                    w.controlPoints = w.controlPoints.map(cp => ({ x: cp.y, y: -cp.x }));
+                }
             }
         });
 

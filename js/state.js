@@ -186,6 +186,10 @@
                 el.classList.add('comp-broken', 'restoring');
                 if (comp.type.startsWith('led_') || comp.type === 'bulb') el.classList.add('led-broken');
                 if (comp.type === 'fuse') el.classList.add('fuse-blown');
+                const brokenBadge = document.createElement('div');
+                brokenBadge.className = 'broken-badge';
+                brokenBadge.textContent = `⛔ ${CZ.t('ctxBroken')}`;
+                el.appendChild(brokenBadge);
                 // Remove restoring flag after paint so future breaks still animate
                 requestAnimationFrame(() => el.classList.remove('restoring'));
             }
@@ -409,6 +413,10 @@
                     el.classList.add('comp-broken', 'restoring');
                     if (comp.type.startsWith('led_') || comp.type === 'bulb') el.classList.add('led-broken');
                     if (comp.type === 'fuse') el.classList.add('fuse-blown');
+                    const brokenBadge = document.createElement('div');
+                    brokenBadge.className = 'broken-badge';
+                    brokenBadge.textContent = `⛔ ${CZ.t('ctxBroken')}`;
+                    el.appendChild(brokenBadge);
                     requestAnimationFrame(() => el.classList.remove('restoring'));
                 }
                 if (comp.isClosed && comp.type === 'switch_toggle') {

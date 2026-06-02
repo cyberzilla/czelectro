@@ -419,6 +419,14 @@
                     if (c.type === 'fuse') el.classList.add('fuse-blown');
                     if (c.type === 'motor_dc') { el.classList.remove('motor-active'); const s = el.querySelector('.motor-spin'); if (s) s.style.animation = 'none'; }
                     if (c.type === 'bulb') { const f = el.querySelector('.bulb-filament'); if (f) f.style.stroke = 'transparent'; }
+                    // Add persistent broken badge
+                    let brokenBadge = el.querySelector('.broken-badge');
+                    if (!brokenBadge) {
+                        brokenBadge = document.createElement('div');
+                        brokenBadge.className = 'broken-badge';
+                        brokenBadge.textContent = `⛔ ${CZ.t('ctxBroken')}`;
+                        el.appendChild(brokenBadge);
+                    }
                     CZ.spawnSparks(el);
                     CZ.showBurnNotice(el, weak.amps, weak.maxCurrent);
                     if (c.type === 'fuse') CZ.SFX.fuseSnap(); else CZ.SFX.burn();
