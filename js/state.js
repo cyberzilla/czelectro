@@ -95,7 +95,8 @@
                 currentResistance: c.currentResistance,
                 rotation: c.rotation || 0,
                 batteryLevel: c.batteryLevel,
-                batteryCapacity: c.batteryCapacity
+                batteryCapacity: c.batteryCapacity,
+                atsMode: c.atsMode || undefined
             })),
             wires: CZ.wires.map(w => ({
                 c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
@@ -150,6 +151,7 @@
                 isPoweredOff: saved.isPoweredOff || false,
                 mmMode: saved.mmMode || 'V',
                 isBroken: saved.isBroken || false,
+                atsMode: saved.atsMode || undefined,
                 rotation: saved.rotation || 0,
                 x: saved.x, y: saved.y,
                 terminals: JSON.parse(JSON.stringify(tmpl.terminals))
@@ -341,6 +343,7 @@
                     isPoweredOff: saved.isPoweredOff || false,
                     mmMode: saved.mmMode || 'V',
                     isBroken: saved.isBroken || false,
+                    atsMode: saved.atsMode || undefined,
                     rotation: saved.rotation || 0,
                     x: saved.x, y: saved.y,
                     terminals: JSON.parse(JSON.stringify(tmpl.terminals))

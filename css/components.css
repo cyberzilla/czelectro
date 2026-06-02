@@ -626,6 +626,62 @@
     50% { fill: #15803d; filter: none; }
 }
 
+/* ── PLN Source States ── */
+.board-component.pln-active {
+    filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.4));
+}
+
+.board-component.pln-active .pln-led {
+    animation: plnLedPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes plnLedPulse {
+    0%, 100% { fill: #22c55e; filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.9)); }
+    50% { fill: #16a34a; filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.4)); }
+}
+
+/* ── ATS States ── */
+.board-component.ats-pln-mode {
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.3));
+}
+
+.board-component.ats-plts-mode {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+}
+
+.board-component .ats-arm {
+    transition: all 0.5s ease;
+}
+
+.board-component.ats-pln-mode .ats-pln-led {
+    animation: plnLedPulse 1.2s ease-in-out infinite;
+}
+
+.board-component.ats-plts-mode .ats-plts-led {
+    animation: pltsLedPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pltsLedPulse {
+    0%, 100% { fill: #22c55e; filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.9)); }
+    50% { fill: #16a34a; filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.4)); }
+}
+
+.ats-mode-badge {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+    z-index: 10;
+}
+
 /* ── AC Appliance States ── */
 .ac-active {
     filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.4));

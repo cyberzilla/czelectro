@@ -3,8 +3,9 @@
 (function(CZ) {
     'use strict';
 
-    const isSource = c => c.type.startsWith('battery') || c.type.startsWith('solar_');
+    const isSource = c => c.type.startsWith('battery') || c.type.startsWith('solar_') || c.type === 'pln_source';
     const isInverterType = t => t === 'inverter' || t === 'inverter_3k' || t === 'inverter_5k';
+    const isACSourceType = t => t === 'pln_source'; // direct AC source (no inverter needed)
     const AC_TYPES = ['iron','fridge','blender','ricecooker','ac_05pk','ac_1pk','tv_led','lamp_30w','computer','pump_125','pump_250'];
 
     // ── Multimeter display helpers ──
@@ -110,7 +111,7 @@
         CZ.deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active');
+            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active','pln-active','ats-pln-mode','ats-plts-mode');
             if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
             if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
             // Clear timer intervals only during full reset (not during timer-triggered re-eval)
@@ -122,7 +123,7 @@
             if (ring && !c.isBroken) { ring.style.fillOpacity = '0'; ring.style.fill = ''; }
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
-            el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status,.mcb-amp-badge,.mcb-trip-badge').forEach(b => b.remove());
+            el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status,.mcb-amp-badge,.mcb-trip-badge,.ats-mode-badge').forEach(b => b.remove());
             // Reset meter disc
             const mDiscGroup = el.querySelector('.meter-disc-group');
             if (mDiscGroup) mDiscGroup.style.animation = 'none';
@@ -222,22 +223,36 @@
 
         // ── AC/DC Domain Tagging per Node ──
         // Nodes connected to inverter AC output (pin 1) are tagged 'AC'
+        // PLN source nodes are also tagged 'AC' directly (no inverter needed)
         // All other nodes default to 'DC'
         const nodeDomain = {}; // nodeId -> 'AC' | 'DC'
         const acNodeVoltage = {}; // nodeId -> effective AC voltage
         result.components.forEach(cr => {
             const tmpl = cr.tmpl;
-            if (!tmpl || !tmpl.isInverter) return;
-            if (Math.abs(cr.current) < EL.SIM.MIN_CURRENT) return;
-            // Input voltage = DC pin voltage relative to ground (node 0 = 0V)
-            // Pin 0 (DC) is nodeP, connected to battery positive
-            const inputV = Math.abs(cr.v1);
-            const inputOk = inputV >= (tmpl.inputVoltageMin || 0);
-            // Pin 1 = AC output side of inverter
-            const acNode = cr.nodeN; // nodeN corresponds to pin 1 (terminal index 1)
-            if (acNode >= 0) {
-                nodeDomain[acNode] = inputOk ? 'AC' : 'DC_UNDERVOLT';
-                acNodeVoltage[acNode] = inputOk ? (tmpl.outputVoltageEf || 220) : 0;
+            // Inverter: output side = AC
+            if (tmpl && tmpl.isInverter) {
+                if (Math.abs(cr.current) < EL.SIM.MIN_CURRENT) return;
+                const inputV = Math.abs(cr.v1);
+                const inputOk = inputV >= (tmpl.inputVoltageMin || 0);
+                const acNode = cr.nodeN;
+                if (acNode >= 0) {
+                    nodeDomain[acNode] = inputOk ? 'AC' : 'DC_UNDERVOLT';
+                    acNodeVoltage[acNode] = inputOk ? (tmpl.outputVoltageEf || 220) : 0;
+                }
+            }
+            // PLN: both output terminals = AC (direct grid power)
+            if (tmpl && tmpl.isPLN && !cr.comp.isPoweredOff) {
+                if (Math.abs(cr.current) >= EL.SIM.MIN_CURRENT) {
+                    // PLN terminal 1 (output/neutral) is the load side
+                    if (cr.nodeN >= 0) {
+                        nodeDomain[cr.nodeN] = 'AC';
+                        acNodeVoltage[cr.nodeN] = 220;
+                    }
+                    if (cr.nodeP >= 0) {
+                        nodeDomain[cr.nodeP] = 'AC';
+                        acNodeVoltage[cr.nodeP] = 220;
+                    }
+                }
             }
         });
 
@@ -778,6 +793,65 @@
                         const ampFmt = EL.Units.autoFormat(amps, 'A');
                         mcbBadge.textContent = `${ampFmt.val}${ampFmt.unit}`;
                     }
+                }
+
+                // ── PLN Source — active indicator ──
+                if (tmpl && tmpl.isPLN) {
+                    const amps = Math.abs(cr.current);
+                    const plnLed = el.querySelector('.pln-led');
+                    const plnVolt = el.querySelector('.pln-voltage');
+                    if (amps > EL.SIM.MIN_CURRENT && !c.isPoweredOff) {
+                        el.classList.add('pln-active');
+                        if (plnLed) plnLed.setAttribute('fill', '#22c55e');
+                        if (plnVolt) plnVolt.setAttribute('fill', '#22c55e');
+                    } else {
+                        el.classList.remove('pln-active');
+                        if (plnLed) plnLed.setAttribute('fill', c.isPoweredOff ? '#ef4444' : '#475569');
+                        if (plnVolt) {
+                            plnVolt.textContent = c.isPoweredOff ? 'OFF' : '220V';
+                            plnVolt.setAttribute('fill', c.isPoweredOff ? '#ef4444' : '#475569');
+                        }
+                    }
+                }
+
+                // ── ATS — Auto Transfer Switch indicator ──
+                if (tmpl && tmpl.isATS) {
+                    const src = c._atsSource || '---';
+                    const mode = c.atsMode || 'PLN_FIRST';
+                    const arm = el.querySelector('.ats-arm');
+                    const plnLed = el.querySelector('.ats-pln-led');
+                    const pltsLed = el.querySelector('.ats-plts-led');
+                    const srcLabel = el.querySelector('.ats-source-label');
+                    if (src === 'PLN') {
+                        if (arm) { arm.setAttribute('x2', '30'); arm.setAttribute('y2', '38'); arm.setAttribute('stroke', '#f59e0b'); }
+                        if (plnLed) plnLed.setAttribute('fill', '#22c55e');
+                        if (pltsLed) pltsLed.setAttribute('fill', '#475569');
+                        if (srcLabel) { srcLabel.textContent = '▸ PLN'; srcLabel.setAttribute('fill', '#f59e0b'); }
+                        el.classList.add('ats-pln-mode');
+                        el.classList.remove('ats-plts-mode');
+                    } else if (src === 'PLTS') {
+                        if (arm) { arm.setAttribute('x2', '70'); arm.setAttribute('y2', '38'); arm.setAttribute('stroke', '#3b82f6'); }
+                        if (plnLed) plnLed.setAttribute('fill', '#475569');
+                        if (pltsLed) pltsLed.setAttribute('fill', '#22c55e');
+                        if (srcLabel) { srcLabel.textContent = '▸ PLTS'; srcLabel.setAttribute('fill', '#3b82f6'); }
+                        el.classList.remove('ats-pln-mode');
+                        el.classList.add('ats-plts-mode');
+                    } else {
+                        if (arm) { arm.setAttribute('x2', '50'); arm.setAttribute('y2', '48'); arm.setAttribute('stroke', '#ef4444'); }
+                        if (plnLed) plnLed.setAttribute('fill', '#ef4444');
+                        if (pltsLed) pltsLed.setAttribute('fill', '#ef4444');
+                        if (srcLabel) { srcLabel.textContent = 'NO PWR'; srcLabel.setAttribute('fill', '#ef4444'); }
+                        el.classList.remove('ats-pln-mode', 'ats-plts-mode');
+                    }
+                    // Mode badge
+                    let modeBadge = el.querySelector('.ats-mode-badge');
+                    if (!modeBadge) {
+                        modeBadge = document.createElement('div');
+                        modeBadge.className = 'ats-mode-badge';
+                        el.appendChild(modeBadge);
+                    }
+                    modeBadge.textContent = mode === 'PLTS_FIRST' ? '☀ PLTS↑' : '⚡ PLN↑';
+                    modeBadge.style.background = mode === 'PLTS_FIRST' ? 'rgba(59,130,246,0.85)' : 'rgba(245,158,11,0.85)';
                 }
             });
         }

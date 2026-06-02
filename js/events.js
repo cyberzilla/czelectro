@@ -481,6 +481,34 @@
                     CZ.saveState();
                 }
 
+                // ── PLN toggle (click to turn on/off grid power) ──
+                if (comp && comp.type === 'pln_source') {
+                    comp.isPoweredOff = !comp.isPoweredOff;
+                    const plnLed = CZ.dragEl.querySelector('.pln-led');
+                    const plnVolt = CZ.dragEl.querySelector('.pln-voltage');
+                    if (comp.isPoweredOff) {
+                        comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+                        if (plnLed) plnLed.setAttribute('fill', '#ef4444');
+                        if (plnVolt) { plnVolt.textContent = 'OFF'; plnVolt.setAttribute('fill', '#ef4444'); }
+                    } else {
+                        const tmpl = COMPONENTS.find(t => t.id === 'pln_source');
+                        comp.currentResistance = tmpl ? tmpl.resistance : 0.01;
+                        if (plnLed) plnLed.setAttribute('fill', '#22c55e');
+                        if (plnVolt) { plnVolt.textContent = '220V'; plnVolt.setAttribute('fill', '#22c55e'); }
+                    }
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
+                // ── ATS mode toggle (click to switch PLN_FIRST ↔ PLTS_FIRST) ──
+                if (comp && comp.type === 'ats_switch') {
+                    comp.atsMode = (comp.atsMode || 'PLN_FIRST') === 'PLN_FIRST' ? 'PLTS_FIRST' : 'PLN_FIRST';
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
                 // ── Power on/off for output components ──
                 const TOGGLEABLE = [
                     'tv_led','fridge','pump_125','pump_250','lamp_30w',

@@ -112,7 +112,7 @@
 
     // ── Check if component is a voltage source ──
     function isSource(c) {
-        return c.type.startsWith('battery') || c.type.startsWith('solar_');
+        return c.type.startsWith('battery') || c.type.startsWith('solar_') || c.type === 'pln_source';
     }
 
     // ── Get effective voltage of a source (accounts for battery depletion) ──
@@ -146,6 +146,10 @@
         if (c.type.startsWith('solar_')) {
             const hod = (CZ.simElapsedMin / 60) % 24;
             if (hod < 6 || hod >= 18) v = 0;
+        }
+        // PLN: 48V in MNA (matches battery pack), 0V when off
+        if (c.type === 'pln_source') {
+            v = c.isPoweredOff ? 0 : 48;
         }
         return v;
     }
@@ -242,6 +246,50 @@
             if (isSwitchLike && !c.isClosed) return;
             if (c.isPoweredOff) return; // powered-off component = open circuit
 
+            // ── ATS: 3-terminal auto transfer switch ──
+            // Terminal 0=PLN, Terminal 1=PLTS, Terminal 2=LOAD
+            // Mode: PLN_FIRST (default) or PLTS_FIRST
+            if (tmpl && tmpl.isATS) {
+                const n3 = getNode(c.id, 2); // LOAD terminal
+                if (n3 < 0) return;
+                const mode = c.atsMode || 'PLN_FIRST';
+
+                // Check PLN availability
+                const plnActive = CZ.deployed.some(pc => {
+                    const pt = COMPONENTS.find(t => t.id === pc.type);
+                    return pt && pt.isPLN && !pc.isPoweredOff && !pc.isBroken;
+                });
+
+                // Check PLTS availability (batteries have charge)
+                const pltsActive = CZ.deployed.some(pc => {
+                    if (pc.type !== 'battery_32140' && !pc.type.includes('lifepo4') && !pc.type.includes('plts')) return false;
+                    if (pc.isBroken) return false;
+                    const minLvl = CZ.getBattDeadLevel ? CZ.getBattDeadLevel(pc) : 0;
+                    return (pc.batteryLevel || 0) > minLvl;
+                });
+
+                // Determine active source based on mode
+                let usePLN;
+                if (mode === 'PLTS_FIRST') {
+                    // PLTS priority: use PLTS if batteries alive, PLN as backup
+                    usePLN = !pltsActive && plnActive;
+                } else {
+                    // PLN priority (default): use PLN if available, PLTS as backup
+                    usePLN = plnActive;
+                }
+
+                const srcNode = usePLN ? n1 : n2;
+                c._atsSource = usePLN ? 'PLN' : (pltsActive || !plnActive ? 'PLTS' : 'NONE');
+                const G = EL.Ohm.conductance(0.01);
+                if (srcNode > 0) A[nIdx(srcNode)][nIdx(srcNode)] += G;
+                if (n3 > 0) A[nIdx(n3)][nIdx(n3)] += G;
+                if (srcNode > 0 && n3 > 0) {
+                    A[nIdx(srcNode)][nIdx(n3)] -= G;
+                    A[nIdx(n3)][nIdx(srcNode)] -= G;
+                }
+                return;
+            }
+
             // Diode/LED reverse-bias check: terminal 0 = Anode, terminal 1 = Kathode
             // We'll do a first-pass solve, then check polarity in iteration
             let R = c.currentResistance;
@@ -312,6 +360,19 @@
             const v1 = nodeVoltages[n1] || 0;
             const v2 = nodeVoltages[n2] || 0;
             let vDrop, current;
+
+            // ATS: 3-terminal component — use active source↔load pair
+            if (tmpl && tmpl.isATS) {
+                const n3 = getNode(c.id, 2); // LOAD terminal
+                const v3 = n3 >= 0 ? (nodeVoltages[n3] || 0) : 0;
+                const srcNode = c._atsSource === 'PLN' ? n1 : (getNode(c.id, 1));
+                const vSrc = srcNode >= 0 ? (nodeVoltages[srcNode] || 0) : 0;
+                vDrop = vSrc - v3;
+                current = Math.abs(vDrop) > 0.001 ? EL.Ohm.current(vDrop, 0.01) : 0;
+                const power = EL.Power.fromVI(vDrop, current);
+                compResults.push({ comp: c, tmpl, vDrop, current, power, nodeP: srcNode, nodeN: n3 >= 0 ? n3 : n2, v1: vSrc, v2: v3 });
+                return;
+            }
 
             if (isSource(c)) {
                 // For sources, find the branch current
