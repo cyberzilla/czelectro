@@ -1152,6 +1152,25 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); CZ.duplicateSelected(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); CZ.saveFile(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); CZ.openFile(); }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A') && !e.shiftKey) {
+                e.preventDefault();
+                // Select all components
+                CZ.selectedIds.clear();
+                document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                CZ.deployed.forEach(c => {
+                    CZ.selectedIds.add(c.id);
+                    document.getElementById(c.id)?.classList.add('selected');
+                });
+                // Select all wire handles
+                CZ.selectedHandles.clear();
+                document.querySelectorAll('.wire-handle').forEach(h => {
+                    const key = `${h.dataset.widx}:${h.dataset.hidx}`;
+                    CZ.selectedHandles.add(key);
+                    h.classList.add('handle-selected');
+                });
+                CZ.expandSelectionToGroups();
+                CZ.renderGroupLabels();
+            }
             if (e.key === 'r' && !e.shiftKey) {
                 if (CZ.selectedIds.size > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     e.preventDefault();

@@ -90,6 +90,15 @@
             toastInvalidFile: 'Format file tidak valid!',
             toastFileError: 'Gagal membuka file',
 
+            // Import modal
+            importTitle: '📋 Impor Rangkaian JSON',
+            importPlaceholder: 'Tempel JSON rangkaian di sini...',
+            importCancel: 'Batal',
+            importMerge: '➕ Tambahkan',
+            importReplace: '🔄 Ganti Semua',
+            importMergeTitle: 'Tambahkan ke rangkaian yang ada',
+            importReplaceTitle: 'Ganti seluruh rangkaian',
+
             // Battery sim
             simDay: 'Hari',
             simPause: '⏸ JEDA',
@@ -196,6 +205,15 @@
             toastInvalidFile: 'Invalid file format!',
             toastFileError: 'Failed to open file',
 
+            // Import modal
+            importTitle: '📋 Import Circuit JSON',
+            importPlaceholder: 'Paste circuit JSON here...',
+            importCancel: 'Cancel',
+            importMerge: '➕ Merge',
+            importReplace: '🔄 Replace All',
+            importMergeTitle: 'Add to existing circuit',
+            importReplaceTitle: 'Replace entire circuit',
+
             // Battery sim
             simDay: 'Day',
             simPause: '⏸ PAUSE',
@@ -238,9 +256,9 @@
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.dataset.i18n;
             const val = CZ.t(key);
-            if (el.tagName === 'INPUT' && el.type !== 'checkbox') {
+            if ((el.tagName === 'INPUT' && el.type !== 'checkbox') || el.tagName === 'TEXTAREA') {
                 el.placeholder = val;
-            } else if (el.hasAttribute('title')) {
+            } else if (el.hasAttribute('title') && !el.hasAttribute('data-i18n-title')) {
                 el.title = val;
             } else {
                 el.textContent = val;

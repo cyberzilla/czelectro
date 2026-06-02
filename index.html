@@ -290,12 +290,12 @@
     <!-- Import JSON Modal -->
     <div id="import-modal" class="import-modal-overlay hidden">
         <div class="import-modal">
-            <div class="import-modal-header">📋 Import Circuit JSON</div>
-            <textarea id="import-json-input" class="import-json-textarea" placeholder="Paste circuit JSON here..." spellcheck="false"></textarea>
+            <div class="import-modal-header" data-i18n="importTitle">📋 Impor Rangkaian JSON</div>
+            <textarea id="import-json-input" class="import-json-textarea" data-i18n="importPlaceholder" placeholder="Tempel JSON rangkaian di sini..." spellcheck="false"></textarea>
             <div class="import-modal-actions">
-                <button id="import-json-cancel" class="import-btn import-btn-cancel">Cancel</button>
-                <button id="import-json-merge" class="import-btn import-btn-merge" title="Tambahkan ke rangkaian yang ada">➕ Tambahkan</button>
-                <button id="import-json-confirm" class="import-btn import-btn-confirm" title="Ganti seluruh rangkaian">🔄 Ganti Semua</button>
+                <button id="import-json-cancel" class="import-btn import-btn-cancel" data-i18n="importCancel">Batal</button>
+                <button id="import-json-merge" class="import-btn import-btn-merge" data-i18n-title="importMergeTitle" title="Tambahkan ke rangkaian yang ada" data-i18n="importMerge">➕ Tambahkan</button>
+                <button id="import-json-confirm" class="import-btn import-btn-confirm" data-i18n-title="importReplaceTitle" title="Ganti seluruh rangkaian" data-i18n="importReplace">🔄 Ganti Semua</button>
             </div>
         </div>
     </div>
