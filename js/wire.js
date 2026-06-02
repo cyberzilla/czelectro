@@ -182,7 +182,13 @@
 
     // ── Wire rendering ──
     CZ.renderWires = function() {
-        CZ.wiresG.innerHTML = '';
+        // Incremental DOM update: reuse existing wire groups, only add/remove as needed
+        const existingGroups = CZ.wiresG.querySelectorAll('g.wire-group');
+        const existingMap = {};
+        existingGroups.forEach(g => { existingMap[g.dataset.widx] = g; });
+
+        // Track which indices are still valid
+        const activeIndices = new Set();
         document.querySelectorAll('.terminal').forEach(el => el.classList.remove('connected'));
 
         // Auto-spread: compute offset for wires sharing the same terminal pair
@@ -241,67 +247,97 @@
             // Save spread for in-place updates during drag
             w._lastSpread = wireSpread[idx];
 
-            const { d, handlePositions } = CZ.makeWirePath(p1, dir1, p2, dir2, w.controlPoints, wireSpread[idx]);
+            activeIndices.add(String(idx));
 
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.classList.add('wire-group');
-            g.dataset.widx = idx;
-
-            // Hit area for dragging
-            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            hit.setAttribute('d', d);
-            hit.classList.add('wire-hit-area');
-            hit.dataset.widx = idx;
-
-            // Visual wire
-            const vis = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            vis.setAttribute('d', d);
-            vis.setAttribute('stroke', w.color || '#94a3b8');
-            vis.setAttribute('stroke-width', '3.5');
-            vis.setAttribute('stroke-linecap', 'round');
-            vis.setAttribute('stroke-linejoin', 'round');
-            vis.classList.add('real-wire');
-
-            // Flow animation if energized
-            if (w.energized) {
-                const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                flow.setAttribute('d', d);
-                flow.setAttribute('stroke', 'rgba(74,222,128,0.6)');
-                flow.setAttribute('stroke-width', '2');
-                flow.setAttribute('fill', 'none');
-                flow.setAttribute('stroke-linecap', 'round');
-                flow.setAttribute('stroke-linejoin', 'round');
-                flow.classList.add('wire-flow');
-                g.appendChild(flow);
-            }
-
-            g.appendChild(vis);
-            g.appendChild(hit);
-
-            // Draggable handles — 3 control points, hidden by default, visible on hover
-            handlePositions.forEach((hp, hIdx) => {
-                const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                handle.setAttribute('cx', hp.x);
-                handle.setAttribute('cy', hp.y);
-                // On touch: set SVG attribute to large radius for reliable finger tapping.
-                // CSS controls visual appearance (fill, opacity) but SVG attribute
-                // determines hit-testing area in the browser's touch engine.
-                // All handles get the same size for consistent drag targets.
-                handle.setAttribute('r', _isCoarse ? '16' : '5');
-                handle.classList.add('wire-handle');
-                handle.dataset.widx = idx;
-                handle.dataset.hidx = hIdx;
-                // Re-apply selected state if this handle was previously selected
-                if (CZ.selectedHandles.has(`${idx}:${hIdx}`)) {
-                    handle.classList.add('handle-selected');
+            // Reuse existing DOM group if possible
+            if (existingMap[String(idx)]) {
+                CZ.updateWire(idx);
+                // Update energized flow state
+                const g = existingMap[String(idx)];
+                const flow = g.querySelector('.wire-flow');
+                const { d } = CZ.makeWirePath(p1, dir1, p2, dir2, w.controlPoints, wireSpread[idx]);
+                if (w.energized && !flow) {
+                    const nf = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    nf.setAttribute('d', d);
+                    nf.setAttribute('stroke', 'rgba(74,222,128,0.6)');
+                    nf.setAttribute('stroke-width', '2');
+                    nf.setAttribute('fill', 'none');
+                    nf.setAttribute('stroke-linecap', 'round');
+                    nf.setAttribute('stroke-linejoin', 'round');
+                    nf.classList.add('wire-flow');
+                    g.insertBefore(nf, g.firstChild);
+                } else if (!w.energized && flow) {
+                    flow.remove();
                 }
-                g.appendChild(handle);
-            });
+                // Update wire color
+                const vis = g.querySelector('.real-wire');
+                if (vis) vis.setAttribute('stroke', w.color || '#94a3b8');
+            } else {
+                // Create new wire group
+                const { d, handlePositions } = CZ.makeWirePath(p1, dir1, p2, dir2, w.controlPoints, wireSpread[idx]);
 
-            CZ.wiresG.appendChild(g);
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.classList.add('wire-group');
+                g.dataset.widx = idx;
+
+                // Hit area for dragging
+                const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                hit.setAttribute('d', d);
+                hit.classList.add('wire-hit-area');
+                hit.dataset.widx = idx;
+
+                // Visual wire
+                const vis = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                vis.setAttribute('d', d);
+                vis.setAttribute('stroke', w.color || '#94a3b8');
+                vis.setAttribute('stroke-width', '3.5');
+                vis.setAttribute('stroke-linecap', 'round');
+                vis.setAttribute('stroke-linejoin', 'round');
+                vis.classList.add('real-wire');
+
+                // Flow animation if energized
+                if (w.energized) {
+                    const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    flow.setAttribute('d', d);
+                    flow.setAttribute('stroke', 'rgba(74,222,128,0.6)');
+                    flow.setAttribute('stroke-width', '2');
+                    flow.setAttribute('fill', 'none');
+                    flow.setAttribute('stroke-linecap', 'round');
+                    flow.setAttribute('stroke-linejoin', 'round');
+                    flow.classList.add('wire-flow');
+                    g.appendChild(flow);
+                }
+
+                g.appendChild(vis);
+                g.appendChild(hit);
+
+                // Draggable handles — 3 control points, hidden by default, visible on hover
+                handlePositions.forEach((hp, hIdx) => {
+                    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    handle.setAttribute('cx', hp.x);
+                    handle.setAttribute('cy', hp.y);
+                    handle.setAttribute('r', _isCoarse ? '16' : '5');
+                    handle.classList.add('wire-handle');
+                    handle.dataset.widx = idx;
+                    handle.dataset.hidx = hIdx;
+                    if (CZ.selectedHandles.has(`${idx}:${hIdx}`)) {
+                        handle.classList.add('handle-selected');
+                    }
+                    g.appendChild(handle);
+                });
+
+                CZ.wiresG.appendChild(g);
+            }
 
             document.querySelector(`[data-cid="${w.c1}"][data-tidx="${w.i1}"]`)?.classList.add('connected');
             document.querySelector(`[data-cid="${w.c2}"][data-tidx="${w.i2}"]`)?.classList.add('connected');
+        });
+
+        // Remove stale wire groups (deleted wires)
+        Object.keys(existingMap).forEach(widx => {
+            if (!activeIndices.has(widx)) {
+                existingMap[widx].remove();
+            }
         });
     };
 

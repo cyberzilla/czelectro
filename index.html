@@ -272,7 +272,7 @@
 
     <script src="js/electrical-laws.js"></script>
     <script src="js/components.js"></script>
-    <!-- Modular architecture: laws → components → state → i18n → audio → grid → wire → effects → solver → circuit → evaluate → battery → ui → events -->
+    <!-- Modular architecture: laws → components → state → i18n → audio → grid → wire → effects → solver → evaluate → battery → ui → events -->
     <script src="js/state.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/audio.js"></script>
@@ -280,7 +280,7 @@
     <script src="js/wire.js"></script>
     <script src="js/effects.js"></script>
     <script src="js/mna-solver.js"></script>
-    <script src="js/circuit.js"></script>
+
     <script src="js/mna-evaluate.js"></script>
     <script src="js/battery-sim.js"></script>
     <script src="js/components-ui.js"></script>
@@ -294,7 +294,8 @@
             <textarea id="import-json-input" class="import-json-textarea" placeholder="Paste circuit JSON here..." spellcheck="false"></textarea>
             <div class="import-modal-actions">
                 <button id="import-json-cancel" class="import-btn import-btn-cancel">Cancel</button>
-                <button id="import-json-confirm" class="import-btn import-btn-confirm">Import</button>
+                <button id="import-json-merge" class="import-btn import-btn-merge" title="Tambahkan ke rangkaian yang ada">➕ Tambahkan</button>
+                <button id="import-json-confirm" class="import-btn import-btn-confirm" title="Ganti seluruh rangkaian">🔄 Ganti Semua</button>
             </div>
         </div>
     </div>

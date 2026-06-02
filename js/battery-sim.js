@@ -44,28 +44,53 @@
         const deltaMin = CZ.simSpeed;
         CZ.simElapsedMin += deltaMin;
 
+        // Recompute solar factor AFTER time advance for accurate charge/drain
+        const postHour = (CZ.simElapsedMin / 60) % 24;
+        const postSolarFactor = CZ.getSolarFactor(postHour);
+        const postIsDaytime = postSolarFactor > 0;
+
         const loopsDrain = window._activeLoops || [];
         let anyDrained = false;
         loopsDrain.forEach(loop => {
             if (!loop.battIds || loop.battIds.length === 0) return;
-            let adjSrcW = (loop.srcW || 0) * solarFactor;
+            let adjSrcW = (loop.srcW || 0) * postSolarFactor;
             let adjLoadW = loop.loadW || 0;
             if (loop.hasCC) adjSrcW *= 0.93;
             if (loop.hasInverter) adjLoadW /= 0.90;
+
+            // BMS cutoff: when ALL batteries are at dead level, loads are disconnected
+            // In real life, BMS cuts off inverter → loads stop → only solar charges
+            const allLoopBatts = loop.battIds
+                .map(id => CZ.deployed.find(c => c.id === id))
+                .filter(Boolean);
+            const allDead = allLoopBatts.length > 0 && allLoopBatts.every(b => {
+                const minLevel = CZ.getBattDeadLevel(b);
+                return b.batteryLevel <= minLevel;
+            });
+            if (allDead) {
+                adjLoadW = 0; // BMS disconnected loads — only solar can charge
+            }
+
             const loopNetW = adjSrcW - adjLoadW;
             if (loopNetW === 0) return;
             const isCharging = loopNetW > 0;
-            const loopBatts = loop.battIds
-                .map(id => CZ.deployed.find(c => c.id === id))
-                .filter(b => b && (isCharging ? b.batteryLevel < b.batteryCapacity : b.batteryLevel > 0));
+            const loopBatts = allLoopBatts
+                .filter(b => isCharging ? b.batteryLevel < b.batteryCapacity : b.batteryLevel > 0);
             if (loopBatts.length === 0) return;
             const perBattRaw = (loopNetW * deltaMin) / 60 / loopBatts.length;
             loopBatts.forEach(bat => {
                 let delta = perBattRaw;
                 if (isCharging) {
+                    // Cap charge rate at 0.5C
                     const maxChargeWhPerMin = (bat.batteryCapacity * 0.5) / 60;
                     const maxDelta = maxChargeWhPerMin * deltaMin;
                     delta = Math.min(delta, maxDelta);
+                } else {
+                    // Cap discharge rate at 1C — prevents unrealistic instant drain
+                    // at high sim speeds (e.g. 9V battery drained 70% in 1 tick)
+                    const maxDrainWhPerMin = (bat.batteryCapacity * 1.0) / 60;
+                    const maxDrainDelta = maxDrainWhPerMin * deltaMin;
+                    delta = Math.max(delta, -maxDrainDelta);
                 }
                 const minLevel = CZ.getBattDeadLevel(bat);
                 bat.batteryLevel = Math.max(minLevel, Math.min(bat.batteryCapacity, bat.batteryLevel + delta));
@@ -73,31 +98,87 @@
             anyDrained = true;
         });
 
-        // Auto-cutoff: batteries near dead threshold get forced to dead level
-        // This prevents them from getting stuck at low voltage where no current flows
-        batteries.forEach(bat => {
-            const minLevel = CZ.getBattDeadLevel(bat);
-            const usable = bat.batteryCapacity - minLevel;
-            if (usable > 0 && bat.batteryLevel > minLevel) {
-                const usablePct = (bat.batteryLevel - minLevel) / usable;
-                if (usablePct < 0.05) { // below 5% usable → force dead
-                    bat.batteryLevel = minLevel;
+        // ── Fallback: Solar direct-charge when batteries are dead ──
+        // When batteryLevel <= deadLevel, MNA sees 0V → no current → no loops
+        // But in reality, charge controller still charges dead batteries from solar!
+        // This fallback bypasses MNA to simulate CC direct charging.
+        if (postIsDaytime && batteries.length > 0) {
+            const allLoopBattIds = new Set();
+            loopsDrain.forEach(loop => (loop.battIds || []).forEach(id => allLoopBattIds.add(id)));
+
+            const orphanBatts = batteries.filter(b => {
+                const minLevel = CZ.getBattDeadLevel(b);
+                return b.batteryLevel <= minLevel && !allLoopBattIds.has(b.id);
+            });
+
+            if (orphanBatts.length > 0) {
+                // Find solar panels connected to these batteries via Union-Find
+                const ufP = {};
+                CZ.deployed.forEach(c => ufP[c.id] = c.id);
+                function ufFindSim(x) { return ufP[x] === x ? x : (ufP[x] = ufFindSim(ufP[x])); }
+                CZ.wires.forEach(w => {
+                    if (ufP[w.c1] !== undefined && ufP[w.c2] !== undefined)
+                        ufP[ufFindSim(w.c1)] = ufFindSim(w.c2);
+                });
+
+                // Check if any solar panel shares network with orphan batteries
+                const solarPanels = CZ.deployed.filter(c => c.type.startsWith('solar_'));
+                const hasCCinNetwork = CZ.deployed.some(c => c.type === 'charge_controller');
+
+                orphanBatts.forEach(bat => {
+                    const batRoot = ufFindSim(bat.id);
+                    const connectedSolar = solarPanels.find(sp => ufFindSim(sp.id) === batRoot);
+                    if (!connectedSolar || !hasCCinNetwork) return;
+
+                    const tmpl = COMPONENTS.find(t => t.id === connectedSolar.type);
+                    if (!tmpl || !tmpl.ratedPower) return;
+
+                    // Charge at solar rated power × solar factor × CC efficiency
+                    // Split among all dead batteries in same network
+                    const networkDeadBatts = orphanBatts.filter(b => ufFindSim(b.id) === batRoot);
+                    const solarW = tmpl.ratedPower * postSolarFactor * 0.93; // CC 93% efficiency
+                    const perBattW = solarW / networkDeadBatts.length;
+                    const whDelta = (perBattW * deltaMin) / 60;
+
+                    // Cap charge rate at 0.5C
+                    const maxChargeWh = (bat.batteryCapacity * 0.5 / 60) * deltaMin;
+                    bat.batteryLevel = Math.min(bat.batteryCapacity, bat.batteryLevel + Math.min(whDelta, maxChargeWh));
                     anyDrained = true;
-                }
+                });
             }
-        });
+        }
+
+        // Auto-cutoff: batteries near dead threshold get forced to dead level
+        // Only during discharge (nighttime) — don't interfere with solar charging
+        // This simulates BMS low-SOC protection during discharge
+        if (!postIsDaytime) {
+            batteries.forEach(bat => {
+                const minLevel = CZ.getBattDeadLevel(bat);
+                const usable = bat.batteryCapacity - minLevel;
+                if (usable > 0 && bat.batteryLevel > minLevel) {
+                    const usablePct = (bat.batteryLevel - minLevel) / usable;
+                    if (usablePct < 0.05) { // below 5% usable → force dead
+                        bat.batteryLevel = minLevel;
+                        anyDrained = true;
+                    }
+                }
+            });
+        }
 
         if (anyDrained) { CZ.saveState(); }
         CZ.evaluateCircuit();
-        CZ.updateSimPanel(totalSolarW, totalLoadW, batteries, hour, isDaytime, solarFactor, noPower);
+        const postSolarW = CZ.simTotalSrcW * postSolarFactor;
+        CZ.updateSimPanel(postSolarW, totalLoadW, batteries, hour, postIsDaytime, postSolarFactor, noPower);
     };
 
     CZ.updateSimPanel = function(solarW, loadW, batteries, hour, isDaytime, solarFactor, noPower) {
         let panel = document.getElementById('sim-panel');
         if (!panel) return;
+        // Single source of truth: derive all time displays from CZ.simElapsedMin
+        const displayHour = (CZ.simElapsedMin / 60) % 24;
         const dayNum = Math.floor(CZ.simElapsedMin / 1440) + 1;
-        const clockH = Math.floor(hour);
-        const clockM = Math.floor((hour % 1) * 60);
+        const clockH = Math.floor(displayHour);
+        const clockM = Math.floor((displayHour % 1) * 60);
         const timeStr = `${String(clockH).padStart(2,'0')}:${String(clockM).padStart(2,'0')}`;
         const timeIcon = isDaytime ? '☀️' : '🌙';
         const solarPct = (solarFactor * 100).toFixed(0);
@@ -107,11 +188,23 @@
         const speedLabel = CZ.simSpeed === 0 ? CZ.t('simPause') : `▶ ${CZ.simSpeed}x`;
         const speedColor = CZ.simSpeed === 0 ? '#ef4444' : '#22c55e';
 
-        const hourAngle = CZ.simElapsedMin * 0.5;
-        const minAngle = CZ.simElapsedMin * 6;
+        // Clock hand angles (from displayHour — synced with digital time)
+        const h12 = displayHour % 12;          // 0-12 float (e.g. 3.5 = 3:30)
+        const targetH = h12 * 30;              // h12 already includes minutes as fraction
+        const targetM = (displayHour % 1) * 360; // minute fraction → full circle
+
+        // Cumulative tracking: always rotate clockwise (avoid CSS shortest-path issues)
+        if (CZ._ckH === undefined) { CZ._ckH = targetH; CZ._ckM = targetM; }
+        let dH = targetH - (CZ._ckH % 360);
+        if (dH < -1) dH += 360;
+        CZ._ckH += dH;
+        let dM = targetM - (CZ._ckM % 360);
+        if (dM < -1) dM += 360;
+        CZ._ckM += dM;
+
         const faceColor = isDaytime ? '#1a2a3a' : '#0d0d1a';
         const rimColor = isDaytime ? '#f59e0b' : '#334155';
-        const sunAngleVis = ((hour % 12) / 12) * 360;
+        const sunAngleVis = ((displayHour % 12) / 12) * 360;
         const sunX = 30 + 24 * Math.sin(sunAngleVis * Math.PI / 180);
         const sunY = 30 - 24 * Math.cos(sunAngleVis * Math.PI / 180);
 
@@ -135,8 +228,8 @@
                 ${ticks}
                 <circle class="ck-sun-glow" cx="${sunX}" cy="${sunY}" r="5" fill="#f59e0b" opacity="0" style="transition:cx .3s,cy .3s,opacity .3s"/>
                 <circle class="ck-sun" cx="${sunX}" cy="${sunY}" r="3" fill="#f59e0b" opacity="0.5" style="transition:cx .3s,cy .3s,opacity .3s,fill .3s"/>
-                <line class="ck-hour" x1="30" y1="30" x2="30" y2="14" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round" style="transform-origin:30px 30px;transition:transform .9s linear"/>
-                <line class="ck-min" x1="30" y1="30" x2="30" y2="8" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" style="transform-origin:30px 30px;transition:transform .9s linear"/>
+                <line class="ck-hour" x1="30" y1="30" x2="30" y2="14" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round" style="transform-origin:30px 30px"/>
+                <line class="ck-min" x1="30" y1="30" x2="30" y2="8" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" style="transform-origin:30px 30px"/>
                 <circle cx="30" cy="30" r="2" fill="#f59e0b"/>
             </svg>`;
             panel.insertBefore(clockWrap, panel.firstChild);
@@ -144,8 +237,12 @@
 
         const hHand = clockWrap.querySelector('.ck-hour');
         const mHand = clockWrap.querySelector('.ck-min');
-        hHand.style.transform = `rotate(${hourAngle}deg)`;
-        mHand.style.transform = `rotate(${minAngle}deg)`;
+        // Adapt transition speed to sim speed
+        const transDur = CZ.simSpeed >= 30 ? '0.4s' : '0.9s';
+        hHand.style.transition = `transform ${transDur} linear`;
+        mHand.style.transition = `transform ${transDur} linear`;
+        hHand.style.transform = `rotate(${CZ._ckH}deg)`;
+        mHand.style.transform = `rotate(${CZ._ckM}deg)`;
 
         const face = clockWrap.querySelector('.ck-face');
         face.setAttribute('fill', faceColor);

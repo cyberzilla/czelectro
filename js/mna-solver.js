@@ -237,8 +237,10 @@
             const n2 = getNode(c.id, 1);
             if (n1 < 0 || n2 < 0 || n1 === n2) return;
 
-            // Switch handling
-            if ((c.type === 'switch_toggle' || c.type === 'timer_555') && !c.isClosed) return; // open switch/timer = no connection
+            // Switch / MCB handling — open = no connection
+            const isSwitchLike = c.type === 'switch_toggle' || c.type === 'timer_555' || c.type.startsWith('mcb_');
+            if (isSwitchLike && !c.isClosed) return;
+            if (c.isPoweredOff) return; // powered-off component = open circuit
 
             // Diode/LED reverse-bias check: terminal 0 = Anode, terminal 1 = Kathode
             // We'll do a first-pass solve, then check polarity in iteration
@@ -319,7 +321,9 @@
             } else {
                 vDrop = v1 - v2;
                 const R = c.currentResistance;
-                if ((c.type === 'switch_toggle' || c.type === 'timer_555') && !c.isClosed) {
+                if ((c.type === 'switch_toggle' || c.type === 'timer_555' || c.type.startsWith('mcb_')) && !c.isClosed) {
+                    current = 0;
+                } else if (c.isPoweredOff) {
                     current = 0;
                 } else if (R === Infinity || R <= 0) {
                     current = 0;
@@ -394,6 +398,7 @@
                 let hasCC = false, hasInv = false, hasSolar = false;
                 let groupHasCurrent = false;
 
+                // Pass 1: detect circuit features and sources
                 group.forEach(cr => {
                     if (Math.abs(cr.current) > EL.SIM.MIN_CURRENT) groupHasCurrent = true;
                     if (isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT) {
@@ -403,10 +408,21 @@
                     }
                     if (cr.comp.type === 'charge_controller') hasCC = true;
                     if (cr.tmpl.isInverter) hasInv = true;
+                });
+
+                // Pass 2: compute load power (needs hasInv to be resolved first)
+                group.forEach(cr => {
                     if (!isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
                         cr.comp.type !== 'charge_controller' && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
-                        // Use actual power from MNA instead of ratedPower
-                        totalLoadW += cr.power || 0;
+                        // AC loads through inverter: use ratedPower (nameplate watts)
+                        // because MNA computes V²/R at DC battery voltage (~51V),
+                        // not at the 220V AC the inverter provides.
+                        // DC loads: use actual MNA power (accurate at DC voltage).
+                        if (cr.tmpl.acOnly && hasInv && cr.tmpl.ratedPower) {
+                            totalLoadW += cr.tmpl.ratedPower;
+                        } else {
+                            totalLoadW += cr.power || 0;
+                        }
                     }
                 });
 
@@ -439,7 +455,7 @@
 
     // ── Diode iteration: re-solve with reverse-biased diodes blocked ──
     CZ.solveMNAWithDiodes = function() {
-        const MAX_ITER = 5;
+        const MAX_ITER = 10;
         let result;
 
         // Reset all diode/LED resistances to template values before solving
@@ -452,6 +468,9 @@
             }
         });
 
+        // Track per-diode flip count for oscillation detection
+        const flipCount = {};
+
         for (let iter = 0; iter < MAX_ITER; iter++) {
             result = CZ.solveMNA();
             if (!result.hasCircuit) break;
@@ -462,6 +481,12 @@
                 if (!tmpl || !tmpl.isDiode) return;
                 if (cr.comp.isBroken) return;
 
+                const did = cr.comp.id;
+                if (!flipCount[did]) flipCount[did] = 0;
+
+                // Oscillation guard: if diode flipped > 3 times, freeze its state
+                if (flipCount[did] >= 3) return;
+
                 // Pin 0 = Anode (+), Pin 1 = Cathode (-)
                 // Forward bias: V_anode > V_cathode (vDrop > 0 when current flows A->K)
                 const vAcross = cr.v1 - cr.v2; // v at pin0 - v at pin1
@@ -470,12 +495,14 @@
                     // Reverse biased or below threshold — block
                     if (cr.comp.currentResistance !== 1e12) {
                         cr.comp.currentResistance = 1e12; // effectively infinite
+                        flipCount[did]++;
                         changed = true;
                     }
                 } else {
                     // Forward biased — restore original resistance
                     if (cr.comp.currentResistance === 1e12) {
                         cr.comp.currentResistance = tmpl.resistance;
+                        flipCount[did]++;
                         changed = true;
                     }
                 }

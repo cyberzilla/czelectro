@@ -458,6 +458,60 @@
                     CZ.saveState();
                 }
 
+                // ── MCB toggle (click to reset after trip, or manual on/off) ──
+                if (comp && comp.type.startsWith('mcb_')) {
+                    const tmpl = COMPONENTS.find(t => t.id === comp.type);
+                    comp.isClosed = comp.isClosed === false ? true : false;
+                    comp.currentResistance = comp.isClosed ? (tmpl ? tmpl.resistance : 0.01) : EL.SIM.OPEN_CIRCUIT_R;
+                    CZ.dragEl.classList.remove('mcb-tripped');
+                    const toggle = CZ.dragEl.querySelector('.mcb-toggle');
+                    const label = CZ.dragEl.querySelector('.mcb-label');
+                    const indicator = CZ.dragEl.querySelector('.mcb-indicator');
+                    if (comp.isClosed) {
+                        if (toggle) { toggle.setAttribute('fill', '#22c55e'); toggle.setAttribute('y', '25'); }
+                        if (label) { label.textContent = 'ON'; label.setAttribute('y', '44'); }
+                        if (indicator) indicator.setAttribute('fill', '#22c55e');
+                    } else {
+                        if (toggle) { toggle.setAttribute('fill', '#6b7280'); toggle.setAttribute('y', '35'); }
+                        if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
+                        if (indicator) indicator.setAttribute('fill', '#6b7280');
+                    }
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
+                // ── Power on/off for output components ──
+                const TOGGLEABLE = [
+                    'tv_led','fridge','pump_125','pump_250','lamp_30w',
+                    'iron','blender','ricecooker','ac_05pk','ac_1pk',
+                    'computer','motor_dc','buzzer','speaker','bulb',
+                    'led_red','led_green','led_blue','led_white','led_rgb'
+                ];
+                if (comp && TOGGLEABLE.includes(comp.type)) {
+                    comp.isPoweredOff = !comp.isPoweredOff;
+                    const tmpl = COMPONENTS.find(t => t.id === comp.type);
+                    if (comp.isPoweredOff) {
+                        comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+                        CZ.dragEl.classList.add('powered-off');
+                    } else {
+                        comp.currentResistance = tmpl ? tmpl.resistance : 100;
+                        CZ.dragEl.classList.remove('powered-off');
+                    }
+                    // Power badge
+                    let pwrBadge = CZ.dragEl.querySelector('.power-on-off-badge');
+                    if (!pwrBadge) {
+                        pwrBadge = document.createElement('div');
+                        pwrBadge.className = 'power-on-off-badge';
+                        CZ.dragEl.appendChild(pwrBadge);
+                    }
+                    pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
+                    pwrBadge.classList.toggle('off', comp.isPoweredOff);
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
                 // ── Multimeter mode cycling: V → Ω → A → V ──
                 if (comp && comp.type === 'voltmeter') {
                     const modes = ['V', 'Ω', 'A'];

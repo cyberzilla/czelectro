@@ -498,10 +498,54 @@
         if (btnExport) {
             btnExport.addEventListener('click', () => {
                 try {
-                    const json = CZ.getFullSnapshot();
+                    let exportData;
+                    let label;
+
+                    if (CZ.selectedIds.size > 0) {
+                        // Export only selected components + their interconnecting wires
+                        const selIds = new Set(CZ.selectedIds);
+                        const selComps = CZ.deployed.filter(c => selIds.has(c.id));
+                        const selWires = CZ.wires.filter(w => selIds.has(w.c1) && selIds.has(w.c2));
+                        const selGroups = CZ.groups.filter(g => g.members.some(m => selIds.has(m)))
+                            .map(g => ({ ...g, members: g.members.filter(m => selIds.has(m)) }))
+                            .filter(g => g.members.length > 0);
+
+                        exportData = {
+                            deployed: selComps.map(c => ({
+                                id: c.id, type: c.type, x: c.x, y: c.y,
+                                isBroken: c.isBroken, isClosed: c.isClosed,
+                                isPoweredOff: c.isPoweredOff || false,
+                                mmMode: c.mmMode || undefined,
+                                currentResistance: c.currentResistance,
+                                rotation: c.rotation || 0,
+                                batteryLevel: c.batteryLevel,
+                                batteryCapacity: c.batteryCapacity
+                            })),
+                            wires: selWires.map(w => ({
+                                c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
+                                color: w.color,
+                                controlPoints: w.controlPoints
+                            })),
+                            groups: selGroups,
+                            counter: CZ.counter
+                        };
+                        label = `📤 ${selComps.length} komponen, ${selWires.length} kabel (seleksi)`;
+                    } else {
+                        // Export full circuit
+                        exportData = JSON.parse(CZ.getFullSnapshot());
+                        label = `📤 ${exportData.deployed.length} komponen, ${exportData.wires.length} kabel (semua)`;
+                    }
+
+                    const json = JSON.stringify(exportData, null, 2);
                     navigator.clipboard.writeText(json).then(() => {
                         btnExport.textContent = '✓';
                         setTimeout(() => btnExport.textContent = '📤', 1500);
+                        // Toast notification
+                        const toast = document.createElement('div');
+                        toast.className = 'copy-toast';
+                        toast.textContent = label + ' — disalin ke clipboard';
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 2500);
                     });
                 } catch (e) {
                     alert('Export failed: ' + e.message);
@@ -510,6 +554,8 @@
         }
 
         if (btnImport && importModal) {
+            const btnMerge = document.getElementById('import-json-merge');
+
             btnImport.addEventListener('click', () => {
                 importInput.value = '';
                 importModal.classList.remove('hidden');
@@ -520,29 +566,125 @@
                 importModal.classList.add('hidden');
             });
 
-            importModal.addEventListener('click', (e) => {
-                if (e.target === importModal) importModal.classList.add('hidden');
-            });
 
-            importConfirm.addEventListener('click', () => {
+            // Parse and validate input JSON
+            function parseImportJSON() {
                 const raw = importInput.value.trim();
-                if (!raw) return;
+                if (!raw) return null;
                 try {
                     const state = JSON.parse(raw);
                     if (!state.deployed || !Array.isArray(state.deployed)) {
                         alert('Invalid circuit JSON: missing "deployed" array');
-                        return;
+                        return null;
                     }
                     if (!state.wires) state.wires = [];
                     if (!state.groups) state.groups = [];
-                    if (!state.counter) state.counter = state.deployed.length;
-                    CZ.applySnapshot(JSON.stringify(state));
-                    CZ.saveState();
-                    importModal.classList.add('hidden');
+                    return state;
                 } catch (e) {
                     alert('Invalid JSON: ' + e.message);
+                    return null;
                 }
+            }
+
+            // ── Replace mode: replaces entire circuit ──
+            importConfirm.addEventListener('click', () => {
+                const state = parseImportJSON();
+                if (!state) return;
+                if (!state.counter) state.counter = state.deployed.length;
+                CZ.applySnapshot(JSON.stringify(state));
+                CZ.saveState();
+                importModal.classList.add('hidden');
+
+                const toast = document.createElement('div');
+                toast.className = 'copy-toast';
+                toast.textContent = `🔄 Rangkaian diganti — ${state.deployed.length} komponen, ${state.wires.length} kabel`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2500);
             });
+
+            // ── Merge mode: adds to existing circuit ──
+            if (btnMerge) {
+                btnMerge.addEventListener('click', () => {
+                    const state = parseImportJSON();
+                    if (!state) return;
+
+                    // If workspace is empty, just apply directly
+                    if (CZ.deployed.length === 0) {
+                        if (!state.counter) state.counter = state.deployed.length;
+                        CZ.applySnapshot(JSON.stringify(state));
+                        CZ.saveState();
+                        importModal.classList.add('hidden');
+                        const toast = document.createElement('div');
+                        toast.className = 'copy-toast';
+                        toast.textContent = `➕ ${state.deployed.length} komponen, ${state.wires.length} kabel ditambahkan`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 2500);
+                        return;
+                    }
+
+                    // Calculate position offset to avoid overlap
+                    let maxX = -Infinity;
+                    CZ.deployed.forEach(c => {
+                        const tmpl = COMPONENTS.find(t => t.id === c.type);
+                        const w = tmpl ? tmpl.width : 80;
+                        maxX = Math.max(maxX, c.x + w);
+                    });
+                    let minImportX = Infinity;
+                    state.deployed.forEach(c => { minImportX = Math.min(minImportX, c.x); });
+                    const offsetX = (maxX + 50) - minImportX;
+
+                    // Remap IDs to avoid collisions
+                    const idMap = {};
+                    state.deployed.forEach(saved => {
+                        CZ.counter++;
+                        const newId = `comp_${CZ.counter}`;
+                        idMap[saved.id] = newId;
+                        saved.id = newId;
+                        saved.x += offsetX;
+                    });
+
+                    // Remap wire references
+                    state.wires.forEach(w => {
+                        w.c1 = idMap[w.c1] || w.c1;
+                        w.c2 = idMap[w.c2] || w.c2;
+                    });
+
+                    // Remap group member references
+                    state.groups.forEach(g => {
+                        g.members = g.members.map(m => idMap[m] || m);
+                        CZ.groupCounter++;
+                        g.id = `grp_${CZ.groupCounter}`;
+                    });
+
+                    // Build a snapshot that combines existing + new
+                    const combined = JSON.parse(CZ.getSnapshot());
+                    combined.deployed.push(...state.deployed);
+                    combined.wires.push(...state.wires);
+                    combined.groups.push(...state.groups);
+                    combined.counter = CZ.counter;
+
+                    // Apply combined state
+                    CZ.applySnapshot(JSON.stringify(combined));
+
+                    // Auto-select the newly added components
+                    CZ.selectedIds.clear();
+                    CZ.selectedHandles.clear();
+                    document.querySelectorAll('.board-component.selected').forEach(el => el.classList.remove('selected'));
+                    Object.values(idMap).forEach(newId => {
+                        CZ.selectedIds.add(newId);
+                        document.getElementById(newId)?.classList.add('selected');
+                    });
+
+                    CZ.saveState();
+                    importModal.classList.add('hidden');
+
+                    const toast = document.createElement('div');
+                    toast.className = 'copy-toast';
+                    toast.textContent = `➕ ${state.deployed.length} komponen, ${state.wires.length} kabel ditambahkan ke rangkaian`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 2500);
+                });
+            }
         }
     };
 

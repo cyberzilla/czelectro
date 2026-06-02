@@ -40,7 +40,7 @@
         workspaceMode: 'select',
 
         // ── Undo/Redo History ──
-        UNDO_MAX: 100,
+        UNDO_MAX: 30,
         undoStack: [],
         redoStack: [],
         isRestoring: false,
@@ -90,6 +90,7 @@
             deployed: CZ.deployed.map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y,
                 isBroken: c.isBroken, isClosed: c.isClosed,
+                isPoweredOff: c.isPoweredOff || false,
                 mmMode: c.mmMode || undefined,
                 currentResistance: c.currentResistance,
                 rotation: c.rotation || 0,
@@ -146,6 +147,7 @@
                 maxCurrent: tmpl.maxCurrent || null,
                 glowGradient: tmpl.glowGradient || null,
                 isClosed: saved.isClosed || false,
+                isPoweredOff: saved.isPoweredOff || false,
                 mmMode: saved.mmMode || 'V',
                 isBroken: saved.isBroken || false,
                 rotation: saved.rotation || 0,
@@ -172,6 +174,22 @@
                 if (comp.type === 'fuse') el.classList.add('fuse-blown');
             }
             if (comp.isClosed && comp.type === 'switch_toggle') el.classList.add('switch-closed');
+            // Restore MCB visual state
+            if (comp.type.startsWith('mcb_') && comp.isClosed === false) {
+                const toggle = el.querySelector('.mcb-toggle');
+                const label = el.querySelector('.mcb-label');
+                const indicator = el.querySelector('.mcb-indicator');
+                if (toggle) { toggle.setAttribute('fill', '#6b7280'); toggle.setAttribute('y', '35'); }
+                if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
+                if (indicator) indicator.setAttribute('fill', '#6b7280');
+            }
+            if (comp.isPoweredOff) {
+                el.classList.add('powered-off');
+                const pwrBadge = document.createElement('div');
+                pwrBadge.className = 'power-on-off-badge off';
+                pwrBadge.textContent = '⏻ OFF';
+                el.appendChild(pwrBadge);
+            }
             // Restore multimeter mode visual
             if (comp.type === 'voltmeter' && comp.mmMode && comp.mmMode !== 'V') {
                 const modeColor = { V: '#22c55e', A: '#ef4444', 'Ω': '#f59e0b' };
@@ -245,7 +263,12 @@
             CZ.redoStack = []; // any new action clears redo
             CZ.updateUndoRedoButtons();
             localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot());
-        } catch (e) { /* quota exceeded, silently fail */ }
+        } catch (e) {
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                console.warn('CZElectro: localStorage quota exceeded, state not persisted');
+                if (typeof CZ.showToast === 'function') CZ.showToast('⚠️ Storage penuh! State tidak tersimpan.', 'warning');
+            }
+        }
     };
 
     // Save view-only changes (zoom/pan) without pushing to undo stack
@@ -315,6 +338,7 @@
                     maxCurrent: tmpl.maxCurrent || null,
                     glowGradient: tmpl.glowGradient || null,
                     isClosed: saved.isClosed || false,
+                    isPoweredOff: saved.isPoweredOff || false,
                     mmMode: saved.mmMode || 'V',
                     isBroken: saved.isBroken || false,
                     rotation: saved.rotation || 0,
@@ -348,6 +372,22 @@
                 }
                 if (comp.isClosed && comp.type === 'switch_toggle') {
                     el.classList.add('switch-closed');
+                }
+                // Restore MCB visual state
+                if (comp.type.startsWith('mcb_') && comp.isClosed === false) {
+                    const toggle = el.querySelector('.mcb-toggle');
+                    const label = el.querySelector('.mcb-label');
+                    const indicator = el.querySelector('.mcb-indicator');
+                    if (toggle) { toggle.setAttribute('fill', '#6b7280'); toggle.setAttribute('y', '35'); }
+                    if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
+                    if (indicator) indicator.setAttribute('fill', '#6b7280');
+                }
+                if (comp.isPoweredOff) {
+                    el.classList.add('powered-off');
+                    const pwrBadge = document.createElement('div');
+                    pwrBadge.className = 'power-on-off-badge off';
+                    pwrBadge.textContent = '⏻ OFF';
+                    el.appendChild(pwrBadge);
                 }
                 // Restore multimeter mode visual
                 if (comp.type === 'voltmeter' && comp.mmMode && comp.mmMode !== 'V') {

@@ -110,7 +110,7 @@
         CZ.deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active');
+            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active');
             if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
             if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
             // Clear timer intervals only during full reset (not during timer-triggered re-eval)
@@ -122,7 +122,16 @@
             if (ring && !c.isBroken) { ring.style.fillOpacity = '0'; ring.style.fill = ''; }
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
-            el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status').forEach(b => b.remove());
+            el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status,.mcb-amp-badge,.mcb-trip-badge').forEach(b => b.remove());
+            // Reset meter disc
+            const mDiscGroup = el.querySelector('.meter-disc-group');
+            if (mDiscGroup) mDiscGroup.style.animation = 'none';
+            const mDisc = el.querySelector('.meter-disc');
+            if (mDisc) mDisc.setAttribute('stroke', '#94a3b8');
+            const mWatt = el.querySelector('.meter-watt');
+            if (mWatt) mWatt.textContent = '0W';
+            const mLed = el.querySelector('.meter-led');
+            if (mLed) mLed.setAttribute('fill', '#475569');
             // Voltmeter: only remove CSS class; preserve animation state for smooth transitions
             // (vm-badge is managed by the animation system, not by the general reset)
             const vmIndicator = el.querySelector('.vm-indicator');
@@ -151,6 +160,16 @@
             if (c.type === 'charge_controller' || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
                 const tmpl = COMPONENTS.find(t => t.id === c.type);
                 if (tmpl) c.currentResistance = tmpl.resistance;
+            }
+            // CC blocking diode: block reverse current when solar is not producing voltage
+            // Real charge controllers have built-in blocking diodes to prevent
+            // battery discharge through the solar panel at night
+            if (c.type === 'charge_controller') {
+                const hod = (CZ.simElapsedMin / 60) % 24;
+                const isSolarActive = hod >= 6 && hod < 18;
+                if (!isSolarActive) {
+                    c.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+                }
             }
         });
         CZ.SFX.stopAll();
@@ -301,6 +320,7 @@
 
         // ── PASS 1: Overcurrent — break WEAKEST component first (lowest maxCurrent) ──
         // Like real circuits: a 10A fuse blows before a 100A battery is damaged
+        // MCB also participates — it trips (resettable) instead of breaking (permanent)
         let anyBroken = false;
         const overcurrentList = [];
         result.components.forEach(cr => {
@@ -322,25 +342,72 @@
             if (c.type === 'voltmeter' && c.mmMode === 'A' && tmpl && tmpl.maxCurrent && amps > tmpl.maxCurrent) {
                 overcurrentList.push({ cr, maxCurrent: tmpl.maxCurrent, amps, isSource: false, isMeter: true });
             }
+            // MCB overcurrent: use equivalent AC current from total load power
+            // (MNA operates at DC battery voltage, so raw amps ≠ real AC amps)
+            // Real MCB: 16A × 230V = 3,680W max
+            if (tmpl && tmpl.isMCB && c.isClosed !== false && amps > EL.SIM.MIN_CURRENT) {
+                let mcbLoadW = 0;
+                result.components.forEach(other => {
+                    const ot = other.tmpl;
+                    if (!ot || other.comp.isBroken || other.comp.isPoweredOff) return;
+                    if (Math.abs(other.current) < EL.SIM.MIN_CURRENT) return;
+                    const isLoad = AC_TYPES.includes(other.comp.type) ||
+                        other.comp.type.startsWith('led_') || other.comp.type === 'bulb' ||
+                        other.comp.type === 'motor_dc' || other.comp.type === 'buzzer' ||
+                        other.comp.type === 'speaker';
+                    if (isLoad) {
+                        mcbLoadW += (ot.acOnly && ot.ratedPower) ? ot.ratedPower : (other.power || 0);
+                    }
+                });
+                const acAmps = mcbLoadW / 230; // equivalent AC current
+                if (acAmps > tmpl.maxCurrent) {
+                    overcurrentList.push({ cr, maxCurrent: tmpl.maxCurrent, amps: acAmps, isSource: false, isMCB: true });
+                }
+            }
         });
-        // Sort: weakest (lowest maxCurrent) first — that's what blows in reality
+        // Sort: weakest (lowest maxCurrent) first — that's what trips/blows in reality
         overcurrentList.sort((a, b) => a.maxCurrent - b.maxCurrent);
-        // Break only the weakest link
+        // Process the weakest link
         if (overcurrentList.length > 0) {
             const weak = overcurrentList[0];
             const c = weak.cr.comp, el = document.getElementById(c.id);
             if (el) {
                 anyBroken = true;
-                c.isBroken = true;
-                c.currentResistance = Infinity;
-                el.classList.add('comp-broken');
-                if (weak.isLed) el.classList.add('led-broken');
-                if (c.type === 'fuse') el.classList.add('fuse-blown');
-                if (c.type === 'motor_dc') { el.classList.remove('motor-active'); const s = el.querySelector('.motor-spin'); if (s) s.style.animation = 'none'; }
-                if (c.type === 'bulb') { const f = el.querySelector('.bulb-filament'); if (f) f.style.stroke = 'transparent'; }
-                CZ.spawnSparks(el);
-                CZ.showBurnNotice(el, weak.amps, weak.maxCurrent);
-                if (c.type === 'fuse') CZ.SFX.fuseSnap(); else CZ.SFX.burn();
+
+                if (weak.isMCB) {
+                    // MCB: clean TRIP (just flips off, no sparks/burn)
+                    // Real MCBs are magnetic/thermal breakers — they simply disconnect
+                    c.isClosed = false;
+                    c.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+                    el.classList.add('mcb-tripped');
+                    const toggle = el.querySelector('.mcb-toggle');
+                    if (toggle) { toggle.setAttribute('fill', '#ef4444'); toggle.setAttribute('y', '35'); }
+                    const label = el.querySelector('.mcb-label');
+                    if (label) { label.textContent = 'TRIP'; label.setAttribute('y', '54'); label.setAttribute('fill', '#fff'); }
+                    const indicator = el.querySelector('.mcb-indicator');
+                    if (indicator) indicator.setAttribute('fill', '#ef4444');
+                    CZ.SFX.switchClick();
+                    // Show trip info badge (not burn notice)
+                    let tripBadge = el.querySelector('.mcb-trip-badge');
+                    if (!tripBadge) {
+                        tripBadge = document.createElement('div');
+                        tripBadge.className = 'mcb-trip-badge';
+                        el.appendChild(tripBadge);
+                    }
+                    tripBadge.textContent = `⚡ TRIP ${weak.amps.toFixed(1)}A > ${weak.maxCurrent}A`;
+                } else {
+                    // Fuse / Component: BREAK (permanent damage)
+                    c.isBroken = true;
+                    c.currentResistance = Infinity;
+                    el.classList.add('comp-broken');
+                    if (weak.isLed) el.classList.add('led-broken');
+                    if (c.type === 'fuse') el.classList.add('fuse-blown');
+                    if (c.type === 'motor_dc') { el.classList.remove('motor-active'); const s = el.querySelector('.motor-spin'); if (s) s.style.animation = 'none'; }
+                    if (c.type === 'bulb') { const f = el.querySelector('.bulb-filament'); if (f) f.style.stroke = 'transparent'; }
+                    CZ.spawnSparks(el);
+                    CZ.showBurnNotice(el, weak.amps, weak.maxCurrent);
+                    if (c.type === 'fuse') CZ.SFX.fuseSnap(); else CZ.SFX.burn();
+                }
             }
         }
 
@@ -646,6 +713,71 @@
                     if (!pBadge) { pBadge = document.createElement('div'); pBadge.className = 'power-badge'; el.appendChild(pBadge); }
                     const fmt = EL.Units.autoFormat(pReal, 'W');
                     pBadge.textContent = `${fmt.val}${fmt.unit}`;
+                }
+
+                // ── kWh Meter — spinning disc + live watt display ──
+                if (tmpl && tmpl.isKwhMeter) {
+                    // Sum total power of all active LOADS in this circuit
+                    // (real meters measure downstream consumption, not own loss)
+                    let watts = 0;
+                    const meterHasCurrent = Math.abs(cr.current) > EL.SIM.MIN_CURRENT;
+                    if (meterHasCurrent) {
+                        result.components.forEach(other => {
+                            const ot = other.tmpl;
+                            if (!ot || other.comp.isBroken || other.comp.isPoweredOff) return;
+                            if (Math.abs(other.current) < EL.SIM.MIN_CURRENT) return;
+                            const isLoad = AC_TYPES.includes(other.comp.type) ||
+                                other.comp.type.startsWith('led_') || other.comp.type === 'bulb' ||
+                                other.comp.type === 'motor_dc' || other.comp.type === 'buzzer' ||
+                                other.comp.type === 'speaker';
+                            if (isLoad) {
+                                watts += (ot.acOnly && ot.ratedPower) ? ot.ratedPower : (other.power || 0);
+                            }
+                        });
+                    }
+                    const wattFmt = EL.Units.autoFormat(watts, 'W');
+                    const wattLabel = el.querySelector('.meter-watt');
+                    if (wattLabel) wattLabel.textContent = `${wattFmt.val}${wattFmt.unit}`;
+                    // Spinning disc group — speed proportional to power
+                    const discGroup = el.querySelector('.meter-disc-group');
+                    const disc = el.querySelector('.meter-disc');
+                    if (watts > 1) {
+                        const rpm = Math.min(watts / 50, 10); // ~1 rpm per 50W, max 10
+                        const duration = Math.max(0.3, 6 / rpm);
+                        if (discGroup) discGroup.style.animation = `meterSpin ${duration}s linear infinite`;
+                        if (disc) disc.setAttribute('stroke', '#60a5fa');
+                        el.classList.add('meter-active');
+                    } else {
+                        if (discGroup) discGroup.style.animation = 'none';
+                        if (disc) disc.setAttribute('stroke', '#94a3b8');
+                        el.classList.remove('meter-active');
+                    }
+                    // Accumulate kWh (runs every evaluateCircuit call during sim)
+                    if (c._kwhTotal === undefined) c._kwhTotal = 0;
+                    if (watts > 0) {
+                        const deltaH = (CZ.simSpeed || 1) / 60; // sim minutes → hours
+                        c._kwhTotal += (watts / 1000) * deltaH;
+                    }
+                    const kwhLabel = el.querySelector('.kwh-reading');
+                    if (kwhLabel) kwhLabel.textContent = c._kwhTotal.toFixed(2);
+                    // LED indicator
+                    const led = el.querySelector('.meter-led');
+                    if (led) led.setAttribute('fill', watts > 1 ? '#22c55e' : '#475569');
+                }
+
+                // ── MCB active indicator ──
+                if (tmpl && tmpl.isMCB && c.isClosed !== false) {
+                    const amps = Math.abs(cr.current);
+                    if (amps > EL.SIM.MIN_CURRENT) {
+                        el.classList.add('mcb-active');
+                        const indicator = el.querySelector('.mcb-indicator');
+                        if (indicator) indicator.setAttribute('fill', '#22c55e');
+                        // Show current badge
+                        let mcbBadge = el.querySelector('.mcb-amp-badge');
+                        if (!mcbBadge) { mcbBadge = document.createElement('div'); mcbBadge.className = 'power-badge'; mcbBadge.style.bottom = '-20px'; el.appendChild(mcbBadge); }
+                        const ampFmt = EL.Units.autoFormat(amps, 'A');
+                        mcbBadge.textContent = `${ampFmt.val}${ampFmt.unit}`;
+                    }
                 }
             });
         }

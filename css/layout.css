@@ -1437,11 +1437,20 @@
     color: var(--text-primary, #e2e8f0);
 }
 .import-btn-confirm {
+    background: rgba(239, 68, 68, 0.8);
+    color: #fff;
+    border-color: rgba(239, 68, 68, 0.6);
+}
+.import-btn-confirm:hover {
+    filter: brightness(1.15);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+}
+.import-btn-merge {
     background: var(--accent, #4ade80);
     color: #000;
     border-color: var(--accent, #4ade80);
 }
-.import-btn-confirm:hover {
+.import-btn-merge:hover {
     filter: brightness(1.15);
     box-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
 }
