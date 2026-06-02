@@ -49,6 +49,12 @@
         const postSolarFactor = CZ.getSolarFactor(postHour);
         const postIsDaytime = postSolarFactor > 0;
 
+        // ── EVALUATE CIRCUIT FIRST ──
+        // This detects overcurrent (breaks components) BEFORE draining batteries.
+        // Without this, a shorted motor could drain batteries for an entire tick
+        // before being detected and tripped offline.
+        CZ.evaluateCircuit();
+
         const loopsDrain = window._activeLoops || [];
         let anyDrained = false;
         loopsDrain.forEach(loop => {
@@ -169,7 +175,6 @@
         }
 
         if (anyDrained) { CZ.saveState(); }
-        CZ.evaluateCircuit();
         const postSolarW = CZ.simTotalSrcW * postSolarFactor;
         CZ.updateSimPanel(postSolarW, totalLoadW, batteries, hour, postIsDaytime, postSolarFactor, noPower);
     };

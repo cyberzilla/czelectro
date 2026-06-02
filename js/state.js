@@ -177,10 +177,17 @@
                 tEl.dataset.label = term.label || '';
                 el.appendChild(tEl);
             });
+            // Apply rotation FIRST — before any visual classes (broken/active/etc.)
+            // This prevents broken-effect animations from flashing at 0° on restore
+            if (comp.rotation) {
+                el.style.transform = `rotate(${comp.rotation}deg)`;
+            }
             if (comp.isBroken) {
-                el.classList.add('comp-broken');
+                el.classList.add('comp-broken', 'restoring');
                 if (comp.type.startsWith('led_') || comp.type === 'bulb') el.classList.add('led-broken');
                 if (comp.type === 'fuse') el.classList.add('fuse-blown');
+                // Remove restoring flag after paint so future breaks still animate
+                requestAnimationFrame(() => el.classList.remove('restoring'));
             }
             if (comp.isClosed && comp.type === 'switch_toggle') el.classList.add('switch-closed');
             // Restore MCB visual state
@@ -232,9 +239,6 @@
                 });
                 const unt = el.querySelector('.vm-unit');
                 if (unt) { unt.textContent = m; unt.setAttribute('fill', modeColor[m]); }
-            }
-            if (comp.rotation) {
-                el.style.transform = `rotate(${comp.rotation}deg)`;
             }
             // Mark grouped components
             const grp = CZ.groups.find(g => g.members.includes(saved.id));
@@ -396,11 +400,16 @@
                     el.appendChild(tEl);
                 });
 
+                // Apply rotation FIRST — before any visual classes
+                if (comp.rotation) {
+                    el.style.transform = `rotate(${comp.rotation}deg)`;
+                }
                 // Restore visual states
                 if (comp.isBroken) {
-                    el.classList.add('comp-broken');
+                    el.classList.add('comp-broken', 'restoring');
                     if (comp.type.startsWith('led_') || comp.type === 'bulb') el.classList.add('led-broken');
                     if (comp.type === 'fuse') el.classList.add('fuse-blown');
+                    requestAnimationFrame(() => el.classList.remove('restoring'));
                 }
                 if (comp.isClosed && comp.type === 'switch_toggle') {
                     el.classList.add('switch-closed');
@@ -454,9 +463,6 @@
                     });
                     const unt = el.querySelector('.vm-unit');
                     if (unt) { unt.textContent = m; unt.setAttribute('fill', modeColor[m]); }
-                }
-                if (comp.rotation) {
-                    el.style.transform = `rotate(${comp.rotation}deg)`;
                 }
                 // Mark grouped components
                 const grp = CZ.groups.find(g => g.members.includes(saved.id));
