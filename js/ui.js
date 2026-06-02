@@ -386,14 +386,24 @@
         document.addEventListener('sim-reset', () => CZ.resetBatteries());
         document.addEventListener('sim-jump', (e) => {
             const currentDay = Math.floor(CZ.simElapsedMin / 1440);
+            const currentHourMin = CZ.simElapsedMin % 1440; // minutes within current day
             if (e.detail === 'day') {
-                CZ.simElapsedMin = currentDay * 1440 + 6 * 60;
+                const targetMin = 6 * 60; // 06:00
+                // If already past 06:00, jump to next day's 06:00
+                CZ.simElapsedMin = currentHourMin >= targetMin
+                    ? (currentDay + 1) * 1440 + targetMin
+                    : currentDay * 1440 + targetMin;
             } else {
-                CZ.simElapsedMin = currentDay * 1440 + 18 * 60;
+                const targetMin = 18 * 60; // 18:00
+                // If already past 18:00, jump to next day's 18:00
+                CZ.simElapsedMin = currentHourMin >= targetMin
+                    ? (currentDay + 1) * 1440 + targetMin
+                    : currentDay * 1440 + targetMin;
             }
             CZ.saveSimState();
             CZ.evaluateCircuit();
-            if (CZ.simSpeed > 0) CZ.simTick();
+            // Always update sim panel after jumping (even when paused)
+            CZ.simTick();
         });
 
         // ── Toolbar drag-to-scroll (desktop) ──

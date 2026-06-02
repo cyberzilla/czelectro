@@ -50,6 +50,40 @@
             comp.mmMode = 'V';
         }
         CZ.deployed.push(comp);
+        // Toggleable output components start OFF (like real appliances)
+        const TOGGLEABLE_TYPES = [
+            'tv_led','fridge','pump_125','pump_250','lamp_30w',
+            'iron','blender','ricecooker','ac_05pk','ac_1pk',
+            'computer','motor_dc','buzzer','speaker','bulb',
+            'led_red','led_green','led_blue','led_white','led_rgb'
+        ];
+        if (TOGGLEABLE_TYPES.includes(comp.type)) {
+            comp.isPoweredOff = true;
+            comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+            el.classList.add('powered-off');
+            const pwrBadge = document.createElement('div');
+            pwrBadge.className = 'power-on-off-badge off';
+            pwrBadge.textContent = '⏻ OFF';
+            el.appendChild(pwrBadge);
+        }
+        // PLN source also starts OFF
+        if (comp.type === 'pln_source') {
+            comp.isPoweredOff = true;
+            comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+            const plnLed = el.querySelector('.pln-led');
+            const plnVolt = el.querySelector('.pln-voltage');
+            if (plnLed) plnLed.setAttribute('fill', '#ef4444');
+            if (plnVolt) { plnVolt.textContent = 'OFF'; plnVolt.setAttribute('fill', '#ef4444'); }
+            const pwrBadge = document.createElement('div');
+            pwrBadge.className = 'power-on-off-badge off';
+            pwrBadge.textContent = '⏻ OFF';
+            el.appendChild(pwrBadge);
+        }
+        // MCB starts ON (closed circuit) — matches SVG default visual
+        if (comp.type.startsWith('mcb_')) {
+            comp.isClosed = true;
+            comp.currentResistance = tmplCap ? tmplCap.resistance : 0.01;
+        }
         CZ.updateStatus();
         return comp;
     };
@@ -75,6 +109,12 @@
             if (comp._timerInterval) { clearInterval(comp._timerInterval); comp._timerInterval = null; }
             comp.isClosed = false;
             comp.currentResistance = tmpl.resistance;
+        }
+        // MCB resets to ON (closed)
+        if (comp.type.startsWith('mcb_')) {
+            comp.isClosed = true;
+            comp.currentResistance = tmpl.resistance;
+            el.classList.remove('mcb-tripped');
         }
 
         // Restore visual — re-inject SVG
@@ -116,12 +156,22 @@
 
         // Use cumulative rotation (always +90°) so CSS transition never goes backwards
         comp.rotation = (comp.rotation || 0) + 90;
+
+        // Disable CSS transition so rotation + wire render happen simultaneously
+        el.style.transition = 'none';
         el.style.transform = `rotate(${comp.rotation}deg)`;
+        el.offsetHeight; // force reflow — apply rotation instantly
+
+        // Render wires immediately with new rotation value
+        CZ.renderWires();
+        CZ.evaluateCircuit();
+
+        // Re-enable transition for future interactions (drag, etc.)
+        el.style.transition = '';
 
         const displayAngle = ((comp.rotation % 360) + 360) % 360;
 
-        // Normalize after CSS transition completes to prevent unbounded growth
-        // (270→360 animates forward, then silently resets to 0 with no visual change)
+        // Normalize to prevent unbounded growth
         clearTimeout(comp._rotNormTimer);
         comp._rotNormTimer = setTimeout(() => {
             comp.rotation = displayAngle;
@@ -130,10 +180,7 @@
             el.offsetHeight; // force reflow
             el.style.transition = '';
             delete comp._rotNormTimer;
-        }, 180);
-
-        CZ.renderWires();
-        CZ.evaluateCircuit();
+        }, 50);
     };
 
     // ── Helper: immediately finalize any pending group rotation animation ──

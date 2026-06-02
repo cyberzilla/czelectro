@@ -496,6 +496,15 @@
                         if (plnLed) plnLed.setAttribute('fill', '#22c55e');
                         if (plnVolt) { plnVolt.textContent = '220V'; plnVolt.setAttribute('fill', '#22c55e'); }
                     }
+                    // Power badge (consistent with other toggleable components)
+                    let pwrBadge = CZ.dragEl.querySelector('.power-on-off-badge');
+                    if (!pwrBadge) {
+                        pwrBadge = document.createElement('div');
+                        pwrBadge.className = 'power-on-off-badge';
+                        CZ.dragEl.appendChild(pwrBadge);
+                    }
+                    pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
+                    pwrBadge.classList.toggle('off', comp.isPoweredOff);
                     CZ.SFX.switchClick();
                     CZ.evaluateCircuit();
                     CZ.saveState();
@@ -832,6 +841,16 @@
                 }
             }
 
+            // kWh Meter options (copy reading / reset counter)
+            if (!isMulti && comp) {
+                const kwhTmpl = COMPONENTS.find(t => t.id === comp.type);
+                if (kwhTmpl && kwhTmpl.isKwhMeter) {
+                    const kwh = (comp._kwhTotal || 0).toFixed(2);
+                    menuItems += `<div class="ctx-item" data-action="copykwh">📋 ${CZ.t('ctxCopyKwh')} (${kwh})</div>`;
+                    menuItems += `<div class="ctx-item" data-action="resetkwh">🔄 ${CZ.t('ctxResetKwh')}</div>`;
+                }
+            }
+
             menuItems += `<div class="ctx-item" data-action="duplicate">📋 ${CZ.t('ctxDuplicate')}${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="rotate">🔄 ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="copytext">📝 ${CZ.t('ctxCopyText')}</div>`;
@@ -1004,6 +1023,16 @@
                     });
                     CZ.evaluateCircuit();
                     if (CZ.updateBatteryVisuals) CZ.updateBatteryVisuals();
+                    CZ.saveState();
+                } else if (action === 'copykwh' && comp) {
+                    const kwh = (comp._kwhTotal || 0).toFixed(2);
+                    navigator.clipboard.writeText(kwh + ' kWh').then(() => {
+                        if (typeof CZ.showToast === 'function') CZ.showToast(`📋 ${kwh} kWh`, 'success');
+                    }).catch(() => {});
+                } else if (action === 'resetkwh' && comp) {
+                    comp._kwhTotal = 0;
+                    const kwhLabel = document.getElementById(comp.id)?.querySelector('.kwh-reading');
+                    if (kwhLabel) kwhLabel.textContent = '000.00';
                     CZ.saveState();
                 } else if (action === 'rotate') {
                     CZ.rotateSelection();

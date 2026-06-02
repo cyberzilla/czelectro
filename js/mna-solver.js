@@ -254,14 +254,51 @@
                 if (n3 < 0) return;
                 const mode = c.atsMode || 'PLN_FIRST';
 
-                // Check PLN availability
-                const plnActive = CZ.deployed.some(pc => {
+                // BFS: trace wires from an ATS terminal to find connected sources
+                // Traverses through passive components but stops at grounds & ATS itself
+                function hasSourceViaWire(atsId, termIdx, sourceCheck) {
+                    const visited = new Set();
+                    const queue = [{ cid: atsId, ti: termIdx }];
+                    while (queue.length) {
+                        const { cid, ti } = queue.shift();
+                        const key = cid + ':' + ti;
+                        if (visited.has(key)) continue;
+                        visited.add(key);
+                        // Check if this component is the source we're looking for
+                        if (cid !== atsId) {
+                            const comp = CZ.deployed.find(x => x.id === cid);
+                            if (comp && sourceCheck(comp)) return true;
+                        }
+                        // Follow wires from this terminal
+                        CZ.wires.forEach(w => {
+                            let nextCid, nextTi;
+                            if (w.c1 === cid && w.i1 === ti) { nextCid = w.c2; nextTi = w.i2; }
+                            else if (w.c2 === cid && w.i2 === ti) { nextCid = w.c1; nextTi = w.i1; }
+                            else return;
+                            if (visited.has(nextCid + ':' + nextTi)) return;
+                            queue.push({ cid: nextCid, ti: nextTi });
+                            // Traverse through component to its other terminals
+                            // (skip ground & ATS to avoid cross-contamination)
+                            const nc = CZ.deployed.find(x => x.id === nextCid);
+                            const nt = nc ? COMPONENTS.find(t => t.id === nc.type) : null;
+                            if (nt && nt.terminals && !nt.isGround && !nt.isATS) {
+                                nt.terminals.forEach((_, i) => {
+                                    if (i !== nextTi) queue.push({ cid: nextCid, ti: i });
+                                });
+                            }
+                        });
+                    }
+                    return false;
+                }
+
+                // Check PLN: trace from ATS terminal 0 to find active PLN source
+                const plnActive = hasSourceViaWire(c.id, 0, pc => {
                     const pt = COMPONENTS.find(t => t.id === pc.type);
                     return pt && pt.isPLN && !pc.isPoweredOff && !pc.isBroken;
                 });
 
-                // Check PLTS availability (batteries have charge)
-                const pltsActive = CZ.deployed.some(pc => {
+                // Check PLTS: trace from ATS terminal 1 to find charged battery/inverter
+                const pltsActive = hasSourceViaWire(c.id, 1, pc => {
                     if (pc.type !== 'battery_32140' && !pc.type.includes('lifepo4') && !pc.type.includes('plts')) return false;
                     if (pc.isBroken) return false;
                     const minLvl = CZ.getBattDeadLevel ? CZ.getBattDeadLevel(pc) : 0;
@@ -271,10 +308,10 @@
                 // Determine active source based on mode
                 let usePLN;
                 if (mode === 'PLTS_FIRST') {
-                    // PLTS priority: use PLTS if batteries alive, PLN as backup
+                    // PLTS priority: use PLTS if connected & batteries alive, PLN as backup
                     usePLN = !pltsActive && plnActive;
                 } else {
-                    // PLN priority (default): use PLN if available, PLTS as backup
+                    // PLN priority (default): use PLN if connected & available, PLTS as backup
                     usePLN = plnActive;
                 }
 
@@ -467,14 +504,14 @@
                         if (cr.comp.type.startsWith('solar_')) hasSolar = true;
                         if (cr.tmpl.ratedPower && !cr.comp.type.startsWith('battery')) totalSrcW += cr.tmpl.ratedPower;
                     }
-                    if (cr.comp.type === 'charge_controller') hasCC = true;
+                    if (cr.tmpl.isChargeController) hasCC = true;
                     if (cr.tmpl.isInverter) hasInv = true;
                 });
 
                 // Pass 2: compute load power (needs hasInv to be resolved first)
                 group.forEach(cr => {
                     if (!isSource(cr.comp) && Math.abs(cr.current) > EL.SIM.MIN_CURRENT &&
-                        cr.comp.type !== 'charge_controller' && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
+                        !cr.tmpl.isChargeController && !cr.tmpl.isInverter && cr.comp.type !== 'switch_toggle') {
                         // AC loads through inverter: use ratedPower (nameplate watts)
                         // because MNA computes V²/R at DC battery voltage (~51V),
                         // not at the 220V AC the inverter provides.

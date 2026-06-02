@@ -516,8 +516,8 @@
 
 /* ── Component Power On/Off Toggle ── */
 .board-component.powered-off {
-    opacity: 0.4;
-    filter: grayscale(0.7) brightness(0.6);
+    opacity: 1;
+    filter: none;
     transition: opacity 0.3s, filter 0.3s;
 }
 

@@ -158,14 +158,14 @@
             const pumpImp = el.querySelector('.pump-impeller');
             if (pumpImp) pumpImp.style.animation = 'none';
             // Reset charge controller / step-down
-            if (c.type === 'charge_controller' || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            if ((tmpl && tmpl.isChargeController) || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
                 if (tmpl) c.currentResistance = tmpl.resistance;
             }
             // CC blocking diode: block reverse current when solar is not producing voltage
             // Real charge controllers have built-in blocking diodes to prevent
             // battery discharge through the solar panel at night
-            if (c.type === 'charge_controller') {
+            if (tmpl && tmpl.isChargeController) {
                 const hod = (CZ.simElapsedMin / 60) % 24;
                 const isSolarActive = hod >= 6 && hod < 18;
                 if (!isSolarActive) {
@@ -188,7 +188,7 @@
                 if (!tmpl || c.isBroken) return;
                 const amps = Math.abs(cr.current);
                 // Charge Controller
-                if (c.type === 'charge_controller' && tmpl.maxOutputCurrent && amps > tmpl.maxOutputCurrent) {
+                if (tmpl.isChargeController && tmpl.maxOutputCurrent && amps > tmpl.maxOutputCurrent) {
                     const hasSolar = result.components.some(x => x.comp.type.startsWith('solar_') && Math.abs(x.current) > EL.SIM.MIN_CURRENT);
                     if (hasSolar) {
                         // Increase resistance to limit current to maxOutputCurrent
@@ -330,7 +330,7 @@
             const t = cr.tmpl;
             if (!t) return;
             if (isSource(cr.comp) && t.ratedPower && !cr.comp.type.startsWith('battery')) srcPower += t.ratedPower;
-            else if (t.ratedPower && !isSource(cr.comp) && cr.comp.type !== 'charge_controller' && !isInverterType(cr.comp.type) && cr.comp.type !== 'switch_toggle') loadPower += t.ratedPower;
+            else if (t.ratedPower && !isSource(cr.comp) && !t.isChargeController && !isInverterType(cr.comp.type) && cr.comp.type !== 'switch_toggle') loadPower += t.ratedPower;
         });
 
         // ── PASS 1: Overcurrent — break WEAKEST component first (lowest maxCurrent) ──
@@ -553,7 +553,7 @@
                 }
 
                 // Power insufficient check
-                if (tmpl && tmpl.ratedPower && !isSource(c) && c.type !== 'charge_controller' && !isInverterType(c.type) && c.type !== 'switch_toggle') {
+                if (tmpl && tmpl.ratedPower && !isSource(c) && !tmpl.isChargeController && !isInverterType(c.type) && c.type !== 'switch_toggle') {
                     if (srcPower > 0 && loadPower > srcPower) {
                         el.classList.add('ac-no-inverter');
                         let lpBadge = el.querySelector('.no-ac-badge');
@@ -695,7 +695,7 @@
                 if (c.type === 'pump_125' || c.type === 'pump_250') { el.classList.add('ac-active'); const imp = el.querySelector('.pump-impeller'); if (imp) imp.style.animation = 'spin 0.5s linear infinite'; const i = el.querySelector('.pump-indicator'); if (i) i.style.fill = '#22c55e'; }
 
                 // ── Charge Controller badge ──
-                if (c.type === 'charge_controller') {
+                if (tmpl && tmpl.isChargeController) {
                     const isProtecting = protectedComps.has(c.id);
                     const hasBattery = result.components.some(x => x.comp.type.startsWith('battery') && Math.abs(x.current) > EL.SIM.MIN_CURRENT);
                     el.classList.add('scc-active');

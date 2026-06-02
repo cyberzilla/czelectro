@@ -123,7 +123,10 @@
 
                 // Check if any solar panel shares network with orphan batteries
                 const solarPanels = CZ.deployed.filter(c => c.type.startsWith('solar_'));
-                const hasCCinNetwork = CZ.deployed.some(c => c.type === 'charge_controller');
+                const hasCCinNetwork = CZ.deployed.some(c => {
+                    const t = COMPONENTS.find(x => x.id === c.type);
+                    return t && t.isChargeController;
+                });
 
                 orphanBatts.forEach(bat => {
                     const batRoot = ufFindSim(bat.id);

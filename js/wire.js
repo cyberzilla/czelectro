@@ -48,19 +48,31 @@
         const term = comp.terminals[termIdx];
         const cx = tmpl.width / 2, cy = tmpl.height / 2;
         const tx = term.x - cx, ty = term.y - cy;
-        let dir;
+        let dx, dy;
         if (Math.abs(tx) > Math.abs(ty)) {
-            dir = tx > 0 ? { dx: 1, dy: 0 } : { dx: -1, dy: 0 };
+            dx = tx > 0 ? 1 : -1; dy = 0;
         } else {
-            dir = ty > 0 ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 };
+            dx = 0; dy = ty > 0 ? 1 : -1;
         }
-        // Rotate direction vector if component is rotated
+        // Rotate direction vector using exact values (same as rotatePoint)
         if (comp.rotation) {
-            const rad = comp.rotation * Math.PI / 180;
-            const cos = Math.cos(rad), sin = Math.sin(rad);
-            dir = { dx: Math.round(dir.dx * cos - dir.dy * sin), dy: Math.round(dir.dx * sin + dir.dy * cos) };
+            const angle = ((comp.rotation % 360) + 360) % 360;
+            let cos, sin;
+            switch (angle) {
+                case 0:   cos = 1;  sin = 0;  break;
+                case 90:  cos = 0;  sin = 1;  break;
+                case 180: cos = -1; sin = 0;  break;
+                case 270: cos = 0;  sin = -1; break;
+                default:
+                    const rad = angle * Math.PI / 180;
+                    cos = Math.cos(rad); sin = Math.sin(rad);
+            }
+            const ndx = dx * cos - dy * sin;
+            const ndy = dx * sin + dy * cos;
+            dx = Math.round(ndx);
+            dy = Math.round(ndy);
         }
-        return dir;
+        return { dx, dy };
     };
 
     // ── Default control points ──
@@ -363,6 +375,13 @@
         // Find the existing SVG group by wire index
         const g = CZ.wiresG.querySelector(`g.wire-group[data-widx="${idx}"]`);
         if (!g) return;
+
+        // Clear any lingering CSS transforms from group rotation animation
+        if (g.style.transform) {
+            g.style.transform = '';
+            g.style.transformOrigin = '';
+            g.style.transition = '';
+        }
 
         // Update path data in-place — no DOM destruction
         const hit = g.querySelector('.wire-hit-area');

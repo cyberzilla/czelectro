@@ -96,7 +96,8 @@
                 rotation: c.rotation || 0,
                 batteryLevel: c.batteryLevel,
                 batteryCapacity: c.batteryCapacity,
-                atsMode: c.atsMode || undefined
+                atsMode: c.atsMode || undefined,
+                kwhTotal: c._kwhTotal || undefined
             })),
             wires: CZ.wires.map(w => ({
                 c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
@@ -160,6 +161,12 @@
                 comp.batteryCapacity = tmpl.capacityWh;
                 comp.batteryLevel = saved.batteryLevel ?? tmpl.capacityWh;
             }
+            // Restore kWh meter accumulated reading
+            if (saved.kwhTotal) {
+                comp._kwhTotal = saved.kwhTotal;
+                const kwhLabel = el.querySelector('.kwh-reading');
+                if (kwhLabel) kwhLabel.textContent = saved.kwhTotal.toFixed(2);
+            }
             comp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
                 tEl.className = 'terminal';
@@ -185,11 +192,27 @@
                 if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
                 if (indicator) indicator.setAttribute('fill', '#6b7280');
             }
-            if (comp.isPoweredOff && comp.type !== 'pln_source') {
-                el.classList.add('powered-off');
+            // Restore power on/off badge for all toggleable components
+            const RESTORE_TOGGLEABLE = [
+                'tv_led','fridge','pump_125','pump_250','lamp_30w',
+                'iron','blender','ricecooker','ac_05pk','ac_1pk',
+                'computer','motor_dc','buzzer','speaker','bulb',
+                'led_red','led_green','led_blue','led_white','led_rgb',
+                'pln_source'
+            ];
+            if (RESTORE_TOGGLEABLE.includes(comp.type)) {
+                if (comp.isPoweredOff) {
+                    el.classList.add('powered-off');
+                    if (comp.type === 'pln_source') {
+                        const plnLed = el.querySelector('.pln-led');
+                        const plnVolt = el.querySelector('.pln-voltage');
+                        if (plnLed) plnLed.setAttribute('fill', '#ef4444');
+                        if (plnVolt) { plnVolt.textContent = 'OFF'; plnVolt.setAttribute('fill', '#ef4444'); }
+                    }
+                }
                 const pwrBadge = document.createElement('div');
-                pwrBadge.className = 'power-on-off-badge off';
-                pwrBadge.textContent = '⏻ OFF';
+                pwrBadge.className = 'power-on-off-badge' + (comp.isPoweredOff ? ' off' : '');
+                pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
                 el.appendChild(pwrBadge);
             }
             // Restore multimeter mode visual
@@ -354,6 +377,12 @@
                     comp.batteryCapacity = tmpl.capacityWh;
                     comp.batteryLevel = saved.batteryLevel ?? tmpl.capacityWh;
                 }
+                // Restore kWh meter accumulated reading
+                if (saved.kwhTotal) {
+                    comp._kwhTotal = saved.kwhTotal;
+                    const kwhLabel = el.querySelector('.kwh-reading');
+                    if (kwhLabel) kwhLabel.textContent = saved.kwhTotal.toFixed(2);
+                }
 
                 // Re-create terminals
                 comp.terminals.forEach((term, idx) => {
@@ -385,11 +414,27 @@
                     if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
                     if (indicator) indicator.setAttribute('fill', '#6b7280');
                 }
-                if (comp.isPoweredOff && comp.type !== 'pln_source') {
-                    el.classList.add('powered-off');
+                // Restore power on/off badge for all toggleable components
+                const RESTORE_TOGGLEABLE2 = [
+                    'tv_led','fridge','pump_125','pump_250','lamp_30w',
+                    'iron','blender','ricecooker','ac_05pk','ac_1pk',
+                    'computer','motor_dc','buzzer','speaker','bulb',
+                    'led_red','led_green','led_blue','led_white','led_rgb',
+                    'pln_source'
+                ];
+                if (RESTORE_TOGGLEABLE2.includes(comp.type)) {
+                    if (comp.isPoweredOff) {
+                        el.classList.add('powered-off');
+                        if (comp.type === 'pln_source') {
+                            const plnLed = el.querySelector('.pln-led');
+                            const plnVolt = el.querySelector('.pln-voltage');
+                            if (plnLed) plnLed.setAttribute('fill', '#ef4444');
+                            if (plnVolt) { plnVolt.textContent = 'OFF'; plnVolt.setAttribute('fill', '#ef4444'); }
+                        }
+                    }
                     const pwrBadge = document.createElement('div');
-                    pwrBadge.className = 'power-on-off-badge off';
-                    pwrBadge.textContent = '⏻ OFF';
+                    pwrBadge.className = 'power-on-off-badge' + (comp.isPoweredOff ? ' off' : '');
+                    pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
                     el.appendChild(pwrBadge);
                 }
                 // Restore multimeter mode visual
