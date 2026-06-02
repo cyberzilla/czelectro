@@ -185,7 +185,7 @@
                 if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
                 if (indicator) indicator.setAttribute('fill', '#6b7280');
             }
-            if (comp.isPoweredOff) {
+            if (comp.isPoweredOff && comp.type !== 'pln_source') {
                 el.classList.add('powered-off');
                 const pwrBadge = document.createElement('div');
                 pwrBadge.className = 'power-on-off-badge off';
@@ -385,7 +385,7 @@
                     if (label) { label.textContent = 'OFF'; label.setAttribute('y', '54'); }
                     if (indicator) indicator.setAttribute('fill', '#6b7280');
                 }
-                if (comp.isPoweredOff) {
+                if (comp.isPoweredOff && comp.type !== 'pln_source') {
                     el.classList.add('powered-off');
                     const pwrBadge = document.createElement('div');
                     pwrBadge.className = 'power-on-off-badge off';
