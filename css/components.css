@@ -1077,6 +1077,23 @@
     50% { fill: #15803d; filter: none; }
 }
 
+/* ── Arduino — flashed indicator (code stored in chip) ── */
+.board-component.arduino-flashed .arduino-indicator {
+    fill: #f59e0b;
+    filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.8));
+}
+
+/* Running = green blink (overrides orange) */
+.board-component.arduino-running .arduino-indicator {
+    fill: #22c55e;
+    filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.9));
+    animation: arduinoLedBlink 1s ease-in-out infinite;
+}
+
+.board-component.arduino-running {
+    filter: drop-shadow(0 0 8px rgba(0, 150, 136, 0.35));
+}
+
 /* ── Transformer — active hum glow ── */
 .board-component.trafo-active {
     filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.35));
@@ -1160,3 +1177,112 @@
 .board-component.tblock-active {
     filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.3));
 }
+
+/* ══════════════════════════════════════════════════ */
+/* ── Arduino IDE Modal ── */
+/* ══════════════════════════════════════════════════ */
+#arduino-ide-modal {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+}
+.ard-ide-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+}
+.ard-ide-container {
+    position: relative; z-index: 1;
+    width: 820px; max-width: 95vw; max-height: 90vh;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 12px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(14,116,144,0.15);
+    animation: ard-modal-in 0.25s ease-out;
+}
+@keyframes ard-modal-in {
+    from { transform: scale(0.92) translateY(20px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.ard-ide-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: #161b22; border-bottom: 1px solid #30363d;
+    gap: 10px; flex-wrap: wrap;
+}
+.ard-ide-title {
+    display: flex; align-items: center; gap: 8px;
+    font: 700 14px 'Inter', sans-serif; color: #e6edf3;
+}
+.ard-ide-icon { font-size: 18px; }
+.ard-ide-comp-id {
+    font: 500 10px monospace; color: #8b949e;
+    background: #21262d; padding: 2px 6px; border-radius: 4px;
+}
+.ard-ide-actions {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.ard-preset-select {
+    font: 500 11px 'Inter', sans-serif; color: #c9d1d9;
+    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+    padding: 5px 8px; cursor: pointer; outline: none;
+    max-width: 180px;
+}
+.ard-preset-select:hover { border-color: #58a6ff; }
+.ard-btn {
+    font: 600 11px 'Inter', sans-serif; border: none; border-radius: 6px;
+    padding: 6px 14px; cursor: pointer; transition: all 0.2s;
+}
+.ard-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ard-btn-run { background: #238636; color: #fff; }
+.ard-btn-run:hover:not(:disabled) { background: #2ea043; }
+.ard-btn-stop { background: #da3633; color: #fff; }
+.ard-btn-stop:hover:not(:disabled) { background: #f85149; }
+.ard-btn-close {
+    background: transparent; color: #8b949e; font-size: 16px;
+    padding: 4px 8px; border: 1px solid #30363d; border-radius: 6px;
+}
+.ard-btn-close:hover { color: #f85149; border-color: #f85149; }
+.ard-ide-body {
+    display: flex; flex: 1; min-height: 0; overflow: hidden;
+}
+.ard-ide-editor-pane {
+    flex: 1.6; display: flex; flex-direction: column;
+    border-right: 1px solid #30363d;
+}
+.ard-ide-serial-pane {
+    flex: 1; display: flex; flex-direction: column;
+}
+.ard-ide-pane-header {
+    font: 600 11px 'Inter', sans-serif; color: #8b949e;
+    padding: 6px 12px; background: #161b22; border-bottom: 1px solid #21262d;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.ard-btn-mini {
+    font: 500 10px 'Inter', sans-serif; color: #8b949e;
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+    padding: 2px 8px; cursor: pointer;
+}
+.ard-btn-mini:hover { color: #c9d1d9; border-color: #58a6ff; }
+.ard-code-editor {
+    flex: 1; resize: none; border: none; outline: none;
+    background: #0d1117; color: #c9d1d9;
+    font: 13px/1.5 'JetBrains Mono','Cascadia Code','Consolas','Fira Code',monospace;
+    padding: 12px; tab-size: 2;
+    min-height: 350px;
+}
+.ard-code-editor::selection { background: #264f78; }
+.ard-serial-output {
+    flex: 1; margin: 0; overflow-y: auto;
+    background: #010409; color: #3fb950;
+    font: 12px/1.5 'JetBrains Mono','Cascadia Code','Consolas',monospace;
+    padding: 10px; min-height: 200px;
+    border: none; white-space: pre-wrap; word-break: break-all;
+}
+.ard-ide-status {
+    padding: 5px 12px; background: #161b22; border-top: 1px solid #21262d;
+    font: 500 10px 'Inter', sans-serif; color: #8b949e;
+    display: flex; align-items: center; gap: 6px;
+}
+.ard-status-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #6b7280;
+    display: inline-block;
+}
+.ard-status-dot.running { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.5); animation: ard-pulse 1s ease infinite; }
+@keyframes ard-pulse { 50% { opacity: 0.5; } }

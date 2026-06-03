@@ -569,6 +569,7 @@
                     pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
                     pwrBadge.classList.toggle('off', comp.isPoweredOff);
                     CZ.SFX.switchClick();
+                    if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.evaluateCircuit();
                     CZ.saveState();
                 }
@@ -794,6 +795,7 @@
                         const action = ev.target.closest('.ctx-item')?.dataset.action;
                         if (action === 'delete') {
                             CZ.wires.splice(wIdx, 1);
+                            if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                             CZ.renderWires(); CZ.evaluateCircuit();
                             CZ.saveState();
                         }
@@ -929,6 +931,7 @@
                     CZ.groups = CZ.groups.filter(g => g.members.length > 0);
                     CZ.selectedIds.clear();
                     CZ.renderGroupLabels();
+                    if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.renderWires(); CZ.evaluateCircuit();
                     CZ.saveState();
                 } else if (action === 'duplicate') {
@@ -1161,6 +1164,21 @@
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }, { passive: true });
+
+        // ── Arduino double-click → open IDE ──
+        wCont.addEventListener('dblclick', e => {
+            const compEl = e.target.closest('.board-component');
+            if (!compEl) return;
+            const comp = CZ.deployed.find(c => c.id === compEl.id);
+            if (!comp) return;
+            const tmpl = REGISTRY.components.find(t => t.id === comp.type);
+            if (tmpl && tmpl.isArduino && typeof CZ.openArduinoIDE === 'function') {
+                e.preventDefault();
+                e.stopPropagation();
+                CZ.openArduinoIDE(comp.id);
+            }
+        });
+
         document.addEventListener('keydown', e => {
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (CZ.selectedIds.size > 0) {
@@ -1174,6 +1192,7 @@
                     CZ.groups = CZ.groups.filter(g => g.members.length > 0);
                     CZ.selectedIds.clear();
                     CZ.renderGroupLabels();
+                    if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.renderWires(); CZ.evaluateCircuit();
                     CZ.saveState();
                 }

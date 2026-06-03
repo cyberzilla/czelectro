@@ -9,7 +9,7 @@ const variants = [
     nameEn: 'Arduino Uno',
     spec: 'ATmega328P, 5V',
     category: 'passive',
-    voltage: 5,
+    voltage: 0,
     resistance: 100,
     isArduino: true,
     width: 80, height: 55,

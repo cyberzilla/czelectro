@@ -63,6 +63,14 @@
         // Merge terminals connected by wires
         wires.forEach(w => union(termKey(w.c1, w.i1), termKey(w.c2, w.i2)));
 
+        // Arduino: internally connect GND pins (terminals 2 and 6) — like real Arduino
+        deployed.forEach(c => {
+            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            if (tmpl && tmpl.isArduino) {
+                union(termKey(c.id, 2), termKey(c.id, 6)); // GND = GND2
+            }
+        });
+
         // Merge ground components to a canonical ground key
         const GND_KEY = '__GND__';
         find(GND_KEY);
@@ -78,10 +86,7 @@
         // If no explicit ground, use first battery's negative terminal as ground reference
         // This prevents singular conductance matrix for floating circuits
         if (!hasExplicitGround) {
-            const firstSource = deployed.find(c => {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
-                return tmpl && (tmpl.voltage > 0 || tmpl.isSolar);
-            });
+            const firstSource = deployed.find(c => isSource(c));
             if (firstSource) {
                 union(termKey(firstSource.id, 1), GND_KEY); // pin 1 = negative terminal
             }
@@ -179,6 +184,65 @@
             const tmpl = COMPONENTS.find(t => t.id === c.type);
             const intR = tmpl?.internalResistance || tmpl?.resistance || 0.01;
             vSources.push({ comp: c, v, nP, nN, intR, tmpl });
+        });
+
+        // ── Arduino virtual voltage sources ──
+        // When an Arduino pin is set HIGH via digitalWrite(), it becomes a 5V source
+        // between the pin terminal and the Arduino's GND terminal.
+        // This makes current flow through connected components via real MNA simulation.
+        // Terminal layout:  0=VIN, 1=5V, 2=GND, 3=D13, 4=A0, 5=A1, 6=GND2, 7=3V3
+        const ARD_PIN_TO_TERMINAL = {
+            13: 3,   // D13 → terminal 3
+            14: 4,   // A0 as digital → terminal 4
+            15: 5,   // A1 as digital → terminal 5
+        };
+        const ARD_GND_TERMINALS = [2, 6]; // GND terminal indices
+
+        // Arduino virtual voltage sources — only when Arduino is properly powered
+        deployed.forEach(c => {
+            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            if (!tmpl || !tmpl.isArduino || !c._arduinoPins) return;
+
+            // Check if Arduino is properly powered (VIN → battery AND GND → battery)
+            const vinWires = CZ.wires.filter(w =>
+                (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0)
+            );
+            const hasPower = vinWires.some(w => {
+                const otherId = w.c1 === c.id ? w.c2 : w.c1;
+                const otherComp = CZ.deployed.find(x => x.id === otherId);
+                if (!otherComp) return false;
+                return isSource(otherComp) && !otherComp.isPoweredOff && !otherComp.isBroken;
+            });
+            // GND must connect to a battery/source negative terminal
+            const gndWires = CZ.wires.filter(w =>
+                (w.c1 === c.id && (w.i1 === 2 || w.i1 === 6)) ||
+                (w.c2 === c.id && (w.i2 === 2 || w.i2 === 6))
+            );
+            const hasGND = gndWires.some(w => {
+                const otherId = w.c1 === c.id ? w.c2 : w.c1;
+                const otherComp = CZ.deployed.find(x => x.id === otherId);
+                if (!otherComp) return false;
+                return isSource(otherComp) && !otherComp.isPoweredOff && !otherComp.isBroken;
+            });
+            if (!hasPower || !hasGND) return; // Need both VIN+battery and GND+battery
+
+            Object.entries(c._arduinoPins).forEach(([pin, value]) => {
+                if (!value) return; // only HIGH pins become sources
+                const termIdx = ARD_PIN_TO_TERMINAL[parseInt(pin)];
+                if (termIdx === undefined) return;
+
+                const nP = getNode(c.id, termIdx); // active pin terminal
+                // Find connected GND terminal (try both GND pins)
+                let nN = -1;
+                for (const gndIdx of ARD_GND_TERMINALS) {
+                    const n = getNode(c.id, gndIdx);
+                    if (n >= 0 && n !== nP) { nN = n; break; }
+                }
+                if (nP < 0 || nN < 0 || nP === nN) return;
+
+                // Add as 5V source with internal resistance (25Ω — realistic ATmega328P pin)
+                vSources.push({ comp: c, v: 5, nP, nN, intR: 25, tmpl, isArduinoPin: true, pin: parseInt(pin) });
+            });
         });
 
         // Dead batteries: only stamp as passive resistor if in SERIES (not parallel)

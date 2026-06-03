@@ -709,7 +709,11 @@
                 // Servo Motor
                 if (c.type === 'servo_sg90' && vComp > 0.5) { el.classList.add('servo-active'); const sa = el.querySelector('.servo-arm'); if (sa) sa.style.animation = 'servoSweep 2s ease-in-out infinite'; }
                 // 7-Segment Display — animated counter 0→9
-                if (c.type === 'seven_segment' && amps > EL.SIM.MIN_CURRENT) {
+                // Skip MNA default animation if Arduino program is controlling this seg7
+                const _seg7ArduinoCtrl = CZ.arduinoSessions && [...CZ.arduinoSessions.values()].some(s =>
+                    s.running && s.connected.seg7s.some(seg => seg.id === c.id)
+                );
+                if (c.type === 'seven_segment' && amps > EL.SIM.MIN_CURRENT && !_seg7ArduinoCtrl) {
                     el.classList.add('seg7-active');
                     if (!c._seg7Interval) {
                         // Segment truth table: [a,b,c,d,e,f,g] for digits 0-9
@@ -752,7 +756,7 @@
                         updateDigit();
                         c._seg7Interval = setInterval(updateDigit, 800);
                     }
-                } else if (c.type === 'seven_segment' && c._seg7Interval) {
+                } else if (c.type === 'seven_segment' && c._seg7Interval && !_seg7ArduinoCtrl) {
                     clearInterval(c._seg7Interval); c._seg7Interval = null;
                     el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#7f1d1d'); s.style.filter = 'none'; });
                 }

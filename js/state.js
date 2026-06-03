@@ -97,7 +97,9 @@
                 batteryLevel: c.batteryLevel,
                 batteryCapacity: c.batteryCapacity,
                 atsMode: c.atsMode || undefined,
-                kwhTotal: c._kwhTotal || undefined
+                kwhTotal: c._kwhTotal || undefined,
+                flashedCode: localStorage.getItem('czelectro_ard_flash_' + c.id) || undefined,
+                arduinoCode: localStorage.getItem('czelectro_ard_code_' + c.id) || undefined
             })),
             wires: CZ.wires.map(w => ({
                 c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
@@ -166,6 +168,14 @@
                 comp._kwhTotal = saved.kwhTotal;
                 const kwhLabel = el.querySelector('.kwh-reading');
                 if (kwhLabel) kwhLabel.textContent = saved.kwhTotal.toFixed(2);
+            }
+            // Restore Arduino flashed code & editor code
+            if (saved.flashedCode) {
+                localStorage.setItem('czelectro_ard_flash_' + saved.id, saved.flashedCode);
+                el.classList.add('arduino-flashed');
+            }
+            if (saved.arduinoCode) {
+                localStorage.setItem('czelectro_ard_code_' + saved.id, saved.arduinoCode);
             }
             comp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
