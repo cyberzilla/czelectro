@@ -63,11 +63,11 @@
         // Merge terminals connected by wires
         wires.forEach(w => union(termKey(w.c1, w.i1), termKey(w.c2, w.i2)));
 
-        // Arduino: internally connect GND pins (terminals 2 and 6) — like real Arduino
+        // Arduino: internally connect GND pins (terminals 13 and 21) — like real Arduino
         deployed.forEach(c => {
             const tmpl = COMPONENTS.find(t => t.id === c.type);
             if (tmpl && tmpl.isArduino) {
-                union(termKey(c.id, 2), termKey(c.id, 6)); // GND = GND2
+                union(termKey(c.id, 13), termKey(c.id, 21)); // GND = GND2
             }
         });
 
@@ -190,13 +190,14 @@
         // When an Arduino pin is set HIGH via digitalWrite(), it becomes a 5V source
         // between the pin terminal and the Arduino's GND terminal.
         // This makes current flow through connected components via real MNA simulation.
-        // Terminal layout:  0=VIN, 1=5V, 2=GND, 3=D13, 4=A0, 5=A1, 6=GND2, 7=3V3
+        // Terminal layout (22-pin):
+        //   0-11: D13,D12,D11,D10,D9,D8,D7,D6,D5,D4,D3,D2
+        //  12=VIN, 13=GND, 14=5V, 15=3V3, 16-20=A0-A4, 21=GND2
         const ARD_PIN_TO_TERMINAL = {
-            13: 3,   // D13 → terminal 3
-            14: 4,   // A0 as digital → terminal 4
-            15: 5,   // A1 as digital → terminal 5
+            13: 0,  12: 1,  11: 2,  10: 3,  9: 4,  8: 5,
+            7: 6,   6: 7,   5: 8,   4: 9,   3: 10, 2: 11
         };
-        const ARD_GND_TERMINALS = [2, 6]; // GND terminal indices
+        const ARD_GND_TERMINALS = [13, 21]; // GND terminal indices
 
         // Arduino virtual voltage sources — only when Arduino is properly powered
         deployed.forEach(c => {
@@ -205,7 +206,7 @@
 
             // Check if Arduino is properly powered (VIN → battery AND GND → battery)
             const vinWires = CZ.wires.filter(w =>
-                (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0)
+                (w.c1 === c.id && w.i1 === 12) || (w.c2 === c.id && w.i2 === 12)
             );
             const hasPower = vinWires.some(w => {
                 const otherId = w.c1 === c.id ? w.c2 : w.c1;
@@ -215,8 +216,8 @@
             });
             // GND must connect to a battery/source negative terminal
             const gndWires = CZ.wires.filter(w =>
-                (w.c1 === c.id && (w.i1 === 2 || w.i1 === 6)) ||
-                (w.c2 === c.id && (w.i2 === 2 || w.i2 === 6))
+                (w.c1 === c.id && (w.i1 === 13 || w.i1 === 21)) ||
+                (w.c2 === c.id && (w.i2 === 13 || w.i2 === 21))
             );
             const hasGND = gndWires.some(w => {
                 const otherId = w.c1 === c.id ? w.c2 : w.c1;

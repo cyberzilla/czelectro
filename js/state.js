@@ -5,6 +5,19 @@
 
     const STORAGE_KEY = 'czelectro_state';
 
+    // ── Base64 encode/decode for Arduino code (UTF-8 safe) ──
+    function encodeArdCode(code) {
+        try { return btoa(unescape(encodeURIComponent(code))); }
+        catch { return btoa(code); }
+    }
+    function decodeArdCode(encoded) {
+        try { return decodeURIComponent(escape(atob(encoded))); }
+        catch {
+            try { return atob(encoded); }
+            catch { return encoded; } // raw text fallback (legacy)
+        }
+    }
+
     const CZ = window.CZ = {
         // ── State ──
         deployed: [],
@@ -98,8 +111,9 @@
                 batteryCapacity: c.batteryCapacity,
                 atsMode: c.atsMode || undefined,
                 kwhTotal: c._kwhTotal || undefined,
-                flashedCode: localStorage.getItem('czelectro_ard_flash_' + c.id) || undefined,
-                arduinoCode: localStorage.getItem('czelectro_ard_code_' + c.id) || undefined
+                arduinoCode: c.arduinoCode ? encodeArdCode(c.arduinoCode) : undefined,
+                isFlashed: c.isFlashed || undefined,
+                pinLayoutVersion: c._pinLayoutVersion || undefined
             })),
             wires: CZ.wires.map(w => ({
                 c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
@@ -169,14 +183,18 @@
                 const kwhLabel = el.querySelector('.kwh-reading');
                 if (kwhLabel) kwhLabel.textContent = saved.kwhTotal.toFixed(2);
             }
-            // Restore Arduino flashed code & editor code
-            if (saved.flashedCode) {
-                localStorage.setItem('czelectro_ard_flash_' + saved.id, saved.flashedCode);
+            // Restore Arduino code & flash state on component
+            if (saved.arduinoCode) {
+                comp.arduinoCode = decodeArdCode(saved.arduinoCode);
+                comp.isFlashed = saved.isFlashed || !!saved.flashedCode; // backward compat
+                if (comp.isFlashed) el.classList.add('arduino-flashed');
+            } else if (saved.flashedCode) {
+                // Legacy migration: old saves stored flashedCode as raw text
+                comp.arduinoCode = saved.flashedCode;
+                comp.isFlashed = true;
                 el.classList.add('arduino-flashed');
             }
-            if (saved.arduinoCode) {
-                localStorage.setItem('czelectro_ard_code_' + saved.id, saved.arduinoCode);
-            }
+            comp._pinLayoutVersion = saved.pinLayoutVersion || 0;
             comp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
                 tEl.className = 'terminal';
@@ -219,7 +237,7 @@
                 'iron','blender','ricecooker','ac_05pk','ac_1pk',
                 'computer','motor_dc','buzzer','speaker','bulb',
                 'led_red','led_green','led_blue','led_white','led_rgb',
-                'pln_source'
+                'pln_source','seven_segment'
             ];
             if (RESTORE_TOGGLEABLE.includes(comp.type)) {
                 if (comp.isPoweredOff) {
@@ -284,8 +302,35 @@
         CZ.applyTransform();
         CZ.renderWires();
         CZ.renderGroupLabels();
+        // Migrate old Arduino pin layout (8-pin → 22-pin)
+        migrateArduinoPins();
         CZ.evaluateCircuit();
     };
+
+    // ── Arduino pin layout migration (old 8-pin → new 22-pin) ──
+    // Old terminal indices: 0=VIN, 1=5V, 2=GND, 3=D13, 4=A0, 5=A1, 6=GND2, 7=3V3
+    // New terminal indices: 0=D13, 1=D12,...11=D2, 12=VIN, 13=GND, 14=5V, 15=3V3, 16=A0,...20=A4, 21=GND2
+    const ARD_PIN_MIGRATE = { 0: 12, 1: 14, 2: 13, 3: 0, 4: 16, 5: 17, 6: 21, 7: 15 };
+    function migrateArduinoPins() {
+        let changed = false;
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'arduino_uno') return;
+            if (c._pinLayoutVersion >= 2) return; // already up-to-date
+            // Remap wire terminal indices for this Arduino
+            CZ.wires.forEach(w => {
+                if (w.c1 === c.id && ARD_PIN_MIGRATE[w.i1] !== undefined) {
+                    w.i1 = ARD_PIN_MIGRATE[w.i1]; changed = true;
+                }
+                if (w.c2 === c.id && ARD_PIN_MIGRATE[w.i2] !== undefined) {
+                    w.i2 = ARD_PIN_MIGRATE[w.i2]; changed = true;
+                }
+            });
+            c._pinLayoutVersion = 2;
+        });
+        if (changed) {
+            CZ.renderWires();
+        }
+    }
 
     CZ.updateUndoRedoButtons = function() {
         document.getElementById('btn-undo').disabled = CZ.undoStack.length < 2;
@@ -401,6 +446,15 @@
                     const kwhLabel = el.querySelector('.kwh-reading');
                     if (kwhLabel) kwhLabel.textContent = saved.kwhTotal.toFixed(2);
                 }
+                // Restore Arduino code & flash state
+                if (saved.arduinoCode) {
+                    comp.arduinoCode = decodeArdCode(saved.arduinoCode);
+                    comp.isFlashed = saved.isFlashed || !!saved.flashedCode;
+                } else if (saved.flashedCode) {
+                    comp.arduinoCode = saved.flashedCode;
+                    comp.isFlashed = true;
+                }
+                comp._pinLayoutVersion = saved.pinLayoutVersion || 0;
 
                 // Re-create terminals
                 comp.terminals.forEach((term, idx) => {
@@ -447,7 +501,7 @@
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
                     'led_red','led_green','led_blue','led_white','led_rgb',
-                    'pln_source'
+                    'pln_source','seven_segment'
                 ];
                 if (RESTORE_TOGGLEABLE2.includes(comp.type)) {
                     if (comp.isPoweredOff) {
@@ -482,6 +536,8 @@
                     const unt = el.querySelector('.vm-unit');
                     if (unt) { unt.textContent = m; unt.setAttribute('fill', modeColor[m]); }
                 }
+                // Restore Arduino flashed indicator
+                if (comp.isFlashed) el.classList.add('arduino-flashed');
                 // Mark grouped components
                 const grp = CZ.groups.find(g => g.members.includes(saved.id));
                 if (grp) el.classList.add('grouped');
@@ -513,6 +569,8 @@
             CZ.applyTransform();
             CZ.renderWires();
             CZ.renderGroupLabels();
+            // Migrate old Arduino pin layout (8-pin → 22-pin)
+            migrateArduinoPins();
             CZ.evaluateCircuit();
             return true;
         } catch (e) {

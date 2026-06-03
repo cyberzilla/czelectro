@@ -53,6 +53,8 @@
             comp.mmMode = 'V';
         }
         CZ.deployed.push(comp);
+        // Mark new Arduino components with current pin layout version
+        if (tmplCap?.isArduino) comp._pinLayoutVersion = 2;
         // Toggleable output components start OFF (like real appliances)
         const TOGGLEABLE_TYPES = [
             'tv_led','fridge','pump_125','pump_250','lamp_30w',

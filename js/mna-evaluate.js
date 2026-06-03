@@ -713,7 +713,7 @@
                 const _seg7ArduinoCtrl = CZ.arduinoSessions && [...CZ.arduinoSessions.values()].some(s =>
                     s.running && s.connected.seg7s.some(seg => seg.id === c.id)
                 );
-                if (c.type === 'seven_segment' && amps > EL.SIM.MIN_CURRENT && !_seg7ArduinoCtrl) {
+                if (c.type === 'seven_segment' && amps > EL.SIM.MIN_CURRENT && !c.isPoweredOff && !_seg7ArduinoCtrl) {
                     el.classList.add('seg7-active');
                     if (!c._seg7Interval) {
                         // Segment truth table: [a,b,c,d,e,f,g] for digits 0-9
@@ -756,9 +756,11 @@
                         updateDigit();
                         c._seg7Interval = setInterval(updateDigit, 800);
                     }
-                } else if (c.type === 'seven_segment' && c._seg7Interval && !_seg7ArduinoCtrl) {
-                    clearInterval(c._seg7Interval); c._seg7Interval = null;
-                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#7f1d1d'); s.style.filter = 'none'; });
+                } else if (c.type === 'seven_segment' && (c.isPoweredOff || amps <= EL.SIM.MIN_CURRENT)) {
+                    // Turn off display: no current or powered off — overrides Arduino control
+                    if (c._seg7Interval) { clearInterval(c._seg7Interval); c._seg7Interval = null; }
+                    el.classList.remove('seg7-active');
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
                 }
                 // Transistor
                 if ((c.type === 'transistor_npn' || c.type === 'transistor_pnp') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('transistor-active'); }
@@ -782,6 +784,16 @@
                 if (c.type === 'photodiode' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('photodiode-active'); }
                 // Arduino
                 if (c.type === 'arduino_uno' && vComp > 3) { el.classList.add('arduino-active'); }
+                // Arduino indicator guard: re-apply running/flashed based on actual state
+                // (defensive — ensures indicator stays correct even if some code path strips it)
+                if (c.type === 'arduino_uno') {
+                    const ardSession = CZ.arduinoSessions && CZ.arduinoSessions.get(c.id);
+                    if (ardSession && ardSession.running) {
+                        el.classList.add('arduino-running');
+                    } else if (c.isFlashed) {
+                        el.classList.add('arduino-flashed');
+                    }
+                }
                 // Transformer
                 if (c.type === 'trafo_1a' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('trafo-active'); }
                 // Voltage Regulator

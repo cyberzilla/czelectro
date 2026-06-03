@@ -138,6 +138,7 @@
     border-color: #064e3b;
     box-shadow: 0 0 12px rgba(74, 222, 128, 0.6), 0 2px 6px rgba(0, 0, 0, 0.5);
     opacity: 1;
+    z-index: 25;
 }
 
 .terminal.connected {
@@ -1202,9 +1203,18 @@
     to { transform: scale(1) translateY(0); opacity: 1; }
 }
 .ard-ide-header {
+    background: #161b22; border-bottom: 1px solid #30363d;
+}
+.ard-ide-toolbar-top {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 16px; background: #161b22; border-bottom: 1px solid #30363d;
-    gap: 10px; flex-wrap: wrap;
+    padding: 10px 16px 6px; gap: 10px;
+}
+.ard-ide-toolbar-actions {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 16px 10px; flex-wrap: wrap;
+}
+.ard-toolbar-sep {
+    width: 1px; height: 20px; background: #30363d; margin: 0 4px;
 }
 .ard-ide-title {
     display: flex; align-items: center; gap: 8px;
@@ -1214,6 +1224,17 @@
 .ard-ide-comp-id {
     font: 500 10px monospace; color: #8b949e;
     background: #21262d; padding: 2px 6px; border-radius: 4px;
+}
+.ard-flash-badge {
+    font: 600 10px 'Inter', sans-serif; color: #3fb950;
+    background: rgba(63,185,80,0.12); border: 1px solid rgba(63,185,80,0.3);
+    padding: 2px 8px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 4px;
+}
+.ard-ide-status-inline {
+    display: flex; align-items: center; gap: 5px;
+    font: 500 10px 'Inter', sans-serif; color: #8b949e;
+    margin-left: auto;
 }
 .ard-ide-actions {
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -1234,6 +1255,10 @@
 .ard-btn-run:hover:not(:disabled) { background: #2ea043; }
 .ard-btn-stop { background: #da3633; color: #fff; }
 .ard-btn-stop:hover:not(:disabled) { background: #f85149; }
+.ard-btn-reset { background: #9e6a03; color: #fff; }
+.ard-btn-reset:hover:not(:disabled) { background: #bb8009; }
+.ard-btn-erase { background: #30363d; color: #8b949e; border: 1px solid #484f58; }
+.ard-btn-erase:hover { background: #da3633; color: #fff; border-color: #da3633; }
 .ard-btn-close {
     background: transparent; color: #8b949e; font-size: 16px;
     padding: 4px 8px; border: 1px solid #30363d; border-radius: 6px;
@@ -1266,14 +1291,29 @@
     font: 13px/1.5 'JetBrains Mono','Cascadia Code','Consolas','Fira Code',monospace;
     padding: 12px; tab-size: 2;
     min-height: 350px;
+    overflow-y: auto;
 }
 .ard-code-editor::selection { background: #264f78; }
+.ard-code-editor::placeholder { color: #484f58; }
 .ard-serial-output {
     flex: 1; margin: 0; overflow-y: auto;
     background: #010409; color: #3fb950;
     font: 12px/1.5 'JetBrains Mono','Cascadia Code','Consolas',monospace;
     padding: 10px; min-height: 200px;
     border: none; white-space: pre-wrap; word-break: break-all;
+}
+/* Syntax error banner */
+.ard-error-banner {
+    background: rgba(218,54,51,0.15); border: 1px solid #da3633;
+    border-radius: 6px; margin: 6px 12px; padding: 8px 12px;
+    font: 500 11px/1.5 'JetBrains Mono','Consolas',monospace;
+    color: #f85149; white-space: pre-wrap;
+    animation: ard-shake 0.3s ease;
+}
+@keyframes ard-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
 }
 .ard-ide-status {
     padding: 5px 12px; background: #161b22; border-top: 1px solid #21262d;
@@ -1286,3 +1326,15 @@
 }
 .ard-status-dot.running { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.5); animation: ard-pulse 1s ease infinite; }
 @keyframes ard-pulse { 50% { opacity: 0.5; } }
+
+/* ── Arduino IDE Scrollbars (dark theme) ── */
+.ard-ide-container ::-webkit-scrollbar { width: 8px; height: 8px; }
+.ard-ide-container ::-webkit-scrollbar-track { background: #0d1117; }
+.ard-ide-container ::-webkit-scrollbar-thumb {
+    background: #30363d; border-radius: 4px; border: 2px solid #0d1117;
+}
+.ard-ide-container ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+.ard-ide-container ::-webkit-scrollbar-corner { background: #0d1117; }
+.ard-serial-output::-webkit-scrollbar-track { background: #010409; }
+.ard-serial-output::-webkit-scrollbar-thumb { border-color: #010409; }
+

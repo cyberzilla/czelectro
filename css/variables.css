@@ -192,3 +192,71 @@ body {
     color: #ea580c;
     border-color: rgba(234, 88, 12, 0.2);
 }
+
+/* ── Arduino IDE Light Theme ── */
+[data-theme="light"] .ard-ide-container {
+    background: #ffffff; border-color: #d1d5db;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 0 40px rgba(22,163,74,0.08);
+}
+[data-theme="light"] .ard-ide-header {
+    background: #f8fafc; border-color: #e2e8f0;
+}
+[data-theme="light"] .ard-ide-title { color: #1e293b; }
+[data-theme="light"] .ard-ide-comp-id {
+    color: #64748b; background: #e2e8f0;
+}
+[data-theme="light"] .ard-flash-badge {
+    color: #16a34a; background: rgba(22,163,74,0.08);
+    border-color: rgba(22,163,74,0.25);
+}
+[data-theme="light"] .ard-toolbar-sep { background: #e2e8f0; }
+[data-theme="light"] .ard-ide-status-inline { color: #64748b; }
+[data-theme="light"] .ard-preset-select {
+    color: #1e293b; background: #f1f5f9; border-color: #d1d5db;
+}
+[data-theme="light"] .ard-preset-select:hover { border-color: #16a34a; }
+[data-theme="light"] .ard-btn-close {
+    color: #64748b; border-color: #d1d5db;
+}
+[data-theme="light"] .ard-btn-close:hover {
+    color: #dc2626; border-color: #dc2626;
+}
+[data-theme="light"] .ard-btn-erase {
+    background: #f1f5f9; color: #64748b; border-color: #d1d5db;
+}
+[data-theme="light"] .ard-btn-erase:hover {
+    background: #dc2626; color: #fff; border-color: #dc2626;
+}
+[data-theme="light"] .ard-ide-editor-pane { border-color: #e2e8f0; }
+[data-theme="light"] .ard-ide-pane-header {
+    color: #475569; background: #f8fafc; border-color: #e2e8f0;
+}
+[data-theme="light"] .ard-btn-mini {
+    color: #475569; background: #f1f5f9; border-color: #d1d5db;
+}
+[data-theme="light"] .ard-btn-mini:hover {
+    color: #1e293b; border-color: #16a34a;
+}
+[data-theme="light"] .ard-code-editor {
+    background: #fafbfc; color: #24292f;
+}
+[data-theme="light"] .ard-code-editor::selection { background: #b6d7ff; }
+[data-theme="light"] .ard-serial-output {
+    background: #f8f9fa; color: #15803d;
+}
+[data-theme="light"] .ard-ide-status {
+    background: #f8fafc; border-color: #e2e8f0; color: #64748b;
+}
+[data-theme="light"] .ard-status-dot { background: #94a3b8; }
+[data-theme="light"] .ard-status-dot.running {
+    background: #16a34a; box-shadow: 0 0 6px rgba(22,163,74,0.4);
+}
+[data-theme="light"] .ard-ide-container ::-webkit-scrollbar-track { background: #fafbfc; }
+[data-theme="light"] .ard-ide-container ::-webkit-scrollbar-thumb {
+    background: #d1d5db; border-color: #fafbfc;
+}
+[data-theme="light"] .ard-ide-container ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+[data-theme="light"] .ard-serial-output::-webkit-scrollbar-track { background: #f8f9fa; }
+[data-theme="light"] .ard-serial-output::-webkit-scrollbar-thumb { border-color: #f8f9fa; }
+[data-theme="light"] .ard-ide-backdrop { background: rgba(0,0,0,0.3); }
+

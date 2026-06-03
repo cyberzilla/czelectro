@@ -677,7 +677,10 @@
                                 currentResistance: c.currentResistance,
                                 rotation: c.rotation || 0,
                                 batteryLevel: c.batteryLevel,
-                                batteryCapacity: c.batteryCapacity
+                                batteryCapacity: c.batteryCapacity,
+                                arduinoCode: c.arduinoCode ? btoa(unescape(encodeURIComponent(c.arduinoCode))) : undefined,
+                                isFlashed: c.isFlashed || undefined,
+                                pinLayoutVersion: c._pinLayoutVersion || undefined
                             })),
                             wires: selWires.map(w => ({
                                 c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,

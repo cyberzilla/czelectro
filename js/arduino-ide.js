@@ -127,37 +127,145 @@ void loop() {
   delay(2000);
 }`
         },
+        'traffic_light': {
+            name: '🚦 Traffic Light (3 LED)',
+            code: `// Lampu lalu lintas: LED Merah (D13), Kuning (D12), Hijau (D11)
+void setup() {
+  pinMode(13, OUTPUT);
+  pinMode(12, OUTPUT);
+  pinMode(11, OUTPUT);
+  Serial.println("Traffic Light Started");
+}
+
+void loop() {
+  // Merah
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(11, LOW);
+  Serial.println("🔴 MERAH - Berhenti");
+  delay(3000);
+
+  // Hijau
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(11, HIGH);
+  Serial.println("🟢 HIJAU - Jalan");
+  delay(3000);
+
+  // Kuning
+  digitalWrite(13, LOW);
+  digitalWrite(12, HIGH);
+  digitalWrite(11, LOW);
+  Serial.println("🟡 KUNING - Hati-hati");
+  delay(1500);
+}`
+        },
+        'multi_component': {
+            name: '🎛️ Multi-Component Demo',
+            code: `// LED (D13) + 7-Segment + Motor sekaligus
+void setup() {
+  pinMode(13, OUTPUT);
+  Serial.println("Multi-component demo");
+}
+
+void loop() {
+  // Fase 1: LED nyala, motor pelan, tampil "1"
+  digitalWrite(13, HIGH);
+  motor.speed(100);
+  seg7.show("1");
+  Serial.println("Phase 1");
+  delay(2000);
+
+  // Fase 2: LED mati, motor cepat, tampil "2"
+  digitalWrite(13, LOW);
+  motor.speed(200);
+  seg7.show("2");
+  Serial.println("Phase 2");
+  delay(2000);
+
+  // Fase 3: LED nyala, motor stop, tampil "3"
+  digitalWrite(13, HIGH);
+  motor.speed(0);
+  seg7.show("3");
+  Serial.println("Phase 3");
+  delay(2000);
+
+  // Reset
+  digitalWrite(13, LOW);
+  motor.speed(0);
+  seg7.clear();
+  delay(1000);
+}`
+        },
     };
 
     // ── Active Arduino Sessions ──
     const sessions = new Map(); // compId → session
 
-    // ── Find connected components ──
+    // ── Pin ↔ Terminal Index Mapping ──
+    // Maps Arduino pin numbers to terminal array indices (from comp.arduino.js)
+    // Terminal layout:
+    //   0-11: D13,D12,D11,D10,D9,D8,D7,D6,D5,D4,D3,D2
+    //  12-15: VIN, GND, 5V, 3V3
+    //  16-20: A0-A4
+    //     21: GND2
+    const PIN_TO_TERM = {
+        13: 0,  12: 1,  11: 2,  10: 3,  9: 4,  8: 5,
+        7: 6,   6: 7,   5: 8,   4: 9,   3: 10, 2: 11
+    };
+    const TERM_TO_PIN = {};
+    Object.entries(PIN_TO_TERM).forEach(([pin, term]) => TERM_TO_PIN[term] = parseInt(pin));
+    // Analog pins
+    const ANALOG_TO_TERM = { 0: 16, 1: 17, 2: 18, 3: 19, 4: 20 };
+    // PWM-capable pins
+    const PWM_PINS = new Set([3, 5, 6, 9, 10, 11]);
+
+    // ── Find connected components (per-pin mapping) ──
     function findConnected(arduinoId) {
-        const connected = { leds: [], seg7s: [], motors: [], servos: [], fans: [], buzzers: [], all: [] };
+        const byPin = {};  // pinNumber → [{ id, comp, type }]
+        const leds = [], seg7s = [], motors = [], servos = [], fans = [], buzzers = [], all = [];
+
         CZ.wires.forEach(w => {
-            let otherId = null;
-            if (w.c1 === arduinoId) otherId = w.c2;
-            else if (w.c2 === arduinoId) otherId = w.c1;
-            if (!otherId) return;
+            let ardTermIdx, otherId;
+            if (w.c1 === arduinoId) { ardTermIdx = w.i1; otherId = w.c2; }
+            else if (w.c2 === arduinoId) { ardTermIdx = w.i2; otherId = w.c1; }
+            else return;
+
             const comp = CZ.deployed.find(c => c.id === otherId);
             if (!comp) return;
             const entry = { id: otherId, comp, type: comp.type };
-            connected.all.push(entry);
-            if (comp.type.startsWith('led_')) connected.leds.push(entry);
-            if (comp.type === 'seven_segment') connected.seg7s.push(entry);
-            if (comp.type === 'motor_dc') connected.motors.push(entry);
-            if (comp.type === 'servo_sg90') connected.servos.push(entry);
-            if (comp.type === 'fan_12v') connected.fans.push(entry);
-            if (comp.type === 'buzzer') connected.buzzers.push(entry);
+            all.push(entry);
+
+            // Categorize by type (backward compat)
+            if (comp.type.startsWith('led_')) leds.push(entry);
+            if (comp.type === 'seven_segment') seg7s.push(entry);
+            if (comp.type === 'motor_dc') motors.push(entry);
+            if (comp.type === 'servo_sg90') servos.push(entry);
+            if (comp.type === 'fan_12v') fans.push(entry);
+            if (comp.type === 'buzzer') buzzers.push(entry);
+
+            // Map by pin number (for per-pin control)
+            const pinNum = TERM_TO_PIN[ardTermIdx];
+            if (pinNum !== undefined) {
+                if (!byPin[pinNum]) byPin[pinNum] = [];
+                byPin[pinNum].push(entry);
+            }
         });
-        return connected;
+
+        return { byPin, leds, seg7s, motors, servos, fans, buzzers, all };
     }
 
     // ── Apply 7-segment pattern to DOM ──
     function applySeg7Pattern(seg7Entry, pattern, dp = false) {
         const el = document.getElementById(seg7Entry.id);
         if (!el) return;
+        // Don't light up if component is powered off or not fully connected
+        const comp = CZ.deployed.find(c => c.id === seg7Entry.id);
+        if (comp && comp.isPoweredOff) return;
+        // Both terminals must have wires (complete circuit required)
+        const hasT0 = CZ.wires.some(w => (w.c1 === seg7Entry.id && w.i1 === 0) || (w.c2 === seg7Entry.id && w.i2 === 0));
+        const hasT1 = CZ.wires.some(w => (w.c1 === seg7Entry.id && w.i1 === 1) || (w.c2 === seg7Entry.id && w.i2 === 1));
+        if (!hasT0 || !hasT1) return;
         el.classList.add('seg7-active');
         SEG_NAMES.forEach((name, i) => {
             const seg = el.querySelector('.seg-' + name);
@@ -262,7 +370,7 @@ void loop() {
                     const char = String(ch).toUpperCase()[0] || ' ';
                     const pattern = SEG7_CHARS[char] || SEG7_CHARS[' '];
                     const hasDot = String(ch).includes('.');
-                    conn.seg7s.forEach(s => {
+                    session.connected.seg7s.forEach(s => {
                         const comp = CZ.deployed.find(c => c.id === s.id);
                         if (comp && comp.isPoweredOff) return;
                         // Stop any existing MNA-driven animation
@@ -278,7 +386,7 @@ void loop() {
                     if (session.aborted) return;
                     const pattern = arr.map(v => v ? 1 : 0);
                     while (pattern.length < 7) pattern.push(0);
-                    conn.seg7s.forEach(s => {
+                    session.connected.seg7s.forEach(s => {
                         const comp = CZ.deployed.find(c => c.id === s.id);
                         if (comp && comp._seg7Interval) {
                             clearInterval(comp._seg7Interval);
@@ -294,17 +402,17 @@ void loop() {
                         if (session.aborted) throw '__ABORT__';
                         const ch = text[i];
                         const pattern = SEG7_CHARS[ch] || SEG7_CHARS[' '];
-                        conn.seg7s.forEach(s => applySeg7Pattern(s, pattern, false));
+                        session.connected.seg7s.forEach(s => applySeg7Pattern(s, pattern, false));
                         await api.delay(delayMs);
                     }
                 },
 
                 clear() {
-                    conn.seg7s.forEach(s => clearSeg7(s));
+                    session.connected.seg7s.forEach(s => clearSeg7(s));
                 },
 
                 dot(on) {
-                    conn.seg7s.forEach(s => {
+                    session.connected.seg7s.forEach(s => {
                         const el = document.getElementById(s.id);
                         if (!el) return;
                         const dpEl = el.querySelector('.seg-dp');
@@ -449,8 +557,88 @@ void loop() {
         });
     }
 
+    // ── Syntax Checker ──
+    function checkSyntax(code) {
+        const errors = [];
+        // Strip single-line comments and multi-line comments for analysis
+        const stripped = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // 1. Required functions
+        if (!/void\s+setup\s*\(/.test(stripped)) {
+            errors.push('❌ Missing void setup() function');
+        }
+        if (!/void\s+loop\s*\(/.test(stripped)) {
+            errors.push('❌ Missing void loop() function');
+        }
+
+        // 2. Matching braces
+        let braceCount = 0, parenCount = 0, bracketCount = 0;
+        let lineNum = 1;
+        const braceErrors = [];
+        for (const ch of stripped) {
+            if (ch === '\n') lineNum++;
+            if (ch === '{') braceCount++;
+            if (ch === '}') braceCount--;
+            if (ch === '(') parenCount++;
+            if (ch === ')') parenCount--;
+            if (ch === '[') bracketCount++;
+            if (ch === ']') bracketCount--;
+            if (braceCount < 0) { braceErrors.push(`Line ${lineNum}: Unexpected '}'`); braceCount = 0; }
+            if (parenCount < 0) { braceErrors.push(`Line ${lineNum}: Unexpected ')'`); parenCount = 0; }
+            if (bracketCount < 0) { braceErrors.push(`Line ${lineNum}: Unexpected ']'`); bracketCount = 0; }
+        }
+        if (braceCount > 0) errors.push(`❌ ${braceCount} unclosed '{' brace(s)`);
+        if (parenCount > 0) errors.push(`❌ ${parenCount} unclosed '(' parenthesis`);
+        if (bracketCount > 0) errors.push(`❌ ${bracketCount} unclosed '[' bracket(s)`);
+        braceErrors.forEach(e => errors.push('❌ ' + e));
+
+        // 3. Unterminated strings
+        const lines = stripped.split('\n');
+        lines.forEach((line, i) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('//')) return;
+            // Count unescaped quotes
+            let dq = 0;
+            for (let j = 0; j < trimmed.length; j++) {
+                if (trimmed[j] === '"' && (j === 0 || trimmed[j-1] !== '\\')) dq++;
+            }
+            if (dq % 2 !== 0) {
+                errors.push(`❌ Line ${i+1}: Unterminated string "...`);
+            }
+        });
+
+        // 4. Missing semicolons (basic check on statement-like lines)
+        lines.forEach((line, i) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return;
+            // Skip lines that end with { } , or are flow control
+            if (/[{},]$/.test(trimmed)) return;
+            if (/^(void|if|else|for|while|switch|case|default|return\s*;|#|\/\/)/.test(trimmed)) return;
+            if (trimmed === '}' || trimmed === '{') return;
+            // Statement-like lines that should end with ;
+            if (/\)\s*$/.test(trimmed) && !/^(if|for|while|else)\b/.test(trimmed)) {
+                errors.push(`⚠ Line ${i+1}: Missing semicolon ';' → ${trimmed.substring(0, 40)}`);
+            }
+        });
+
+        return errors;
+    }
+
     // ── Interpreter — Run Arduino Code ──
     async function runArduinoCode(session, skipUploadSim) {
+
+        // Syntax check before upload (skip for auto-run from flash)
+        if (!skipUploadSim) {
+            const syntaxErrors = checkSyntax(session.code);
+            if (syntaxErrors.length > 0) {
+                session.serialLines.push('⛔ Compilation failed:');
+                syntaxErrors.forEach(e => session.serialLines.push('  ' + e));
+                session.serialLines.push('');
+                updateSerialMonitor(session);
+                return; // Block upload
+            }
+        }
+
         session.aborted = false;
         session._timers = [];
         // Clear previous pin states
@@ -463,12 +651,24 @@ void loop() {
             // User clicked Upload → simulate compile & upload, then flash
             const uploaded = await simulateUpload(session);
             if (!uploaded) { session.running = false; updateRunButton(session); return; }
-            localStorage.setItem('czelectro_ard_flash_' + session.compId, session.code);
+            // Save flashed state on the component object (single source of truth)
+            const ardComp2 = CZ.deployed.find(c => c.id === session.compId);
+            if (ardComp2) { ardComp2.arduinoCode = session.code; ardComp2.isFlashed = true; ardComp2._pinLayoutVersion = 2; }
             // Show FLASHED indicator on IDE and on chip SVG
             const flashEl = document.getElementById('ard-flash-' + session.compId);
             if (flashEl) flashEl.style.display = 'inline';
             const chipEl = document.getElementById(session.compId);
             if (chipEl) chipEl.classList.add('arduino-flashed');
+
+            // If Arduino has no power, don't run — just stay flashed (orange)
+            if (!isArduinoPowered(session.compId)) {
+                session.running = false;
+                session.serialLines.push('⚡ No power — code flashed but not running.');
+                session.serialLines.push('Connect VIN + GND to a power source to run.');
+                updateSerialMonitor(session);
+                updateRunButton(session);
+                return;
+            }
         } else {
             // Auto-run from flash — show brief message, no upload sim
             session.serialLines = ['── Auto-run from flash ──'];
@@ -549,9 +749,15 @@ void loop() {
         }
 
         session.running = false;
-        // Turn off chip indicator
+        // Turn off running indicator, but keep flashed if code is stored
         const chipOff = document.getElementById(session.compId);
-        if (chipOff) chipOff.classList.remove('arduino-running');
+        if (chipOff) {
+            chipOff.classList.remove('arduino-running');
+            const ardComp3 = CZ.deployed.find(c => c.id === session.compId);
+            if (ardComp3 && ardComp3.isFlashed) {
+                chipOff.classList.add('arduino-flashed');
+            }
+        }
         resetAllControlled(session);
         updateRunButton(session);
     }
@@ -570,7 +776,7 @@ void loop() {
             const el = document.getElementById(s.id);
             if (!el) return;
             el.classList.remove('seg7-active');
-            el.querySelectorAll('[class^="seg-"]').forEach(seg => {
+            el.querySelectorAll('.seg').forEach(seg => {
                 seg.setAttribute('fill', '#374151');
                 seg.style.filter = 'none';
             });
@@ -592,9 +798,15 @@ void loop() {
         if (session._timers) session._timers.forEach(t => clearTimeout(t));
         session._timers = [];
         session.running = false;
-        // Remove running indicator immediately
+        // Remove running indicator, restore flashed if code is stored
         const chipEl = document.getElementById(session.compId);
-        if (chipEl) chipEl.classList.remove('arduino-running');
+        if (chipEl) {
+            chipEl.classList.remove('arduino-running');
+            const ardComp4 = CZ.deployed.find(c => c.id === session.compId);
+            if (ardComp4 && ardComp4.isFlashed) {
+                chipEl.classList.add('arduino-flashed');
+            }
+        }
         resetAllControlled(session);
         updateRunButton(session);
     }
@@ -610,7 +822,9 @@ void loop() {
     // ── Update Run/Stop button ──
     function updateRunButton(session) {
         const runBtn = document.getElementById('ard-run-' + session.compId);
+        const stopBtn = document.getElementById('ard-stop-' + session.compId);
         if (runBtn) runBtn.disabled = session.running;
+        if (stopBtn) stopBtn.disabled = !session.running;
     }
 
     // ── Create IDE Modal ──
@@ -624,8 +838,8 @@ void loop() {
 
         // Get or create session
         if (!sessions.has(compId)) {
-            // Load saved code from localStorage
-            const savedCode = localStorage.getItem('czelectro_ard_code_' + compId);
+            // Load saved code from component object
+            const savedCode = comp.arduinoCode;
             sessions.set(compId, {
                 compId,
                 code: savedCode || PRESETS['blink_led'].code,
@@ -647,22 +861,34 @@ void loop() {
             <div class="ard-ide-backdrop"></div>
             <div class="ard-ide-container">
                 <div class="ard-ide-header">
-                    <div class="ard-ide-title">
-                        <span class="ard-ide-icon">⚡</span>
-                        <span>Arduino IDE</span>
-                        <span class="ard-ide-comp-id">${compId}</span>
+                    <div class="ard-ide-toolbar-top">
+                        <div class="ard-ide-title">
+                            <span class="ard-ide-icon">⚡</span>
+                            <span>Arduino IDE</span>
+                            <span class="ard-ide-comp-id">${compId}</span>
+                            <span id="ard-flash-${compId}" class="ard-flash-badge" style="display:${comp.isFlashed ? 'inline-flex' : 'none'}">● FLASHED</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <select id="ard-preset-${compId}" class="ard-preset-select">
+                                <option value="">📂 Contoh Program...</option>
+                                ${Object.entries(PRESETS).map(([k, v]) =>
+                                    `<option value="${k}">${v.name}</option>`
+                                ).join('')}
+                            </select>
+                            <button class="ard-btn ard-btn-close" id="ard-close-${compId}">✕</button>
+                        </div>
                     </div>
-                    <div class="ard-ide-actions">
-                        <select id="ard-preset-${compId}" class="ard-preset-select">
-                            <option value="">📂 Contoh Program...</option>
-                            ${Object.entries(PRESETS).map(([k, v]) =>
-                                `<option value="${k}">${v.name}</option>`
-                            ).join('')}
-                        </select>
-                        <button id="ard-run-${compId}" class="ard-btn ard-btn-run">⬆ Upload</button>
-                        <button id="ard-reset-${compId}" class="ard-btn ard-btn-stop">↺ Reset</button>
-                        <span id="ard-flash-${compId}" style="color:#22c55e;font-size:11px;margin-left:4px;display:${localStorage.getItem('czelectro_ard_flash_' + compId) ? 'inline' : 'none'}" title="Program ter-flash di chip">● FLASHED</span>
-                        <button class="ard-btn ard-btn-close" id="ard-close-${compId}">✕</button>
+                    <div class="ard-ide-toolbar-actions">
+                        <button id="ard-run-${compId}" class="ard-btn ard-btn-run" ${session.running ? 'disabled' : ''}>⬆ Upload</button>
+                        <button id="ard-stop-${compId}" class="ard-btn ard-btn-stop" ${session.running ? '' : 'disabled'}>⏹ Stop</button>
+                        <div class="ard-toolbar-sep"></div>
+                        <button id="ard-reset-${compId}" class="ard-btn ard-btn-reset" title="Stop & restart program">↺ Reset</button>
+                        <button id="ard-erase-${compId}" class="ard-btn ard-btn-erase" title="Hapus program dari chip">🗑 Erase</button>
+                        <div class="ard-toolbar-sep"></div>
+                        <div class="ard-ide-status-inline">
+                            <span class="ard-status-dot ${session.running ? 'running' : ''}"></span>
+                            <span>${session.connected.leds.length} LED, ${session.connected.seg7s.length} 7-Seg, ${session.connected.motors.length + session.connected.fans.length} Motor</span>
+                        </div>
                     </div>
                 </div>
                 <div class="ard-ide-body">
@@ -676,10 +902,6 @@ void loop() {
                             <button id="ard-clear-serial-${compId}" class="ard-btn-mini">Clear</button>
                         </div>
                         <pre id="ard-serial-${compId}" class="ard-serial-output">${session.serialLines.join('\n')}</pre>
-                        <div class="ard-ide-status">
-                            <span class="ard-status-dot ${session.running ? 'running' : ''}"></span>
-                            <span>${session.connected.seg7s.length} × 7-Seg, ${session.connected.leds.length} × LED, ${session.connected.motors.length + session.connected.fans.length} × Motor</span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -687,11 +909,11 @@ void loop() {
 
         document.body.appendChild(modal);
 
-        // Helper: save code to localStorage
+        // Helper: save code to component object
         const saveCode = () => {
             const val = document.getElementById(`ard-code-${compId}`).value;
             session.code = val;
-            localStorage.setItem('czelectro_ard_code_' + compId, val);
+            comp.arduinoCode = val;
         };
 
         // Event handlers
@@ -699,6 +921,13 @@ void loop() {
             saveCode();
             session.connected = findConnected(compId);
             runArduinoCode(session);
+        };
+        document.getElementById(`ard-stop-${compId}`).onclick = () => {
+            if (session.running) {
+                stopArduino(session);
+                session.serialLines.push('⏹ Program stopped');
+                updateSerialMonitor(session);
+            }
         };
         document.getElementById(`ard-reset-${compId}`).onclick = () => {
             // Reset = stop + restart (like pressing physical reset button)
@@ -709,14 +938,30 @@ void loop() {
             }
             // Restart from flash after brief delay
             setTimeout(() => {
-                const flashedCode = localStorage.getItem('czelectro_ard_flash_' + compId);
-                if (flashedCode && isArduinoPowered(compId)) {
-                    session.code = flashedCode;
+                if (comp.isFlashed && comp.arduinoCode && isArduinoPowered(compId)) {
+                    session.code = comp.arduinoCode;
                     session.connected = findConnected(compId);
                     session.aborted = false;
                     runArduinoCode(session, true);
                 }
             }, 300);
+        };
+        document.getElementById(`ard-erase-${compId}`).onclick = () => {
+            // Erase = stop + clear flash
+            if (session.running) stopArduino(session);
+            comp.arduinoCode = undefined;
+            comp.isFlashed = false;
+            session.code = PRESETS['blink_led'].code;
+            document.getElementById(`ard-code-${compId}`).value = session.code;
+            const flashEl = document.getElementById(`ard-flash-${compId}`);
+            if (flashEl) flashEl.style.display = 'none';
+            const chipEl = document.getElementById(compId);
+            if (chipEl) {
+                chipEl.classList.remove('arduino-running', 'arduino-flashed');
+            }
+            session.serialLines.push('🗑 Flash erased — program cleared');
+            updateSerialMonitor(session);
+            CZ.saveState();
         };
         document.getElementById(`ard-close-${compId}`).onclick = () => {
             saveCode();
@@ -739,20 +984,20 @@ void loop() {
         };
 
         // Auto-save on every keystroke (debounced)
+        const codeEl = document.getElementById(`ard-code-${compId}`);
         let _saveTimer = null;
-        document.getElementById(`ard-code-${compId}`).addEventListener('input', () => {
+        codeEl.addEventListener('input', () => {
             clearTimeout(_saveTimer);
             _saveTimer = setTimeout(saveCode, 500);
         });
-
-        // Tab key support in editor
-        document.getElementById(`ard-code-${compId}`).addEventListener('keydown', (e) => {
+        // Tab key → insert 2 spaces (instead of changing focus)
+        codeEl.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
-                const ta = e.target;
-                const s = ta.selectionStart;
-                ta.value = ta.value.substring(0, s) + '  ' + ta.value.substring(ta.selectionEnd);
-                ta.selectionStart = ta.selectionEnd = s + 2;
+                const start = codeEl.selectionStart;
+                const end = codeEl.selectionEnd;
+                codeEl.value = codeEl.value.substring(0, start) + '  ' + codeEl.value.substring(end);
+                codeEl.selectionStart = codeEl.selectionEnd = start + 2;
             }
         });
 
@@ -773,6 +1018,7 @@ void loop() {
     };
 
     // Check if Arduino has power (VIN→source + GND→source)
+    // Terminal indices: VIN=12, GND=13, GND2=21
     function isArduinoPowered(compId) {
         const isSourceComp = (otherId) => {
             const c = CZ.deployed.find(x => x.id === otherId);
@@ -780,13 +1026,13 @@ void loop() {
             return c.type.startsWith('battery') || c.type.startsWith('solar_') || c.type === 'pln_source';
         };
         const hasVIN = CZ.wires.some(w => {
-            if (w.c1 === compId && w.i1 === 0) return isSourceComp(w.c2);
-            if (w.c2 === compId && w.i2 === 0) return isSourceComp(w.c1);
+            if (w.c1 === compId && w.i1 === 12) return isSourceComp(w.c2);
+            if (w.c2 === compId && w.i2 === 12) return isSourceComp(w.c1);
             return false;
         });
         const hasGND = CZ.wires.some(w => {
-            if (w.c1 === compId && (w.i1 === 2 || w.i1 === 6)) return isSourceComp(w.c2);
-            if (w.c2 === compId && (w.i2 === 2 || w.i2 === 6)) return isSourceComp(w.c1);
+            if (w.c1 === compId && (w.i1 === 13 || w.i1 === 21)) return isSourceComp(w.c2);
+            if (w.c2 === compId && (w.i2 === 13 || w.i2 === 21)) return isSourceComp(w.c1);
             return false;
         });
         return hasVIN && hasGND;
@@ -794,8 +1040,8 @@ void loop() {
 
     // Auto-run flashed code on a specific Arduino
     function autoRunFlashed(compId) {
-        const flashedCode = localStorage.getItem('czelectro_ard_flash_' + compId);
-        if (!flashedCode) return;
+        const ardComp = CZ.deployed.find(c => c.id === compId);
+        if (!ardComp || !ardComp.isFlashed || !ardComp.arduinoCode) return;
 
         // Always show flashed indicator on chip
         const chipEl = document.getElementById(compId);
@@ -811,7 +1057,7 @@ void loop() {
         if (!sessions.has(compId)) {
             sessions.set(compId, {
                 compId,
-                code: flashedCode,
+                code: ardComp.arduinoCode,
                 serialLines: [],
                 connected: findConnected(compId),
                 running: false,
@@ -821,23 +1067,45 @@ void loop() {
             });
         }
         const s = sessions.get(compId);
-        s.code = flashedCode;
+        s.code = ardComp.arduinoCode;
         s.connected = findConnected(compId);
         s.aborted = false;
         runArduinoCode(s, true); // skip upload simulation
     }
 
-    // Called when wires change — stop if disconnected, auto-run if power restored
+    // Called when wires change — stop if lost power, auto-run if power restored
+    // NOTE: Arduino keeps running as long as it has power (VIN + GND connected),
+    // even if downstream wires are disconnected. This matches real Arduino behavior.
+    // Downstream effects (LED off, motor stop) are handled by MNA circuit evaluation.
     CZ.onArduinoWiresChanged = function() {
-        // 1. Check ALL Arduinos — stop if lost power
+        // 1. Check ALL running Arduinos — stop ONLY if power is lost
         sessions.forEach(session => {
+            // Always refresh connected components so interpreter sees updated topology
+            session.connected = findConnected(session.compId);
+
             if (!session.running) return;
             if (!isArduinoPowered(session.compId)) {
                 stopArduino(session);
                 session.serialLines.push('⚡ Power lost — program stopped');
                 updateSerialMonitor(session);
             }
-            session.connected = findConnected(session.compId);
+        });
+
+        // 1b. Reset disconnected 7-segment displays to gray
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'seven_segment') return;
+            const hasT0 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0));
+            const hasT1 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 1) || (w.c2 === c.id && w.i2 === 1));
+            if (!hasT0 || !hasT1) {
+                const el = document.getElementById(c.id);
+                if (el) {
+                    el.querySelectorAll('.seg').forEach(s => {
+                        s.setAttribute('fill', '#374151');
+                        s.style.filter = 'none';
+                    });
+                    el.classList.remove('seg7-active');
+                }
+            }
         });
 
         // 2. Auto-run: check if any Arduino just got power and has flashed code
@@ -861,6 +1129,22 @@ void loop() {
 
     // Run after page load (delay to let circuit render)
     setTimeout(() => {
+        // ── Migrate old localStorage keys → component properties ──
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'arduino_uno') return;
+            const oldFlash = localStorage.getItem('czelectro_ard_flash_' + c.id);
+            const oldCode = localStorage.getItem('czelectro_ard_code_' + c.id);
+            if (oldFlash && !c.arduinoCode) {
+                c.arduinoCode = oldFlash;
+                c.isFlashed = true;
+            } else if (oldCode && !c.arduinoCode) {
+                c.arduinoCode = oldCode;
+            }
+            // Clean up old keys
+            localStorage.removeItem('czelectro_ard_flash_' + c.id);
+            localStorage.removeItem('czelectro_ard_code_' + c.id);
+        });
+
         if (typeof CZ.autoRunFlashedArduinos === 'function') {
             CZ.autoRunFlashedArduinos();
         }

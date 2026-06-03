@@ -568,6 +568,14 @@
                     }
                     pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
                     pwrBadge.classList.toggle('off', comp.isPoweredOff);
+                    // Immediately reset 7-segment segments when powered off
+                    if (comp.type === 'seven_segment' && comp.isPoweredOff) {
+                        CZ.dragEl.querySelectorAll('.seg').forEach(s => {
+                            s.setAttribute('fill', '#374151');
+                            s.style.filter = 'none';
+                        });
+                        CZ.dragEl.classList.remove('seg7-active');
+                    }
                     CZ.SFX.switchClick();
                     if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.evaluateCircuit();
@@ -664,6 +672,7 @@
                             });
                             CZ.renderWires();
                             CZ.evaluateCircuit();
+                            if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                             CZ.SFX.wireSnap();
                             CZ.saveState();
                         }
@@ -762,6 +771,7 @@
                 if (!isTouchDevice) {
                     // Desktop: instant delete
                     CZ.wires.splice(wIdx, 1);
+                    if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.renderWires(); CZ.evaluateCircuit();
                     CZ.saveState();
                 } else {
@@ -1180,6 +1190,11 @@
         });
 
         document.addEventListener('keydown', e => {
+            // Skip workspace shortcuts when typing in text inputs or Arduino IDE
+            const tag = document.activeElement?.tagName;
+            const inIDE = document.activeElement?.closest('#arduino-ide-modal');
+            if (inIDE || tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (CZ.selectedIds.size > 0) {
                     e.preventDefault();
