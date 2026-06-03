@@ -205,7 +205,7 @@
         // ── Sidebar drag (mouse) — spawn component ──
         document.addEventListener('mousedown', e => {
             const sItem = e.target.closest('.sidebar-item');
-            if (sItem) {
+            if (sItem && e.button === 0) {
                 e.preventDefault();
                 const tmplId = sItem.dataset.id;
                 const tmpl = COMPONENTS.find(t => t.id === tmplId);
@@ -518,12 +518,36 @@
                     CZ.saveState();
                 }
 
+                // ── Push Button toggle (momentary, but acts as toggle in sim) ──
+                if (comp && comp.type === 'push_button') {
+                    comp.isClosed = !comp.isClosed;
+                    comp.currentResistance = comp.isClosed ? EL.SIM.SWITCH_ON_R : EL.SIM.SWITCH_OFF_R;
+                    CZ.dragEl.classList.toggle('pushbtn-pressed', comp.isClosed);
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
+                // ── DPDT Switch toggle (position A ↔ B) ──
+                if (comp && comp.type === 'dpdt_switch') {
+                    comp.isClosed = !comp.isClosed;
+                    comp.currentResistance = comp.isClosed ? EL.SIM.SWITCH_ON_R : EL.SIM.SWITCH_ON_R;
+                    CZ.dragEl.classList.toggle('dpdt-pos-a', comp.isClosed);
+                    CZ.dragEl.classList.toggle('dpdt-pos-b', !comp.isClosed);
+                    CZ.SFX.switchClick();
+                    CZ.evaluateCircuit();
+                    CZ.saveState();
+                }
+
+                // ── Relay toggle (manual on/off when not energized) ──
+
                 // ── Power on/off for output components ──
                 const TOGGLEABLE = [
                     'tv_led','fridge','pump_125','pump_250','lamp_30w',
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
-                    'led_red','led_green','led_blue','led_white','led_rgb'
+                    'led_red','led_green','led_blue','led_white','led_rgb',
+                    'fan_12v','servo_sg90','seven_segment'
                 ];
                 if (comp && TOGGLEABLE.includes(comp.type)) {
                     comp.isPoweredOff = !comp.isPoweredOff;
@@ -580,7 +604,7 @@
                     });
                     // Reset display
                     const rdg = CZ.dragEl.querySelector('.vm-reading');
-                    if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', modeColor[next]); rdg.setAttribute('font-size', '16'); }
+                    if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', modeColor[next]); rdg.setAttribute('font-size', '12'); }
                     const unt = CZ.dragEl.querySelector('.vm-unit');
                     if (unt) { unt.textContent = next; unt.setAttribute('fill', modeColor[next]); }
                     // Remove old badge
@@ -855,6 +879,16 @@
             menuItems += `<div class="ctx-item" data-action="rotate">↻ ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="rotaterev">↺ ${CZ.t('ctxRotateRev')} (Shift+R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="copytext">📝 ${CZ.t('ctxCopyText')}</div>`;
+
+            // Variant switching — only for single component with multiple variants
+            if (!isMulti && comp) {
+                const varGroup = REGISTRY.getGroupForComponent(comp.type);
+                if (varGroup && varGroup.variants.length > 1) {
+                    const varLabel = CZ.lang === 'en' ? 'Change Variant' : 'Ubah Varian';
+                    menuItems += `<div class="ctx-item" data-action="variant" data-group-id="${varGroup.groupId}">🔀 ${varLabel} (${varGroup.variants.length})</div>`;
+                }
+            }
+
             menuItems += `<div class="ctx-sep"></div>`;
 
             const anyInGroup = [...CZ.selectedIds].some(id => CZ.groups.some(g => g.members.includes(id)));
@@ -1039,6 +1073,14 @@
                     CZ.rotateSelection();
                 } else if (action === 'rotaterev') {
                     CZ.rotateSelection(-90);
+                } else if (action === 'variant' && comp) {
+                    const groupId = ev.target.closest('.ctx-item')?.dataset.groupId;
+                    const varGroup = COMPONENT_MANIFEST.find(g => g.groupId === groupId);
+                    if (varGroup) {
+                        menu.remove();
+                        CZ._showVariantMenu(e.clientX, e.clientY, varGroup, 'workspace', comp);
+                        return; // Don't remove menu again below
+                    }
                 } else if (action === 'group') {
                     CZ.groupSelected();
                 } else if (action === 'ungroup') {
@@ -1206,6 +1248,7 @@
     };
 
     // ── Boot ──
-    document.addEventListener('DOMContentLoaded', CZ.init);
+    // Init is called by components-loader.js after all component modules are loaded via import()
+    // (was previously: document.addEventListener('DOMContentLoaded', CZ.init))
 
 })(window.CZ);

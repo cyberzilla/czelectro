@@ -46,29 +46,19 @@
     function mmUpdateDisplay(el, v, mode) {
         const fmt = mmFormatValue(v, mode);
         const color = mmColor(v, mode);
-        const rdg = el.querySelector('.vm-reading');
-        const unt = el.querySelector('.vm-unit');
+        const rdg = el.querySelector('.vm-reading') || el.querySelector('.am-reading');
+        const unt = el.querySelector('.vm-unit') || el.querySelector('.am-unit');
         if (rdg) {
             rdg.textContent = fmt.val;
             rdg.setAttribute('fill', color);
-            // Auto-scale font to fit 56px-wide screen
-            const len = fmt.val.length;
-            const fontSize = len <= 4 ? 16 : len <= 5 ? 13 : 11;
-            rdg.setAttribute('font-size', fontSize);
+            rdg.setAttribute('font-size', 12);
         }
         if (unt) {
             unt.textContent = fmt.unit;
             unt.setAttribute('fill', color);
             unt.setAttribute('opacity', '0.8');
-            // Adjust unit font size for long units like 'mΩ', 'MΩ', 'µA'
-            unt.setAttribute('font-size', fmt.unit.length > 2 ? 6 : 8);
+            unt.setAttribute('font-size', 7);
         }
-        // Badge
-        let badge = el.querySelector('.vm-badge');
-        if (!badge) { badge = document.createElement('div'); badge.className = 'vm-badge'; el.appendChild(badge); }
-        badge.textContent = `${fmt.val} ${fmt.unit}`;
-        badge.style.color = color;
-        badge.style.borderColor = color + '66';
     }
     function mmAnimate(comp, el, targetV, mode) {
         if (comp._vmAnimId) { cancelAnimationFrame(comp._vmAnimId); comp._vmAnimId = null; }
@@ -111,7 +101,7 @@
         CZ.deployed.forEach(c => {
             const el = document.getElementById(c.id);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active','pln-active','ats-pln-mode','ats-plts-mode');
+            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active','pln-active','ats-pln-mode','ats-plts-mode','fan-active','servo-active','seg7-active','transistor-active','mosfet-active','opamp-active','scr-active','triac-active','zener-active','inductor-active','sensor-active','crystal-active','photodiode-active','arduino-active','trafo-active','vreg-active','am-active');
             if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
             if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
             // Clear timer intervals only during full reset (not during timer-triggered re-eval)
@@ -123,6 +113,10 @@
             if (ring && !c.isBroken) { ring.style.fillOpacity = '0'; ring.style.fill = ''; }
             const spin = el.querySelector('.motor-spin');
             if (spin) spin.style.animation = 'none';
+            const fanSpin = el.querySelector('.fan-spin');
+            if (fanSpin) fanSpin.style.animation = 'none';
+            const servoArm = el.querySelector('.servo-arm');
+            if (servoArm) servoArm.style.animation = 'none';
             el.querySelectorAll('.motor-dir-badge,.scc-status,.no-ac-badge,.power-badge,.sd-status,.mcb-amp-badge,.mcb-trip-badge,.ats-mode-badge').forEach(b => b.remove());
             // Reset meter disc
             const mDiscGroup = el.querySelector('.meter-disc-group');
@@ -313,15 +307,7 @@
             return acNodeVoltage[cr.nodeP] || acNodeVoltage[cr.nodeN] || 0;
         };
 
-        // Debug logging
-        if (hasLoop) {
-            const activeComps = result.components.filter(cr => Math.abs(cr.current) > EL.SIM.MIN_CURRENT);
-            console.log(`[MNA] Circuit: ${activeComps.length} active components, ${Object.keys(nodeDomain).filter(k => nodeDomain[k] === 'AC').length} AC nodes`);
-            activeComps.forEach(cr => {
-                const tmpl = cr.tmpl;
-                console.log(`  ${cr.comp.type} (${cr.comp.id}): V=${cr.vDrop.toFixed(3)}V, I=${(cr.current*1000).toFixed(1)}mA, P=${cr.power.toFixed(3)}W, nodes=[${cr.nodeP},${cr.nodeN}] domain=${nodeDomain[cr.nodeP]||'DC'}/${nodeDomain[cr.nodeN]||'DC'}`);
-            });
-        }
+
 
         // Compute source/load power for display
         let srcPower = 0, loadPower = 0;
@@ -444,8 +430,8 @@
                 const tmpl = cr.tmpl;
 
                 // ── Multimeter — mode-aware measurement, handle before amps threshold ──
-                if (tmpl && (tmpl.isMultimeter || tmpl.isVoltmeter)) {
-                    const mode = c.mmMode || 'V';
+                if (tmpl && (tmpl.isMultimeter || tmpl.isVoltmeter || tmpl.isAmmeter)) {
+                    const mode = c.mmMode || (tmpl.isAmmeter ? 'A' : 'V');
                     let measured = 0;
                     if (mode === 'V') {
                         measured = Math.abs(cr.vDrop);
@@ -524,9 +510,9 @@
                     c._vmProcessed = true;
                     const threshold = mode === 'A' ? 1e-7 : mode === 'Ω' ? EL.SIM.MIN_RESISTANCE : EL.SIM.MIN_VOLTAGE;
                     if (measured > threshold) {
-                        const vmIndicator = el.querySelector('.vm-indicator');
+                        const vmIndicator = el.querySelector('.vm-indicator') || el.querySelector('.am-indicator');
                         if (vmIndicator) vmIndicator.style.fill = '#22c55e';
-                        el.classList.add('vm-active');
+                        el.classList.add(tmpl.isAmmeter ? 'am-active' : 'vm-active');
                         const changeSig = mode === 'Ω'
                             ? Math.abs(measured - (c._vmTarget || 0)) > measured * 0.02  // 2% change
                             : Math.abs(measured - (c._vmTarget || 0)) > (mode === 'A' ? EL.SIM.MIN_CURRENT : 0.01);
@@ -541,6 +527,12 @@
                         mmAnimate(c, el, 0, mode);
                     }
                     return;
+                }
+
+                // 7-Segment cleanup when no current
+                if (c.type === 'seven_segment' && c._seg7Interval && amps < EL.SIM.MIN_CURRENT) {
+                    clearInterval(c._seg7Interval); c._seg7Interval = null;
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
                 }
 
                 if (amps < EL.SIM.MIN_CURRENT) return;
@@ -701,6 +693,95 @@
                 if (c.type === 'lamp_30w') { el.classList.add('ac-active'); const g = el.querySelector('.lamp-glow'); if (g) { g.style.fill = '#fbbf24'; g.style.opacity = '0.6'; g.style.filter = 'blur(4px)'; } }
                 if (c.type === 'computer') { el.classList.add('ac-active'); const s = el.querySelector('.pc-screen'); if (s) { s.style.fill = '#1e3a5f'; s.style.filter = 'brightness(1.4)'; } const p = el.querySelector('.pc-power'); if (p) p.style.opacity = '1'; const i = el.querySelector('.pc-indicator'); if (i) i.style.fill = '#22c55e'; }
                 if (c.type === 'pump_125' || c.type === 'pump_250') { el.classList.add('ac-active'); const imp = el.querySelector('.pump-impeller'); if (imp) imp.style.animation = 'spin 0.5s linear infinite'; const i = el.querySelector('.pump-indicator'); if (i) i.style.fill = '#22c55e'; }
+
+                // ── New Components — activation ──
+                // DC Fan
+                if (c.type === 'fan_12v') {
+                    const rated = 12;
+                    const speedRatio = Math.min(vComp / rated, 1);
+                    if (speedRatio >= 0.03) {
+                        el.classList.add('fan-active');
+                        const speed = 0.2 + (1 - speedRatio) * 3.8;
+                        const fs = el.querySelector('.fan-spin');
+                        if (fs) fs.style.animation = `spin ${speed.toFixed(2)}s linear infinite`;
+                    }
+                }
+                // Servo Motor
+                if (c.type === 'servo_sg90' && vComp > 0.5) { el.classList.add('servo-active'); const sa = el.querySelector('.servo-arm'); if (sa) sa.style.animation = 'servoSweep 2s ease-in-out infinite'; }
+                // 7-Segment Display — animated counter 0→9
+                if (c.type === 'seven_segment' && amps > EL.SIM.MIN_CURRENT) {
+                    el.classList.add('seg7-active');
+                    if (!c._seg7Interval) {
+                        // Segment truth table: [a,b,c,d,e,f,g] for digits 0-9
+                        const DIGITS = [
+                            [1,1,1,1,1,1,0], // 0
+                            [0,1,1,0,0,0,0], // 1
+                            [1,1,0,1,1,0,1], // 2
+                            [1,1,1,1,0,0,1], // 3
+                            [0,1,1,0,0,1,1], // 4
+                            [1,0,1,1,0,1,1], // 5
+                            [1,0,1,1,1,1,1], // 6
+                            [1,1,1,0,0,0,0], // 7
+                            [1,1,1,1,1,1,1], // 8
+                            [1,1,1,1,0,1,1], // 9
+                        ];
+                        const SEG_NAMES = ['a','b','c','d','e','f','g'];
+                        c._seg7Digit = 0;
+                        const updateDigit = () => {
+                            const pattern = DIGITS[c._seg7Digit];
+                            SEG_NAMES.forEach((name, i) => {
+                                const seg = el.querySelector('.seg-' + name);
+                                if (seg) {
+                                    if (pattern[i]) {
+                                        seg.setAttribute('fill', '#ef4444');
+                                        seg.style.filter = 'drop-shadow(0 0 3px rgba(239,68,68,0.8))';
+                                    } else {
+                                        seg.setAttribute('fill', '#374151');
+                                        seg.style.filter = 'none';
+                                    }
+                                }
+                            });
+                            // Blink decimal point every other digit
+                            const dp = el.querySelector('.seg-dp');
+                            if (dp) {
+                                dp.setAttribute('fill', c._seg7Digit % 2 === 0 ? '#ef4444' : '#374151');
+                                dp.style.filter = c._seg7Digit % 2 === 0 ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
+                            }
+                            c._seg7Digit = (c._seg7Digit + 1) % 10;
+                        };
+                        updateDigit();
+                        c._seg7Interval = setInterval(updateDigit, 800);
+                    }
+                } else if (c.type === 'seven_segment' && c._seg7Interval) {
+                    clearInterval(c._seg7Interval); c._seg7Interval = null;
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#7f1d1d'); s.style.filter = 'none'; });
+                }
+                // Transistor
+                if ((c.type === 'transistor_npn' || c.type === 'transistor_pnp') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('transistor-active'); }
+                // MOSFET
+                if ((c.type === 'mosfet_n' || c.type === 'mosfet_p') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('mosfet-active'); }
+                // Op-Amp
+                if (c.type === 'opamp_741' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('opamp-active'); }
+                // SCR
+                if (c.type === 'scr' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('scr-active'); }
+                // Triac
+                if (c.type === 'triac' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('triac-active'); }
+                // Zener Diode
+                if (c.type === 'zener_5v1' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('zener-active'); }
+                // Inductor
+                if (c.type === 'inductor_100u' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('inductor-active'); }
+                // LDR / Thermistor / Varistor
+                if ((c.type === 'ldr' || c.type === 'thermistor_ntc' || c.type === 'varistor_275v') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('sensor-active'); }
+                // Crystal
+                if (c.type === 'crystal_16m' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('crystal-active'); }
+                // Photodiode
+                if (c.type === 'photodiode' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('photodiode-active'); }
+                // Arduino
+                if (c.type === 'arduino_uno' && vComp > 3) { el.classList.add('arduino-active'); }
+                // Transformer
+                if (c.type === 'trafo_1a' && amps > EL.SIM.MIN_CURRENT) { el.classList.add('trafo-active'); }
+                // Voltage Regulator
+                if ((c.type === 'vreg_7805' || c.type === 'vreg_7812' || c.type === 'vreg_lm317') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('vreg-active'); }
 
                 // ── Charge Controller badge ──
                 if (tmpl && tmpl.isChargeController) {

@@ -10,20 +10,44 @@
     CZ.renderSidebar = function() {
         CZ.listEl.innerHTML = '';
         const catOrder = { source: 0, passive: 1, control: 2, output: 3 };
-        const sorted = [...COMPONENTS].sort((a, b) => (catOrder[a.category] ?? 9) - (catOrder[b.category] ?? 9) || a.name.localeCompare(b.name));
-        let filtered = activeCategory === 'all' ? sorted : sorted.filter(c => c.category === activeCategory);
 
-        // Apply search filter
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(c =>
-                c.name.toLowerCase().includes(q) ||
-                c.spec.toLowerCase().includes(q) ||
-                c.id.toLowerCase().includes(q)
-            );
+        // Build grouped sidebar from manifest
+        let groups = COMPONENT_MANIFEST.map(group => {
+            const defaultTmpl = REGISTRY.find(group.defaultVariant);
+            if (!defaultTmpl) return null;
+            return {
+                group,
+                tmpl: defaultTmpl,
+                category: group.category,
+                variantCount: group.variants.length
+            };
+        }).filter(Boolean);
+
+        // Sort by category then name
+        groups.sort((a, b) => (catOrder[a.category] ?? 9) - (catOrder[b.category] ?? 9) || a.tmpl.name.localeCompare(b.tmpl.name));
+
+        // Category filter
+        if (activeCategory !== 'all') {
+            groups = groups.filter(g => g.category === activeCategory);
         }
 
-        if (filtered.length === 0 && searchQuery) {
+        // Search filter — search across ALL variants in each group
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            groups = groups.filter(g => {
+                // Check group label
+                if (g.group.label.toLowerCase().includes(q)) return true;
+                if (g.group.labelEn && g.group.labelEn.toLowerCase().includes(q)) return true;
+                // Check all variants in the group
+                return g.group.variants.some(v =>
+                    v.label.toLowerCase().includes(q) ||
+                    v.spec.toLowerCase().includes(q) ||
+                    v.id.toLowerCase().includes(q)
+                );
+            });
+        }
+
+        if (groups.length === 0 && searchQuery) {
             const empty = document.createElement('div');
             empty.className = 'sidebar-empty';
             empty.textContent = `${CZ.t('searchEmpty')}: "${searchQuery}"`;
@@ -31,14 +55,138 @@
             return;
         }
 
-        filtered.forEach(tmpl => {
+        groups.forEach(({ group, tmpl, variantCount }) => {
             const item = document.createElement('div');
             item.className = 'sidebar-item';
             item.dataset.id = tmpl.id;
+            item.dataset.groupId = group.groupId;
+
+            const variantBadge = variantCount > 1
+                ? `<span class="variant-badge" title="Klik kanan untuk pilih varian">${variantCount}</span>`
+                : '';
+
+            // Multi-variant: show group label (e.g. "LED", "Resistor")
+            // Single-variant: show component name directly
+            const displayName = variantCount > 1
+                ? (CZ.lang === 'en' && group.labelEn ? group.labelEn : group.label)
+                : CZ.getCompName(tmpl);
+
             item.innerHTML = `<div class="item-icon">${tmpl.svg}</div>
-                <div class="item-details"><span class="item-name">${CZ.getCompName(tmpl)}</span><span class="item-spec">${CZ.getCompSpec(tmpl)}</span></div>`;
+                <div class="item-details"><span class="item-name">${displayName}${variantBadge}</span><span class="item-spec">${CZ.getCompSpec(tmpl)}</span></div>`;
+
+            // Right-click on sidebar item
+            if (variantCount > 1) {
+                // Multiple variants → show variant submenu
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    CZ._showVariantMenu(e.clientX, e.clientY, group, 'sidebar');
+                });
+            } else {
+                // Single variant → just disable browser context menu
+                item.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
             CZ.listEl.appendChild(item);
         });
+    };
+
+    // ── Variant Submenu ──
+    CZ._showVariantMenu = function(x, y, group, source, deployedComp) {
+        // Remove existing menus
+        document.querySelector('.ctx-menu')?.remove();
+        document.querySelector('.variant-menu')?.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'variant-menu ctx-menu';
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        const title = CZ.lang === 'en'
+            ? `✦ Select Variant — ${group.labelEn || group.label}`
+            : `✦ Pilih Varian — ${group.label}`;
+        let html = `<div class="ctx-item ctx-title">${title}</div><div class="ctx-sep"></div>`;
+
+        let currentId;
+        if (deployedComp) {
+            currentId = deployedComp.type;
+        } else if (source === 'sidebar') {
+            const sItem = CZ.listEl.querySelector(`[data-group-id="${group.groupId}"]`);
+            currentId = sItem ? sItem.dataset.id : group.defaultVariant;
+        } else {
+            currentId = group.defaultVariant;
+        }
+
+        group.variants.forEach(v => {
+            const isActive = v.id === currentId;
+            const tmpl = REGISTRY.find(v.id);
+            const label = tmpl ? CZ.getCompName(tmpl) : v.label;
+            const spec = tmpl ? CZ.getCompSpec(tmpl) : v.spec;
+            html += `<div class="ctx-item${isActive ? ' ctx-active' : ''}" data-variant-id="${v.id}">
+                ${isActive ? '✓ ' : '&nbsp;&nbsp;'}${label} <span class="ctx-spec">${spec}</span>
+            </div>`;
+        });
+
+        menu.innerHTML = html;
+        document.body.appendChild(menu);
+
+        // Auto-position: clamp to viewport + max-height with scroll
+        requestAnimationFrame(() => {
+            const maxH = Math.floor(window.innerHeight * 0.7);
+            menu.style.maxHeight = maxH + 'px';
+            menu.style.overflowY = 'auto';
+
+            const rect = menu.getBoundingClientRect();
+            // Horizontal clamp
+            if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+            if (rect.left < 0) menu.style.left = '8px';
+            // Vertical: prefer showing below click, flip above if no room
+            if (rect.bottom > window.innerHeight) {
+                const above = y - rect.height;
+                menu.style.top = (above >= 8 ? above : 8) + 'px';
+            }
+            if (parseFloat(menu.style.top) < 8) menu.style.top = '8px';
+        });
+
+        menu.addEventListener('click', ev => {
+            const variantId = ev.target.closest('.ctx-item')?.dataset.variantId;
+            if (!variantId) return;
+
+            if (source === 'sidebar') {
+                // Update sidebar default to selected variant
+                const sidebarItem = CZ.listEl.querySelector(`[data-group-id="${group.groupId}"]`);
+                if (sidebarItem) {
+                    sidebarItem.dataset.id = variantId;
+                    const tmpl = REGISTRY.find(variantId);
+                    if (tmpl) {
+                        const iconEl = sidebarItem.querySelector('.item-icon');
+                        const nameEl = sidebarItem.querySelector('.item-name');
+                        const specEl = sidebarItem.querySelector('.item-spec');
+                        if (iconEl) iconEl.innerHTML = tmpl.svg;
+                        if (nameEl) {
+                            const badge = nameEl.querySelector('.variant-badge');
+                            nameEl.textContent = CZ.getCompName(tmpl);
+                            if (badge) nameEl.appendChild(badge);
+                        }
+                        if (specEl) specEl.textContent = CZ.getCompSpec(tmpl);
+                    }
+                }
+            } else if (source === 'workspace' && deployedComp) {
+                // Switch variant on deployed component
+                REGISTRY.switchVariant(deployedComp, variantId, CZ);
+            }
+
+            menu.remove();
+        });
+
+        // Close on outside click
+        const closeHandler = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('mousedown', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', closeHandler), 0);
     };
 
     // Alias for i18n language switch callback

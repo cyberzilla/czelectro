@@ -271,8 +271,10 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script src="js/electrical-laws.js"></script>
-    <script src="js/components.js?v=3"></script>
-    <!-- Modular architecture: laws → components → state → i18n → audio → grid → wire → effects → solver → evaluate → battery → ui → events -->
+    <!-- ── Modular Component System ── -->
+    <script src="js/core/registry.js"></script>
+    <script src="js/components/manifest.js"></script>
+    <!-- Core modules: state → i18n → audio → grid → wire → effects → solver → evaluate → battery → ui → events -->
     <script src="js/state.js?v=4"></script>
     <script src="js/i18n.js"></script>
     <script src="js/audio.js"></script>
@@ -285,7 +287,9 @@
     <script src="js/battery-sim.js"></script>
     <script src="js/components-ui.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/events.js?v=3"></script>
+    <script src="js/events.js?v=4"></script>
+    <!-- Component Loader: loads all component modules via import(), then calls CZ.init() -->
+    <script type="module" src="js/components-loader.js"></script>
 
     <!-- Import JSON Modal -->
     <div id="import-modal" class="import-modal-overlay hidden">

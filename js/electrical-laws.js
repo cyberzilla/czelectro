@@ -40,13 +40,14 @@ window.EL = (function() {
         SWITCH_OFF_R: Infinity,
         // Voltmeter / Ohmmeter input impedance (Ω) — 10MΩ seperti DMM nyata
         METER_HIGH_Z: 10000000,
-        // Ammeter shunt resistance (Ω) — sangat rendah
-        METER_SHUNT_R: 0.001,
+        // Ammeter shunt resistance (Ω) — sangat rendah agar tidak mengganggu rangkaian
+        // Real DMM: ~10µΩ, cukup kecil agar 2+ meter seri tetap akurat
+        METER_SHUNT_R: 0.00001,
         // DMM internal fuse rating (A) — standar multimeter
         METER_FUSE_A: 10.0,
         // Minimum resistance yang valid di MNA solver (Ω)
         // Nilai di bawah ini di-clamp untuk stabilitas numerik
-        MIN_RESISTANCE: 0.001,
+        MIN_RESISTANCE: 0.000001,
         // Resistance dianggap open circuit (Ω)
         OPEN_CIRCUIT_R: 1e12,
         // Arus minimum yang dianggap "mengalir" (A)

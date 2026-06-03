@@ -116,23 +116,46 @@
     };
 
     // ── Make wire path ──
-    // Generates Catmull-Rom spline path through control points.
+    // Generates smooth wire path. Uses simple cubic Bezier when control points
+    // are at default, switches to Catmull-Rom spline when user has moved handles.
     CZ.makeWirePath = function(p1, dir1, p2, dir2, controlPoints, spreadOffset) {
-        const pts = CZ.resolveControlPoints(p1, dir1, p2, dir2, controlPoints);
-
-        // Build smooth path: p1 → pts[0] → pts[1] → pts[2] → p2
-        // Use Catmull-Rom to Bezier conversion for smooth segments
-        const allPts = [p1, pts[0], pts[1], pts[2], p2];
-        const n = allPts.length;
-        let d = `M ${allPts[0].x} ${allPts[0].y}`;
+        const cps = controlPoints || CZ.getDefaultControlPoints();
+        const sox = spreadOffset?.x || 0, soy = spreadOffset?.y || 0;
 
         const dx0 = p2.x - p1.x, dy0 = p2.y - p1.y;
         const dist0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
         const arm = Math.max(15, Math.min(dist0 * 0.4, 150));
-        const sox = spreadOffset?.x || 0, soy = spreadOffset?.y || 0;
 
-        // Spread offset only affects tangent direction — not control point base positions
-        // This keeps wire shapes stable when new wires are added to the same terminal
+        // Check if all control points are at default (untouched by user)
+        const isDefault = cps.every(cp => Math.abs(cp.x) < 0.5 && Math.abs(cp.y) < 0.5);
+
+        if (isDefault) {
+            // ── Clean cubic Bezier — no wobble ──
+            const cp1x = p1.x + dir1.dx * arm + sox * 0.5;
+            const cp1y = p1.y + dir1.dy * arm + soy * 0.5;
+            const cp2x = p2.x + dir2.dx * arm + sox * 0.5;
+            const cp2y = p2.y + dir2.dy * arm + soy * 0.5;
+
+            const d = `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+
+            // Place handles at natural positions on the curve for potential user dragging
+            function evalBez(t) {
+                const u = 1 - t;
+                return {
+                    x: u*u*u*p1.x + 3*u*u*t*cp1x + 3*u*t*t*cp2x + t*t*t*p2.x,
+                    y: u*u*u*p1.y + 3*u*u*t*cp1y + 3*u*t*t*cp2y + t*t*t*p2.y
+                };
+            }
+            const handlePositions = [evalBez(0.35), evalBez(0.5), evalBez(0.65)];
+            return { d, handlePositions };
+        }
+
+        // ── Catmull-Rom spline — user has moved handles ──
+        const pts = CZ.resolveControlPoints(p1, dir1, p2, dir2, controlPoints);
+        const allPts = [p1, pts[0], pts[1], pts[2], p2];
+        const n = allPts.length;
+        let d = `M ${allPts[0].x} ${allPts[0].y}`;
+
         const exitTan = { x: dir1.dx * arm * 0.6 + sox * 0.7, y: dir1.dy * arm * 0.6 + soy * 0.7 };
         const enterTan = { x: dir2.dx * arm * 0.6 + sox * 0.7, y: dir2.dy * arm * 0.6 + soy * 0.7 };
 
@@ -143,28 +166,22 @@
             const p3 = allPts[Math.min(n - 1, i + 2)];
 
             let cp1x, cp1y, cp2x, cp2y;
-            const tension = 0.45; // higher = smoother curves
-
-            // Compute segment-length-aware tangent scaling
             const segLen = Math.sqrt((pi1.x - pi.x) ** 2 + (pi1.y - pi.y) ** 2) || 1;
-            const tScale = Math.min(tension, segLen / 300); // prevent overshooting on short segments
+            const tScale = Math.min(0.45, segLen / 300);
 
             if (i === 0) {
-                // First segment: use terminal exit direction, scale to segment length
                 const exitScale = Math.min(1, segLen / (arm * 1.2));
                 cp1x = pi.x + exitTan.x * exitScale;
                 cp1y = pi.y + exitTan.y * exitScale;
                 cp2x = pi1.x - (p3.x - pi.x) * tScale;
                 cp2y = pi1.y - (p3.y - pi.y) * tScale;
             } else if (i === n - 2) {
-                // Last segment: use terminal enter direction, scale to segment length
                 const enterScale = Math.min(1, segLen / (arm * 1.2));
                 cp1x = pi.x + (pi1.x - p0.x) * tScale;
                 cp1y = pi.y + (pi1.y - p0.y) * tScale;
                 cp2x = pi1.x + enterTan.x * enterScale;
                 cp2y = pi1.y + enterTan.y * enterScale;
             } else {
-                // Middle segments: Catmull-Rom tangents
                 cp1x = pi.x + (pi1.x - p0.x) * tScale;
                 cp1y = pi.y + (pi1.y - p0.y) * tScale;
                 cp2x = pi1.x - (p3.x - pi.x) * tScale;

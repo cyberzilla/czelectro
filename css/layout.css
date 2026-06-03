@@ -648,6 +648,81 @@
     margin: 4px 8px;
 }
 
+/* Variant badge — shown next to component name when multiple variants exist */
+.variant-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), #059669);
+    border-radius: 9px;
+    vertical-align: middle;
+    line-height: 1;
+    cursor: context-menu;
+    box-shadow: 0 1px 4px rgba(74, 222, 128, 0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.variant-badge:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(74, 222, 128, 0.5);
+}
+
+/* Context menu: title row (non-clickable header) */
+.ctx-item.ctx-title {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--accent);
+    cursor: default;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+/* Context menu: currently active variant */
+.ctx-item.ctx-active {
+    color: var(--accent);
+    font-weight: 600;
+    background: rgba(74, 222, 128, 0.08);
+}
+
+/* Context menu: spec text (muted) */
+.ctx-spec {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    padding-left: 12px;
+    opacity: 0.7;
+}
+
+/* Variant menu scrollbar */
+.variant-menu {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.variant-menu::-webkit-scrollbar {
+    width: 5px;
+}
+
+.variant-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.variant-menu::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 3px;
+}
+
+.variant-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+}
+
 /* Copy toast */
 .copy-toast {
     position: fixed;

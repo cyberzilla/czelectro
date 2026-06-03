@@ -45,8 +45,11 @@
             comp.batteryCapacity = tmplCap.capacityWh;
             comp.batteryLevel = comp.batteryLevel ?? tmplCap.capacityWh;
         }
-        // Initialize multimeter mode
-        if (tmplCap?.isMultimeter) {
+        // Initialize multimeter / ammeter mode
+        if (tmplCap?.isAmmeter) {
+            comp.mmMode = 'A';
+            comp.currentResistance = EL.SIM.METER_SHUNT_R;
+        } else if (tmplCap?.isMultimeter) {
             comp.mmMode = 'V';
         }
         CZ.deployed.push(comp);
@@ -55,7 +58,8 @@
             'tv_led','fridge','pump_125','pump_250','lamp_30w',
             'iron','blender','ricecooker','ac_05pk','ac_1pk',
             'computer','motor_dc','buzzer','speaker','bulb',
-            'led_red','led_green','led_blue','led_white','led_rgb'
+            'led_red','led_green','led_blue','led_white','led_rgb',
+            'fan_12v','servo_sg90','seven_segment'
         ];
         if (TOGGLEABLE_TYPES.includes(comp.type)) {
             comp.isPoweredOff = true;
