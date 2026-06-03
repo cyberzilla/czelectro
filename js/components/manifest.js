@@ -564,6 +564,16 @@ const COMPONENT_MANIFEST = [
         ]
     },
     {
+        groupId: 'led-matrix',
+        label: 'LED Dot Matrix',
+        category: 'output',
+        file: 'comp.led-matrix.js',
+        defaultVariant: 'led_matrix',
+        variants: [
+            { id: 'led_matrix', label: 'LED Dot Matrix 32×8', spec: 'P10, 256 LED' },
+        ]
+    },
+    {
         groupId: 'fan',
         label: 'Kipas DC',
         labelEn: 'DC Fan',

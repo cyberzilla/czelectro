@@ -119,6 +119,24 @@
             instrConnect: 'Klik terminal untuk menghubungkan',
             instrSwitch: 'Klik saklar untuk ON/OFF',
             instrRight: 'Klik kanan untuk opsi lainnya',
+
+            // Arduino IDE
+            ardTitle: 'Arduino IDE',
+            ardFlashed: 'TERFLASH',
+            ardPreset: '📂 Contoh Program...',
+            ardUpload: '⬆ Upload',
+            ardStop: '⏹ Stop',
+            ardReset: '↺ Reset',
+            ardErase: '🗑 Hapus',
+            ardResetTitle: 'Stop & mulai ulang program',
+            ardEraseTitle: 'Hapus program dari chip',
+            ardCodeEditor: '📝 Editor Kode',
+            ardSerial: '📡 Serial Monitor',
+            ardClear: 'Bersihkan',
+            ardStopped: '⏹ Program dihentikan',
+            ardBoardReset: '↺ Board direset',
+            ardFlashErased: '🗑 Flash dihapus — program dibersihkan',
+            ardPowerLost: '⚡ Daya terputus — program berhenti',
         },
         en: {
             // Sidebar
@@ -234,6 +252,24 @@
             instrConnect: 'Click terminals to connect',
             instrSwitch: 'Click switch to toggle ON/OFF',
             instrRight: 'Right-click for more options',
+
+            // Arduino IDE
+            ardTitle: 'Arduino IDE',
+            ardFlashed: 'FLASHED',
+            ardPreset: '📂 Example Programs...',
+            ardUpload: '⬆ Upload',
+            ardStop: '⏹ Stop',
+            ardReset: '↺ Reset',
+            ardErase: '🗑 Erase',
+            ardResetTitle: 'Stop & restart program',
+            ardEraseTitle: 'Erase program from chip',
+            ardCodeEditor: '📝 Code Editor',
+            ardSerial: '📡 Serial Monitor',
+            ardClear: 'Clear',
+            ardStopped: '⏹ Program stopped',
+            ardBoardReset: '↺ Board reset',
+            ardFlashErased: '🗑 Flash erased — program cleared',
+            ardPowerLost: '⚡ Power lost — program stopped',
         }
     };
 

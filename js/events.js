@@ -547,7 +547,7 @@
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
                     'led_red','led_green','led_blue','led_white','led_rgb',
-                    'fan_12v','servo_sg90','seven_segment'
+                    'fan_12v','servo_sg90','seven_segment','led_matrix'
                 ];
                 if (comp && TOGGLEABLE.includes(comp.type)) {
                     comp.isPoweredOff = !comp.isPoweredOff;
@@ -575,6 +575,13 @@
                             s.style.filter = 'none';
                         });
                         CZ.dragEl.classList.remove('seg7-active');
+                    }
+                    // Immediately reset matrix dots when powered off
+                    if (comp.type === 'led_matrix' && comp.isPoweredOff) {
+                        CZ.dragEl.querySelectorAll('.mdot').forEach(d => {
+                            d.setAttribute('fill', '#1a2332');
+                            d.style.filter = 'none';
+                        });
                     }
                     CZ.SFX.switchClick();
                     if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
@@ -1272,8 +1279,12 @@
         CZ.setupGridHandlers();
         CZ.setupToolbar();
         CZ.setupEvents();
-        CZ.restoreState();
+        const hasState = CZ.restoreState();
         CZ.restoreSimState();
+        if (!hasState && typeof CZ.loadGreetingCircuit === 'function') {
+            // First-time user — show greeting demo circuit
+            setTimeout(() => CZ.loadGreetingCircuit(), 300);
+        }
         // Push initial state as baseline for undo stack (top = current state)
         CZ.saveState();
         CZ.drawGrid();

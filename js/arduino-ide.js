@@ -51,7 +51,9 @@ void loop() {
         'seg7_counter': {
             name: '🔢 7-Seg Counter 0-9',
             code: `// Counter 0 sampai 9 pada 7-Segment
+// Koneksi: 7-Seg → D10 & GND
 void setup() {
+  pinMode(10, OUTPUT);  // 7-Seg data pin
   seg7.clear();
 }
 
@@ -65,7 +67,9 @@ void loop() {
         'seg7_text': {
             name: '📝 7-Seg Running Text',
             code: `// Running text pada 7-Segment Display
+// Koneksi: 7-Seg → D10 & GND
 void setup() {
+  pinMode(10, OUTPUT);  // 7-Seg data pin
   seg7.clear();
 }
 
@@ -79,7 +83,9 @@ void loop() {
         'seg7_alphabet': {
             name: '🔤 7-Seg Alphabet A-Z',
             code: `// Tampilkan A sampai Z
+// Koneksi: 7-Seg → D10 & GND
 void setup() {
+  pinMode(10, OUTPUT);  // 7-Seg data pin
   Serial.println("Starting alphabet...");
 }
 
@@ -96,7 +102,9 @@ void loop() {
         'seg7_custom': {
             name: '🎨 7-Seg Custom Segments',
             code: `// Kontrol segment individu [a,b,c,d,e,f,g]
+// Koneksi: 7-Seg → D10 & GND
 void setup() {
+  pinMode(10, OUTPUT);  // 7-Seg data pin
   seg7.clear();
 }
 
@@ -164,7 +172,8 @@ void loop() {
             name: '🎛️ Multi-Component Demo',
             code: `// LED (D13) + 7-Segment + Motor sekaligus
 void setup() {
-  pinMode(13, OUTPUT);
+  pinMode(13, OUTPUT);  // LED pin
+  pinMode(12, OUTPUT);  // 7-Segment pin
   Serial.println("Multi-component demo");
 }
 
@@ -197,6 +206,88 @@ void loop() {
   delay(1000);
 }`
         },
+        'matrix_scroll': {
+            name: '🕌 Running Text Masjid',
+            code: `// Running text LED Dot Matrix (seperti di masjid)
+// Koneksi: Matrix → D11 & GND
+void setup() {
+  pinMode(11, OUTPUT);  // Matrix data pin
+  Serial.println("Running Text Started");
+  matrix.clear();
+}
+
+void loop() {
+  matrix.scroll("ASSALAMUALAIKUM.. SELAMAT DATANG DI MASJID AL-IKHLAS", 70);
+  delay(500);
+  matrix.scroll("WAKTU SHOLAT: SUBUH 04:30 DZUHUR 12:00 ASHAR 15:15 MAGHRIB 18:05 ISYA 19:15", 60);
+  delay(500);
+}`
+        },
+        'matrix_static': {
+            name: '📺 Matrix Static Text',
+            code: `// Tampilkan teks statis pada dot matrix
+// Koneksi: Matrix → D11 & GND
+void setup() {
+  pinMode(11, OUTPUT);  // Matrix data pin
+  matrix.clear();
+}
+
+void loop() {
+  matrix.text("HELLO");
+  delay(2000);
+  matrix.text("WORLD");
+  delay(2000);
+  matrix.clear();
+  delay(500);
+}`
+        },
+        'combo_all': {
+            name: '🎯 LED + 7Seg + Matrix',
+            code: `// LED (D13) + 7-Segment + LED Matrix sekaligus
+// Koneksi:
+//   LED    → D13 & GND
+//   7-Seg  → D12 & GND  
+//   Matrix → D11 & GND
+
+void setup() {
+  pinMode(13, OUTPUT);  // LED pin
+  pinMode(12, OUTPUT);  // 7-Segment pin
+  pinMode(11, OUTPUT);  // Matrix data pin
+  Serial.println("Combo Demo Started!");
+  seg7.clear();
+  matrix.clear();
+}
+
+void loop() {
+  // Fase 1: LED nyala + angka 1 + scroll teks
+  digitalWrite(13, HIGH);
+  seg7.show("1");
+  Serial.println("Phase 1: LED ON");
+  matrix.scroll("ASSALAMUALAIKUM", 60);
+
+  // Fase 2: LED mati + angka 2 + teks statis
+  digitalWrite(13, LOW);
+  seg7.show("2");
+  Serial.println("Phase 2: LED OFF");
+  matrix.text("HELLO");
+  delay(2000);
+
+  // Fase 3: LED blink + countdown + scroll
+  seg7.show("3");
+  Serial.println("Phase 3: Blink");
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(13, HIGH);
+    delay(250);
+    digitalWrite(13, LOW);
+    delay(250);
+  }
+  
+  // Reset semua
+  seg7.clear();
+  matrix.clear();
+  delay(500);
+}`
+        },
     };
 
     // ── Active Arduino Sessions ──
@@ -223,7 +314,10 @@ void loop() {
     // ── Find connected components (per-pin mapping) ──
     function findConnected(arduinoId) {
         const byPin = {};  // pinNumber → [{ id, comp, type }]
-        const leds = [], seg7s = [], motors = [], servos = [], fans = [], buzzers = [], all = [];
+        const leds = [], seg7s = [], matrices = [], motors = [], servos = [], fans = [], buzzers = [], all = [];
+
+        // Track which components connect to which Arduino terminals
+        const compTerminals = {}; // otherId → Set of ardTermIdx
 
         CZ.wires.forEach(w => {
             let ardTermIdx, otherId;
@@ -233,26 +327,49 @@ void loop() {
 
             const comp = CZ.deployed.find(c => c.id === otherId);
             if (!comp) return;
+            if (!compTerminals[otherId]) compTerminals[otherId] = new Set();
+            compTerminals[otherId].add(ardTermIdx);
+        });
+
+        // Only register components that have proper wiring:
+        // At least one wire to a digital pin (0-11) AND at least one wire to GND (13 or 21)
+        const DIGITAL_TERMS = new Set([0,1,2,3,4,5,6,7,8,9,10,11]);
+        const GND_TERMS = new Set([13, 21]);
+
+        Object.entries(compTerminals).forEach(([otherId, terms]) => {
+            const comp = CZ.deployed.find(c => c.id === otherId);
+            if (!comp) return;
+
+            const hasDigital = [...terms].some(t => DIGITAL_TERMS.has(t));
+            const hasGND = [...terms].some(t => GND_TERMS.has(t));
+            // Source components (batteries) don't need digital pin check
+            const isSource = comp.type.startsWith('battery') || comp.type.startsWith('solar_') || comp.type === 'pln_source';
+            
+            if (!isSource && (!hasDigital || !hasGND)) return; // incomplete circuit
+
             const entry = { id: otherId, comp, type: comp.type };
             all.push(entry);
 
-            // Categorize by type (backward compat)
-            if (comp.type.startsWith('led_')) leds.push(entry);
+            // Categorize by type
+            if (comp.type.startsWith('led_') && comp.type !== 'led_matrix') leds.push(entry);
             if (comp.type === 'seven_segment') seg7s.push(entry);
+            if (comp.type === 'led_matrix') matrices.push(entry);
             if (comp.type === 'motor_dc') motors.push(entry);
             if (comp.type === 'servo_sg90') servos.push(entry);
             if (comp.type === 'fan_12v') fans.push(entry);
             if (comp.type === 'buzzer') buzzers.push(entry);
 
-            // Map by pin number (for per-pin control)
-            const pinNum = TERM_TO_PIN[ardTermIdx];
-            if (pinNum !== undefined) {
-                if (!byPin[pinNum]) byPin[pinNum] = [];
-                byPin[pinNum].push(entry);
-            }
+            // Map by pin number (use the digital pin)
+            [...terms].forEach(ardTermIdx => {
+                const pinNum = TERM_TO_PIN[ardTermIdx];
+                if (pinNum !== undefined) {
+                    if (!byPin[pinNum]) byPin[pinNum] = [];
+                    byPin[pinNum].push(entry);
+                }
+            });
         });
 
-        return { byPin, leds, seg7s, motors, servos, fans, buzzers, all };
+        return { byPin, leds, seg7s, matrices, motors, servos, fans, buzzers, all };
     }
 
     // ── Apply 7-segment pattern to DOM ──
@@ -365,14 +482,30 @@ void loop() {
 
             // 7-Segment high-level API
             seg7: {
+                // Check if seg7 is properly wired and pin set as OUTPUT
+                _isConnected(seg7Id) {
+                    if (!session.connected.seg7s.some(s => s.id === seg7Id)) return false;
+                    const comp = CZ.deployed.find(c => c.id === seg7Id);
+                    if (!comp || comp.isPoweredOff) return false;
+                    const hasT0 = CZ.wires.some(w => (w.c1 === seg7Id && w.i1 === 0) || (w.c2 === seg7Id && w.i2 === 0));
+                    const hasT1 = CZ.wires.some(w => (w.c1 === seg7Id && w.i1 === 1) || (w.c2 === seg7Id && w.i2 === 1));
+                    if (!hasT0 || !hasT1) return false;
+                    const seg7Pin = Object.entries(session.connected.byPin)
+                        .find(([pin, devs]) => devs.some(d => d.id === seg7Id));
+                    if (!seg7Pin) return false;
+                    const pinNum = parseInt(seg7Pin[0]);
+                    if (api._pinModes[pinNum] !== api.OUTPUT) return false;
+                    return true;
+                },
+
                 show(ch) {
                     if (session.aborted) return;
                     const char = String(ch).toUpperCase()[0] || ' ';
                     const pattern = SEG7_CHARS[char] || SEG7_CHARS[' '];
                     const hasDot = String(ch).includes('.');
                     session.connected.seg7s.forEach(s => {
+                        if (!api.seg7._isConnected(s.id)) return;
                         const comp = CZ.deployed.find(c => c.id === s.id);
-                        if (comp && comp.isPoweredOff) return;
                         // Stop any existing MNA-driven animation
                         if (comp && comp._seg7Interval) {
                             clearInterval(comp._seg7Interval);
@@ -387,6 +520,7 @@ void loop() {
                     const pattern = arr.map(v => v ? 1 : 0);
                     while (pattern.length < 7) pattern.push(0);
                     session.connected.seg7s.forEach(s => {
+                        if (!api.seg7._isConnected(s.id)) return;
                         const comp = CZ.deployed.find(c => c.id === s.id);
                         if (comp && comp._seg7Interval) {
                             clearInterval(comp._seg7Interval);
@@ -402,7 +536,10 @@ void loop() {
                         if (session.aborted) throw '__ABORT__';
                         const ch = text[i];
                         const pattern = SEG7_CHARS[ch] || SEG7_CHARS[' '];
-                        session.connected.seg7s.forEach(s => applySeg7Pattern(s, pattern, false));
+                        session.connected.seg7s.forEach(s => {
+                            if (!api.seg7._isConnected(s.id)) return;
+                            applySeg7Pattern(s, pattern, false);
+                        });
                         await api.delay(delayMs);
                     }
                 },
@@ -413,6 +550,7 @@ void loop() {
 
                 dot(on) {
                     session.connected.seg7s.forEach(s => {
+                        if (!api.seg7._isConnected(s.id)) return;
                         const el = document.getElementById(s.id);
                         if (!el) return;
                         const dpEl = el.querySelector('.seg-dp');
@@ -420,6 +558,162 @@ void loop() {
                             dpEl.setAttribute('fill', on ? '#ef4444' : '#374151');
                             dpEl.style.filter = on ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
                         }
+                    });
+                }
+            },
+
+            // LED Dot Matrix API (32×8)
+            matrix: {
+                // 5×7 pixel font (each entry = 5 column bytes, LSB = top row)
+                _font: {
+                    'A':[0x7E,0x09,0x09,0x09,0x7E],'B':[0x7F,0x49,0x49,0x49,0x36],'C':[0x3E,0x41,0x41,0x41,0x22],
+                    'D':[0x7F,0x41,0x41,0x41,0x3E],'E':[0x7F,0x49,0x49,0x49,0x41],'F':[0x7F,0x09,0x09,0x09,0x01],
+                    'G':[0x3E,0x41,0x49,0x49,0x3A],'H':[0x7F,0x08,0x08,0x08,0x7F],'I':[0x00,0x41,0x7F,0x41,0x00],
+                    'J':[0x20,0x40,0x40,0x40,0x3F],'K':[0x7F,0x08,0x14,0x22,0x41],'L':[0x7F,0x40,0x40,0x40,0x40],
+                    'M':[0x7F,0x02,0x04,0x02,0x7F],'N':[0x7F,0x02,0x04,0x08,0x7F],'O':[0x3E,0x41,0x41,0x41,0x3E],
+                    'P':[0x7F,0x09,0x09,0x09,0x06],'Q':[0x3E,0x41,0x51,0x21,0x5E],'R':[0x7F,0x09,0x19,0x29,0x46],
+                    'S':[0x26,0x49,0x49,0x49,0x32],'T':[0x01,0x01,0x7F,0x01,0x01],'U':[0x3F,0x40,0x40,0x40,0x3F],
+                    'V':[0x0F,0x30,0x40,0x30,0x0F],'W':[0x3F,0x40,0x30,0x40,0x3F],'X':[0x63,0x14,0x08,0x14,0x63],
+                    'Y':[0x03,0x04,0x78,0x04,0x03],'Z':[0x61,0x51,0x49,0x45,0x43],
+                    '0':[0x3E,0x51,0x49,0x45,0x3E],'1':[0x00,0x42,0x7F,0x40,0x00],'2':[0x62,0x51,0x49,0x49,0x46],
+                    '3':[0x22,0x41,0x49,0x49,0x36],'4':[0x18,0x14,0x12,0x7F,0x10],'5':[0x27,0x45,0x45,0x45,0x39],
+                    '6':[0x3C,0x4A,0x49,0x49,0x30],'7':[0x01,0x71,0x09,0x05,0x03],'8':[0x36,0x49,0x49,0x49,0x36],
+                    '9':[0x06,0x49,0x49,0x29,0x1E],
+                    ' ':[0x00,0x00,0x00,0x00,0x00],'.':[0x00,0x60,0x60,0x00,0x00],',':[0x00,0x80,0x60,0x00,0x00],
+                    '!':[0x00,0x00,0x5F,0x00,0x00],'?':[0x02,0x01,0x51,0x09,0x06],'-':[0x08,0x08,0x08,0x08,0x08],
+                    ':':[0x00,0x36,0x36,0x00,0x00]
+                },
+
+                _setDot(matrixId, col, row, on) {
+                    const el = document.getElementById(matrixId);
+                    if (!el) return;
+                    const dot = el.querySelector(`.mdot-${col}-${row}`);
+                    if (dot) {
+                        dot.setAttribute('fill', on ? '#ef4444' : '#1a2332');
+                        dot.style.filter = on ? 'drop-shadow(0 0 2px rgba(239,68,68,0.7))' : 'none';
+                    }
+                },
+
+                _clearMatrix(matrixId) {
+                    const el = document.getElementById(matrixId);
+                    if (!el) return;
+                    el.querySelectorAll('.mdot').forEach(d => {
+                        d.setAttribute('fill', '#1a2332');
+                        d.style.filter = 'none';
+                    });
+                },
+
+                _drawBuffer(matrixId, buffer) {
+                    // buffer = array of column bytes (each byte = 8 rows)
+                    for (let col = 0; col < 32; col++) {
+                        const byte = buffer[col] || 0;
+                        for (let row = 0; row < 8; row++) {
+                            const on = (byte >> row) & 1;
+                            api.matrix._setDot(matrixId, col, row, on);
+                        }
+                    }
+                },
+
+                // Set Arduino pin HIGH for matrix so MNA detects current flow
+                _activateMatrixPins(active) {
+                    const ardComp = CZ.deployed.find(c => c.id === session.compId);
+                    if (!ardComp) return;
+                    if (!ardComp._arduinoPins) ardComp._arduinoPins = {};
+                    // Find which pins matrices are connected to
+                    session.connected.matrices.forEach(m => {
+                        Object.entries(session.connected.byPin).forEach(([pin, devs]) => {
+                            if (devs.some(d => d.id === m.id)) {
+                                ardComp._arduinoPins[pin] = active ? 1 : 0;
+                            }
+                        });
+                    });
+                    CZ.evaluateCircuit();
+                },
+
+                // Check if a matrix is properly wired AND its pin configured as OUTPUT
+                _isConnected(matrixId) {
+                    // Must be in current session's connected list
+                    if (!session.connected.matrices.some(m => m.id === matrixId)) return false;
+                    const comp = CZ.deployed.find(c => c.id === matrixId);
+                    if (!comp || comp.isPoweredOff) return false;
+                    // Both terminals must have wires
+                    const hasT0 = CZ.wires.some(w => (w.c1 === matrixId && w.i1 === 0) || (w.c2 === matrixId && w.i2 === 0));
+                    const hasT1 = CZ.wires.some(w => (w.c1 === matrixId && w.i1 === 1) || (w.c2 === matrixId && w.i2 === 1));
+                    if (!hasT0 || !hasT1) return false;
+                    // The digital pin connected to this matrix must be set as OUTPUT
+                    const matrixPin = Object.entries(session.connected.byPin)
+                        .find(([pin, devs]) => devs.some(d => d.id === matrixId));
+                    if (!matrixPin) return false;
+                    const pinNum = parseInt(matrixPin[0]);
+                    if (api._pinModes[pinNum] !== api.OUTPUT) return false;
+                    return true;
+                },
+
+                // Display static text (fits within 32 columns)
+                text(str) {
+                    if (session.aborted) return;
+                    api.matrix._activateMatrixPins(true);
+                    const text = String(str).toUpperCase();
+                    const font = api.matrix._font;
+                    const buffer = new Array(32).fill(0);
+                    let col = 0;
+                    for (let i = 0; i < text.length && col < 32; i++) {
+                        const glyph = font[text[i]] || font[' '];
+                        for (let g = 0; g < 5 && col < 32; g++) {
+                            buffer[col++] = glyph[g];
+                        }
+                        if (col < 32) buffer[col++] = 0; // 1px gap
+                    }
+                    session.connected.matrices.forEach(m => {
+                        if (!api.matrix._isConnected(m.id)) return;
+                        api.matrix._drawBuffer(m.id, buffer);
+                    });
+                },
+
+                // Scroll text across the display
+                async scroll(str, speed) {
+                    api.matrix._activateMatrixPins(true);
+                    const text = String(str).toUpperCase();
+                    const font = api.matrix._font;
+                    const delayMs = speed || 80;
+                    // Build full pixel buffer for entire text
+                    const fullBuffer = [];
+                    // 32 blank columns at start for scroll-in
+                    for (let i = 0; i < 32; i++) fullBuffer.push(0);
+                    for (let i = 0; i < text.length; i++) {
+                        const glyph = font[text[i]] || font[' '];
+                        for (let g = 0; g < 5; g++) fullBuffer.push(glyph[g]);
+                        fullBuffer.push(0); // 1px gap
+                    }
+                    // 32 blank columns at end for scroll-out
+                    for (let i = 0; i < 32; i++) fullBuffer.push(0);
+
+                    // Scroll through
+                    for (let offset = 0; offset < fullBuffer.length - 31; offset++) {
+                        if (session.aborted) throw '__ABORT__';
+                        const window = fullBuffer.slice(offset, offset + 32);
+                        session.connected.matrices.forEach(m => {
+                            if (!api.matrix._isConnected(m.id)) return;
+                            api.matrix._drawBuffer(m.id, window);
+                        });
+                        await api.delay(delayMs);
+                    }
+                },
+
+                // Set individual pixel
+                pixel(x, y, on) {
+                    if (session.aborted) return;
+                    session.connected.matrices.forEach(m => {
+                        if (!api.matrix._isConnected(m.id)) return;
+                        api.matrix._setDot(m.id, x, y, on ? 1 : 0);
+                    });
+                },
+
+                // Clear display
+                clear() {
+                    api.matrix._activateMatrixPins(false);
+                    session.connected.matrices.forEach(m => {
+                        api.matrix._clearMatrix(m.id);
                     });
                 }
             },
@@ -683,6 +977,25 @@ void loop() {
         const api = createArduinoAPI(session);
         session.api = api;
 
+        // Log detected devices
+        const conn = session.connected;
+        const TERM_TO_PIN_REV = {0:13,1:12,2:11,3:10,4:9,5:8,6:7,7:6,8:5,9:4,10:3,11:2};
+        const deviceLines = [];
+        Object.entries(conn.byPin).forEach(([pin, devices]) => {
+            devices.forEach(d => {
+                const label = d.type.replace(/_/g, ' ').toUpperCase();
+                deviceLines.push(`  📌 D${pin} → ${label}`);
+            });
+        });
+        if (deviceLines.length > 0) {
+            session.serialLines.push('── Detected Devices ──');
+            deviceLines.forEach(l => session.serialLines.push(l));
+            if (conn.seg7s.length) session.serialLines.push(`  🔢 7-Segment: ${conn.seg7s.length} unit`);
+            if (conn.matrices.length) session.serialLines.push(`  📺 LED Matrix: ${conn.matrices.length} unit`);
+            session.serialLines.push('');
+            updateSerialMonitor(session);
+        }
+
         const code = session.code;
 
         // Build async-wrapped code
@@ -695,7 +1008,8 @@ void loop() {
             .replace(/\b(int|float|double|byte|long|boolean|String)\s+(\w+)\s*=/g, 'let $2 =')
             // Replace delay() calls with await delay()
             .replace(/\bdelay\s*\(/g, 'await delay(')
-            .replace(/\bseg7\.text\s*\(/g, 'await seg7.text(');
+            .replace(/\bseg7\.text\s*\(/g, 'await seg7.text(')
+            .replace(/\bmatrix\.scroll\s*\(/g, 'await matrix.scroll(');
 
         // Wrap setup and loop as async
         asyncCode = asyncCode
@@ -726,7 +1040,7 @@ void loop() {
             const fn = new AsyncFunction(
                 'HIGH','LOW','OUTPUT','INPUT','LED_BUILTIN',
                 'pinMode','digitalWrite','digitalRead','analogRead','analogWrite',
-                'delay','Serial','seg7','motor','servo','buzzer','led',
+                'delay','Serial','seg7','matrix','motor','servo','buzzer','led',
                 '_isAborted',
                 fnBody
             );
@@ -738,7 +1052,7 @@ void loop() {
                 api.HIGH, api.LOW, api.OUTPUT, api.INPUT, api.LED_BUILTIN,
                 api.pinMode, api.digitalWrite.bind(api), api.digitalRead.bind(api),
                 api.analogRead.bind(api), api.analogWrite.bind(api),
-                api.delay, api.Serial, api.seg7, api.motor, api.servo, api.buzzer, api.led,
+                api.delay, api.Serial, api.seg7, api.matrix, api.motor, api.servo, api.buzzer, api.led,
                 () => session.aborted
             );
         } catch(e) {
@@ -779,6 +1093,15 @@ void loop() {
             el.querySelectorAll('.seg').forEach(seg => {
                 seg.setAttribute('fill', '#374151');
                 seg.style.filter = 'none';
+            });
+        });
+        // Reset buzzers (tone is Arduino-controlled, not MNA)
+        (conn.matrices || []).forEach(m => {
+            const el = document.getElementById(m.id);
+            if (!el) return;
+            el.querySelectorAll('.mdot').forEach(d => {
+                d.setAttribute('fill', '#1a2332');
+                d.style.filter = 'none';
             });
         });
         // Reset buzzers (tone is Arduino-controlled, not MNA)
@@ -864,13 +1187,13 @@ void loop() {
                     <div class="ard-ide-toolbar-top">
                         <div class="ard-ide-title">
                             <span class="ard-ide-icon">⚡</span>
-                            <span>Arduino IDE</span>
+                            <span>${CZ.t('ardTitle')}</span>
                             <span class="ard-ide-comp-id">${compId}</span>
-                            <span id="ard-flash-${compId}" class="ard-flash-badge" style="display:${comp.isFlashed ? 'inline-flex' : 'none'}">● FLASHED</span>
+                            <span id="ard-flash-${compId}" class="ard-flash-badge" style="display:${comp.isFlashed ? 'inline-flex' : 'none'}">● ${CZ.t('ardFlashed')}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <select id="ard-preset-${compId}" class="ard-preset-select">
-                                <option value="">📂 Contoh Program...</option>
+                                <option value="">${CZ.t('ardPreset')}</option>
                                 ${Object.entries(PRESETS).map(([k, v]) =>
                                     `<option value="${k}">${v.name}</option>`
                                 ).join('')}
@@ -879,11 +1202,11 @@ void loop() {
                         </div>
                     </div>
                     <div class="ard-ide-toolbar-actions">
-                        <button id="ard-run-${compId}" class="ard-btn ard-btn-run" ${session.running ? 'disabled' : ''}>⬆ Upload</button>
-                        <button id="ard-stop-${compId}" class="ard-btn ard-btn-stop" ${session.running ? '' : 'disabled'}>⏹ Stop</button>
+                        <button id="ard-run-${compId}" class="ard-btn ard-btn-run" ${session.running ? 'disabled' : ''}>${CZ.t('ardUpload')}</button>
+                        <button id="ard-stop-${compId}" class="ard-btn ard-btn-stop" ${session.running ? '' : 'disabled'}>${CZ.t('ardStop')}</button>
                         <div class="ard-toolbar-sep"></div>
-                        <button id="ard-reset-${compId}" class="ard-btn ard-btn-reset" title="Stop & restart program">↺ Reset</button>
-                        <button id="ard-erase-${compId}" class="ard-btn ard-btn-erase" title="Hapus program dari chip">🗑 Erase</button>
+                        <button id="ard-reset-${compId}" class="ard-btn ard-btn-reset" title="${CZ.t('ardResetTitle')}">${CZ.t('ardReset')}</button>
+                        <button id="ard-erase-${compId}" class="ard-btn ard-btn-erase" title="${CZ.t('ardEraseTitle')}">${CZ.t('ardErase')}</button>
                         <div class="ard-toolbar-sep"></div>
                         <div class="ard-ide-status-inline">
                             <span class="ard-status-dot ${session.running ? 'running' : ''}"></span>
@@ -893,13 +1216,13 @@ void loop() {
                 </div>
                 <div class="ard-ide-body">
                     <div class="ard-ide-editor-pane">
-                        <div class="ard-ide-pane-header">📝 Code Editor</div>
+                        <div class="ard-ide-pane-header">${CZ.t('ardCodeEditor')}</div>
                         <textarea id="ard-code-${compId}" class="ard-code-editor" spellcheck="false">${session.code}</textarea>
                     </div>
                     <div class="ard-ide-serial-pane">
                         <div class="ard-ide-pane-header">
-                            📡 Serial Monitor
-                            <button id="ard-clear-serial-${compId}" class="ard-btn-mini">Clear</button>
+                            ${CZ.t('ardSerial')}
+                            <button id="ard-clear-serial-${compId}" class="ard-btn-mini">${CZ.t('ardClear')}</button>
                         </div>
                         <pre id="ard-serial-${compId}" class="ard-serial-output">${session.serialLines.join('\n')}</pre>
                     </div>
@@ -925,7 +1248,7 @@ void loop() {
         document.getElementById(`ard-stop-${compId}`).onclick = () => {
             if (session.running) {
                 stopArduino(session);
-                session.serialLines.push('⏹ Program stopped');
+                session.serialLines.push(CZ.t('ardStopped'));
                 updateSerialMonitor(session);
             }
         };
@@ -933,7 +1256,7 @@ void loop() {
             // Reset = stop + restart (like pressing physical reset button)
             if (session.running) {
                 stopArduino(session);
-                session.serialLines.push('↺ Board reset');
+                session.serialLines.push(CZ.t('ardBoardReset'));
                 updateSerialMonitor(session);
             }
             // Restart from flash after brief delay
@@ -959,7 +1282,7 @@ void loop() {
             if (chipEl) {
                 chipEl.classList.remove('arduino-running', 'arduino-flashed');
             }
-            session.serialLines.push('🗑 Flash erased — program cleared');
+            session.serialLines.push(CZ.t('ardFlashErased'));
             updateSerialMonitor(session);
             CZ.saveState();
         };
@@ -1023,6 +1346,11 @@ void loop() {
         const isSourceComp = (otherId) => {
             const c = CZ.deployed.find(x => x.id === otherId);
             if (!c || c.isPoweredOff || c.isBroken) return false;
+            // Check if battery is dead (depleted)
+            if (c.batteryCapacity && c.batteryLevel !== undefined) {
+                const minLevel = CZ.getBattDeadLevel ? CZ.getBattDeadLevel(c) : c.batteryCapacity * 0.10;
+                if (c.batteryLevel <= minLevel) return false;
+            }
             return c.type.startsWith('battery') || c.type.startsWith('solar_') || c.type === 'pln_source';
         };
         const hasVIN = CZ.wires.some(w => {
@@ -1086,7 +1414,7 @@ void loop() {
             if (!session.running) return;
             if (!isArduinoPowered(session.compId)) {
                 stopArduino(session);
-                session.serialLines.push('⚡ Power lost — program stopped');
+                session.serialLines.push(CZ.t('ardPowerLost'));
                 updateSerialMonitor(session);
             }
         });
@@ -1104,6 +1432,22 @@ void loop() {
                         s.style.filter = 'none';
                     });
                     el.classList.remove('seg7-active');
+                }
+            }
+        });
+
+        // 1c. Reset disconnected LED Matrix displays to dark
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'led_matrix') return;
+            const hasT0 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0));
+            const hasT1 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 1) || (w.c2 === c.id && w.i2 === 1));
+            if (!hasT0 || !hasT1) {
+                const el = document.getElementById(c.id);
+                if (el) {
+                    el.querySelectorAll('.mdot').forEach(d => {
+                        d.setAttribute('fill', '#1a2332');
+                        d.style.filter = 'none';
+                    });
                 }
             }
         });

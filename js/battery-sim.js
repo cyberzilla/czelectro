@@ -174,7 +174,41 @@
             });
         }
 
-        if (anyDrained) { CZ.saveState(); }
+        // ── Arduino direct power drain ──
+        // MNA doesn't properly track battery → Arduino VIN/GND as a draining loop
+        // because Arduino's multi-terminal topology confuses the circuit group detection.
+        // Direct drain: ~0.25W (Arduino Uno idle ≈ 50mA @ 5V) + connected peripherals
+        const ufArd = {};
+        CZ.deployed.forEach(c => ufArd[c.id] = c.id);
+        function ufFindArd(x) { return ufArd[x] === x ? x : (ufArd[x] = ufFindArd(ufArd[x])); }
+        CZ.wires.forEach(w => { if (ufArd[w.c1] !== undefined && ufArd[w.c2] !== undefined) ufArd[ufFindArd(w.c1)] = ufFindArd(w.c2); });
+
+        CZ.deployed.forEach(ard => {
+            if (ard.type !== 'arduino_uno') return;
+            if (!ard.isFlashed || ard.isBroken) return;
+            // Find batteries connected to this Arduino via Union-Find
+            const ardRoot = ufFindArd(ard.id);
+            const connBatts = batteries.filter(b => ufFindArd(b.id) === ardRoot && !b.isBroken && b.batteryLevel > CZ.getBattDeadLevel(b));
+            if (connBatts.length === 0) return;
+            // Arduino base power + peripherals (LEDs, matrix, seg7)
+            const ardPowerW = 0.25; // ~50mA @ 5V base
+            const peripheralW = (ard._arduinoPins && Object.values(ard._arduinoPins).filter(v => v).length * 0.1) || 0;
+            const totalW = ardPowerW + peripheralW;
+            const whPerBatt = (totalW * deltaMin) / 60 / connBatts.length;
+            connBatts.forEach(bat => {
+                const minLevel = CZ.getBattDeadLevel(bat);
+                bat.batteryLevel = Math.max(minLevel, bat.batteryLevel - whPerBatt);
+            });
+            anyDrained = true;
+        });
+
+        if (anyDrained) {
+            CZ.saveState();
+            // Re-check Arduino power — if battery just died, stop the program
+            if (typeof CZ.onArduinoWiresChanged === 'function') {
+                CZ.onArduinoWiresChanged();
+            }
+        }
         const postSolarW = CZ.simTotalSrcW * postSolarFactor;
         CZ.updateSimPanel(postSolarW, totalLoadW, batteries, hour, postIsDaytime, postSolarFactor, noPower);
     };

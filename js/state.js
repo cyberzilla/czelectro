@@ -237,7 +237,7 @@
                 'iron','blender','ricecooker','ac_05pk','ac_1pk',
                 'computer','motor_dc','buzzer','speaker','bulb',
                 'led_red','led_green','led_blue','led_white','led_rgb',
-                'pln_source','seven_segment'
+                'pln_source','seven_segment','led_matrix'
             ];
             if (RESTORE_TOGGLEABLE.includes(comp.type)) {
                 if (comp.isPoweredOff) {
@@ -305,6 +305,7 @@
         // Migrate old Arduino pin layout (8-pin → 22-pin)
         migrateArduinoPins();
         CZ.evaluateCircuit();
+        return true;
     };
 
     // ── Arduino pin layout migration (old 8-pin → new 22-pin) ──
@@ -501,7 +502,7 @@
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
                     'led_red','led_green','led_blue','led_white','led_rgb',
-                    'pln_source','seven_segment'
+                    'pln_source','seven_segment','led_matrix'
                 ];
                 if (RESTORE_TOGGLEABLE2.includes(comp.type)) {
                     if (comp.isPoweredOff) {
