@@ -741,6 +741,8 @@
                         const speed = 0.2 + (1 - speedRatio) * 3.8;
                         const fs = el.querySelector('.fan-spin');
                         if (fs) fs.style.animation = `spin ${speed.toFixed(2)}s linear infinite`;
+                        CZ.SFX.fanStart(c.id, speedRatio);
+                        CZ.SFX.fanUpdate(c.id, speedRatio);
                     }
                 }
                 // Servo Motor
