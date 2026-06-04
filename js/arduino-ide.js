@@ -241,6 +241,35 @@ void loop() {
   delay(500);
 }`
         },
+        'matrix_chain': {
+            name: '🔗 Matrix 3-Chain Scroll',
+            code: `// Running text pada 3 LED Matrix tersambung (menyatu)
+// Koneksi: Matrix1 → D11, Matrix2 → D10, Matrix3 → D9
+// Susun matrix berjejer secara horizontal di workspace
+// Teks akan mengalir dari kanan ke kiri melewati 3 panel!
+
+void setup() {
+  pinMode(11, OUTPUT);  // Matrix 1 (kiri)
+  pinMode(10, OUTPUT);  // Matrix 2 (tengah)
+  pinMode(9, OUTPUT);   // Matrix 3 (kanan)
+  Serial.println("3-Chain Matrix Started!");
+  matrix.clear();
+}
+
+void loop() {
+  // Teks berjalan melewati 3 panel seolah satu display panjang
+  matrix.scroll("ASSALAMUALAIKUM WR WB.. SELAMAT DATANG DI MASJID AL-IKHLAS", 55);
+  delay(300);
+  matrix.scroll("WAKTU SHOLAT: SUBUH 04:30  DZUHUR 12:00  ASHAR 15:15  MAGHRIB 18:05  ISYA 19:15", 50);
+  delay(300);
+  
+  // Teks statis tersebar di 3 panel
+  matrix.text("MASJID  AL-IKHLAS  JAKSEL");
+  delay(3000);
+  matrix.clear();
+  delay(500);
+}`
+        },
         'clock_display': {
             name: '🕐 Jam Digital (Clock)',
             code: `// Jam digital pada 7-Segment Clock Display
@@ -802,64 +831,87 @@ void loop() {
                     return true;
                 },
 
-                // Display static text (fits within 32 columns)
+                // Sort connected matrices by physical X position (left → right)
+                // This enables seamless chaining: matrices become one continuous display
+                _getSortedMatrices() {
+                    return session.connected.matrices
+                        .filter(m => api.matrix._isConnected(m.id))
+                        .sort((a, b) => {
+                            const compA = CZ.deployed.find(c => c.id === a.id);
+                            const compB = CZ.deployed.find(c => c.id === b.id);
+                            return (compA?.x || 0) - (compB?.x || 0);
+                        });
+                },
+
+                // Display static text across chained matrices
+                // With N matrices, text spans 32×N columns total
                 text(str) {
                     if (session.aborted) return;
                     api.matrix._activateMatrixPins(true);
                     const text = String(str);
                     const font = api.matrix._font;
-                    const buffer = new Array(32).fill(0);
+                    const sorted = api.matrix._getSortedMatrices();
+                    if (!sorted.length) return;
+                    const totalCols = 32 * sorted.length;
+                    const buffer = new Array(totalCols).fill(0);
                     let col = 0;
-                    for (let i = 0; i < text.length && col < 32; i++) {
+                    for (let i = 0; i < text.length && col < totalCols; i++) {
                         const glyph = font[text[i]] || font[' '];
-                        for (let g = 0; g < 5 && col < 32; g++) {
+                        for (let g = 0; g < 5 && col < totalCols; g++) {
                             buffer[col++] = glyph[g];
                         }
-                        if (col < 32) buffer[col++] = 0; // 1px gap
+                        if (col < totalCols) buffer[col++] = 0; // 1px gap
                     }
-                    session.connected.matrices.forEach(m => {
-                        if (!api.matrix._isConnected(m.id)) return;
-                        api.matrix._drawBuffer(m.id, buffer);
+                    // Each matrix gets its own 32-column slice
+                    sorted.forEach((m, idx) => {
+                        api.matrix._drawBuffer(m.id, buffer.slice(idx * 32, (idx + 1) * 32));
                     });
                 },
 
-                // Scroll text across the display
+                // Scroll text seamlessly across chained matrices
+                // With N matrices, the visible window = 32×N columns, text flows through all
                 async scroll(str, speed) {
                     api.matrix._activateMatrixPins(true);
                     const text = String(str);
                     const font = api.matrix._font;
                     const delayMs = speed || 80;
+                    const sorted = api.matrix._getSortedMatrices();
+                    if (!sorted.length) return;
+                    const totalCols = 32 * sorted.length;
+
                     // Build full pixel buffer for entire text
                     const fullBuffer = [];
-                    // 32 blank columns at start for scroll-in
-                    for (let i = 0; i < 32; i++) fullBuffer.push(0);
+                    // Blank columns at start = totalCols (scroll-in across all panels)
+                    for (let i = 0; i < totalCols; i++) fullBuffer.push(0);
                     for (let i = 0; i < text.length; i++) {
                         const glyph = font[text[i]] || font[' '];
                         for (let g = 0; g < 5; g++) fullBuffer.push(glyph[g]);
                         fullBuffer.push(0); // 1px gap
                     }
-                    // 32 blank columns at end for scroll-out
-                    for (let i = 0; i < 32; i++) fullBuffer.push(0);
+                    // Blank columns at end = totalCols (scroll-out across all panels)
+                    for (let i = 0; i < totalCols; i++) fullBuffer.push(0);
 
-                    // Scroll through
-                    for (let offset = 0; offset < fullBuffer.length - 31; offset++) {
+                    // Scroll through — window size = totalCols
+                    for (let offset = 0; offset <= fullBuffer.length - totalCols; offset++) {
                         if (session.aborted) throw '__ABORT__';
-                        const window = fullBuffer.slice(offset, offset + 32);
-                        session.connected.matrices.forEach(m => {
-                            if (!api.matrix._isConnected(m.id)) return;
-                            api.matrix._drawBuffer(m.id, window);
+                        const win = fullBuffer.slice(offset, offset + totalCols);
+                        // Each matrix gets its own 32-column slice
+                        sorted.forEach((m, idx) => {
+                            api.matrix._drawBuffer(m.id, win.slice(idx * 32, (idx + 1) * 32));
                         });
                         await api.delay(delayMs);
                     }
                 },
 
-                // Set individual pixel
+                // Set individual pixel — x spans full chain (0 to 32×N-1)
                 pixel(x, y, on) {
                     if (session.aborted) return;
-                    session.connected.matrices.forEach(m => {
-                        if (!api.matrix._isConnected(m.id)) return;
-                        api.matrix._setDot(m.id, x, y, on ? 1 : 0);
-                    });
+                    const sorted = api.matrix._getSortedMatrices();
+                    const matIdx = Math.floor(x / 32);
+                    const localCol = x % 32;
+                    if (matIdx >= 0 && matIdx < sorted.length) {
+                        api.matrix._setDot(sorted[matIdx].id, localCol, y, on ? 1 : 0);
+                    }
                 },
 
                 // Clear display
