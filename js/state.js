@@ -237,14 +237,8 @@
                 if (indicator) indicator.setAttribute('fill', '#6b7280');
             }
             // Restore power on/off badge for all toggleable components
-            const RESTORE_TOGGLEABLE = [
-                'tv_led','fridge','pump_125','pump_250','lamp_30w',
-                'iron','blender','ricecooker','ac_05pk','ac_1pk',
-                'computer','motor_dc','buzzer','speaker','bulb',
-                'led_red','led_green','led_blue','led_white','led_rgb',
-                'pln_source','seven_segment','seven_segment_clock','led_matrix'
-            ];
-            if (RESTORE_TOGGLEABLE.includes(comp.type)) {
+            const restoreTmpl = COMPONENTS.find(t => t.id === comp.type);
+            if ((restoreTmpl && restoreTmpl.category === 'output') || comp.type === 'pln_source') {
                 if (comp.isPoweredOff) {
                     el.classList.add('powered-off');
                     if (comp.type === 'pln_source') {
@@ -506,14 +500,8 @@
                     if (indicator) indicator.setAttribute('fill', '#6b7280');
                 }
                 // Restore power on/off badge for all toggleable components
-                const RESTORE_TOGGLEABLE2 = [
-                    'tv_led','fridge','pump_125','pump_250','lamp_30w',
-                    'iron','blender','ricecooker','ac_05pk','ac_1pk',
-                    'computer','motor_dc','buzzer','speaker','bulb',
-                    'led_red','led_green','led_blue','led_white','led_rgb',
-                    'pln_source','seven_segment','seven_segment_clock','led_matrix'
-                ];
-                if (RESTORE_TOGGLEABLE2.includes(comp.type)) {
+                const restoreTmpl2 = COMPONENTS.find(t => t.id === comp.type);
+                if ((restoreTmpl2 && restoreTmpl2.category === 'output') || comp.type === 'pln_source') {
                     if (comp.isPoweredOff) {
                         el.classList.add('powered-off');
                         if (comp.type === 'pln_source') {

@@ -69,6 +69,20 @@
             if (tmpl && tmpl.isArduino) {
                 union(termKey(c.id, 13), termKey(c.id, 21)); // GND = GND2
             }
+            // busTerminals: groups of terminals that are internally shorted (e.g. power strip L/N buses)
+            if (tmpl && tmpl.busTerminals) {
+                tmpl.busTerminals.forEach(bus => {
+                    for (let i = 1; i < bus.length; i++) {
+                        union(termKey(c.id, bus[0]), termKey(c.id, bus[i]));
+                    }
+                });
+            }
+            // groundTerminals: terminals that act as implicit ground (e.g. outlet_strip N)
+            if (tmpl && tmpl.groundTerminals) {
+                tmpl.groundTerminals.forEach(ti => {
+                    union(termKey(c.id, ti), '__GND__');
+                });
+            }
         });
 
         // Merge ground components to a canonical ground key
@@ -83,13 +97,14 @@
             }
         });
 
-        // If no explicit ground, use first battery's negative terminal as ground reference
-        // This prevents singular conductance matrix for floating circuits
+        // If no explicit ground, use ALL sources' negative terminals as ground reference
+        // This ensures multiple disconnected circuits each have a valid ground node
+        // (prevents singular conductance matrix for floating sub-circuits)
         if (!hasExplicitGround) {
-            const firstSource = deployed.find(c => isSource(c));
-            if (firstSource) {
-                union(termKey(firstSource.id, 1), GND_KEY); // pin 1 = negative terminal
-            }
+            deployed.forEach(c => {
+                if (!isSource(c)) return;
+                union(termKey(c.id, 1), GND_KEY); // pin 1 = negative terminal
+            });
         }
 
         // Assign numeric node IDs (ground = 0)
@@ -310,6 +325,7 @@
             const isSwitchLike = c.type === 'switch_toggle' || c.type === 'timer_555' || c.type.startsWith('mcb_');
             if (isSwitchLike && !c.isClosed) return;
             if (c.isPoweredOff) return; // powered-off component = open circuit
+            if (tmpl.isBusOnly) return; // bus-only component (e.g. outlet_strip) — no internal resistance to stamp
 
             // ── ATS: 3-terminal auto transfer switch ──
             // Terminal 0=PLN, Terminal 1=PLTS, Terminal 2=LOAD

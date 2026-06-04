@@ -177,6 +177,13 @@
             if (pcPower) pcPower.style.opacity = '';
             const pumpImp = el.querySelector('.pump-impeller');
             if (pumpImp) pumpImp.style.animation = 'none';
+            // Reset outlet / power strip LEDs
+            const outInd = el.querySelector('.outlet-indicator');
+            if (outInd) { outInd.style.fill = ''; outInd.style.filter = ''; }
+            const stripPwr = el.querySelector('.strip-power');
+            if (stripPwr) { stripPwr.style.fill = ''; stripPwr.style.opacity = ''; stripPwr.style.filter = ''; }
+            const stripLed = el.querySelector('.strip-power-led');
+            if (stripLed) { stripLed.style.fill = ''; stripLed.style.filter = ''; }
             // Reset charge controller / step-down
             const tmpl = COMPONENTS.find(t => t.id === c.type);
             if ((tmpl && tmpl.isChargeController) || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
@@ -359,9 +366,9 @@
             if (isSource(c) && tmpl && tmpl.maxCurrent && amps > tmpl.maxCurrent) {
                 overcurrentList.push({ cr, maxCurrent: tmpl.maxCurrent, amps, isSource: true });
             }
-            // Output overcurrent (LEDs, AC, motors, fuses, etc.)
+            // Output overcurrent (any output component + fuses)
             const isLed = c.type.startsWith('led_') || c.type === 'bulb';
-            const isOutput = isLed || AC_TYPES.includes(c.type) || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || c.type === 'fuse';
+            const isOutput = (tmpl && tmpl.category === 'output') || c.type === 'fuse';
             if (isOutput && c.maxCurrent && amps > c.maxCurrent) {
                 overcurrentList.push({ cr, maxCurrent: c.maxCurrent, amps, isSource: false, isLed });
             }
@@ -378,10 +385,7 @@
                     const ot = other.tmpl;
                     if (!ot || other.comp.isBroken || other.comp.isPoweredOff) return;
                     if (Math.abs(other.current) < EL.SIM.MIN_CURRENT) return;
-                    const isLoad = AC_TYPES.includes(other.comp.type) ||
-                        other.comp.type.startsWith('led_') || other.comp.type === 'bulb' ||
-                        other.comp.type === 'motor_dc' || other.comp.type === 'buzzer' ||
-                        other.comp.type === 'speaker';
+                    const isLoad = other.tmpl && other.tmpl.category === 'output';
                     if (isLoad) {
                         mcbLoadW += (ot.acOnly && ot.ratedPower) ? ot.ratedPower : (other.power || 0);
                     }
@@ -566,7 +570,9 @@
                     el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
                 }
 
-                if (amps < EL.SIM.MIN_CURRENT) return;
+                // Skip low-current components, but allow bus-only components (e.g. outlet_strip) through
+                const isBusOnly = tmpl && tmpl.isBusOnly;
+                if (amps < EL.SIM.MIN_CURRENT && !isBusOnly) return;
 
                 // AC-only check: must be on AC domain with valid voltage
                 if (tmpl && tmpl.acOnly) {
@@ -946,6 +952,22 @@
                 // Voltage Regulator
                 if ((c.type === 'vreg_7805' || c.type === 'vreg_7812' || c.type === 'vreg_lm317') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('vreg-active'); }
 
+                // Power Strip / Outlet — power LED indicator
+                // bus-only components detect via voltage, others via current
+                const isStripActive = (c.type === 'outlet' || c.type === 'outlet_strip' || c.type === 'power_strip_4') &&
+                    (amps > EL.SIM.MIN_CURRENT || (isBusOnly && Math.abs(vComp) > 1));
+                if (isStripActive) {
+                    // outlet single: .outlet-indicator
+                    const oi = el.querySelector('.outlet-indicator');
+                    if (oi) { oi.style.fill = '#22c55e'; oi.style.filter = 'drop-shadow(0 0 4px rgba(34,197,94,0.9))'; }
+                    // outlet_strip: .strip-power
+                    const sp = el.querySelector('.strip-power');
+                    if (sp) { sp.style.fill = '#22c55e'; sp.style.opacity = '1'; sp.style.filter = 'drop-shadow(0 0 4px rgba(34,197,94,0.9))'; }
+                    // power_strip_4: .strip-power-led
+                    const spl = el.querySelector('.strip-power-led');
+                    if (spl) { spl.style.fill = '#22c55e'; spl.style.filter = 'drop-shadow(0 0 5px rgba(34,197,94,0.9))'; }
+                }
+
                 // ── Charge Controller badge ──
                 if (tmpl && tmpl.isChargeController) {
                     const isProtecting = protectedComps.has(c.id);
@@ -973,7 +995,7 @@
 
 
                 // ── Power badge (REAL power, not ratedPower) ──
-                const isOutputComp = c.type.startsWith('led_') || c.type === 'bulb' || c.type === 'motor_dc' || c.type === 'buzzer' || c.type === 'speaker' || AC_TYPES.includes(c.type);
+                const isOutputComp = tmpl && tmpl.category === 'output';
                 if (isOutputComp) {
                     const pReal = cr.power;
                     let pBadge = el.querySelector('.power-badge');
@@ -993,10 +1015,7 @@
                             const ot = other.tmpl;
                             if (!ot || other.comp.isBroken || other.comp.isPoweredOff) return;
                             if (Math.abs(other.current) < EL.SIM.MIN_CURRENT) return;
-                            const isLoad = AC_TYPES.includes(other.comp.type) ||
-                                other.comp.type.startsWith('led_') || other.comp.type === 'bulb' ||
-                                other.comp.type === 'motor_dc' || other.comp.type === 'buzzer' ||
-                                other.comp.type === 'speaker';
+                            const isLoad = other.tmpl && other.tmpl.category === 'output';
                             if (isLoad) {
                                 watts += (ot.acOnly && ot.ratedPower) ? ot.ratedPower : (other.power || 0);
                             }

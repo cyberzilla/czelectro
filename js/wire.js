@@ -47,13 +47,59 @@
         if (!tmpl) return { dx: 0, dy: 1 };
         const term = comp.terminals[termIdx];
         const cx = tmpl.width / 2, cy = tmpl.height / 2;
-        const tx = term.x - cx, ty = term.y - cy;
+
         let dx, dy;
-        if (Math.abs(tx) > Math.abs(ty)) {
-            dx = tx > 0 ? 1 : -1; dy = 0;
+
+        // Check for explicit direction override on the terminal template
+        const tmplTerm = tmpl.terminals[termIdx];
+        if (tmplTerm && tmplTerm.dir) {
+            switch (tmplTerm.dir) {
+                case 'down':  dx = 0;  dy = 1;  break;
+                case 'up':    dx = 0;  dy = -1; break;
+                case 'left':  dx = -1; dy = 0;  break;
+                case 'right': dx = 1;  dy = 0;  break;
+                default: dx = 0; dy = 1;
+            }
         } else {
-            dx = 0; dy = ty > 0 ? 1 : -1;
+            // Smart edge-based auto-detect:
+            // If terminal is at a component edge, wire exits outward from that edge.
+            // This correctly handles wide/tall components (Arduino, power strips, etc.)
+            const w = tmpl.width, h = tmpl.height;
+            const edgeThresh = 2; // px tolerance for edge detection
+            const atLeft   = term.x <= edgeThresh;
+            const atRight  = term.x >= w - edgeThresh;
+            const atTop    = term.y <= edgeThresh;
+            const atBottom = term.y >= h - edgeThresh;
+
+            if (atTop && !atLeft && !atRight) {
+                dx = 0; dy = -1; // top edge → wire goes up
+            } else if (atBottom && !atLeft && !atRight) {
+                dx = 0; dy = 1;  // bottom edge → wire goes down
+            } else if (atLeft && !atTop && !atBottom) {
+                dx = -1; dy = 0; // left edge → wire goes left
+            } else if (atRight && !atTop && !atBottom) {
+                dx = 1; dy = 0;  // right edge → wire goes right
+            } else if (atTop && atLeft) {
+                dx = -1; dy = -1; // corner: bias outward, normalize later
+                // pick dominant edge: whichever is closer to actual edge
+                if (term.x <= term.y) { dx = -1; dy = 0; } else { dx = 0; dy = -1; }
+            } else if (atTop && atRight) {
+                if ((w - term.x) <= term.y) { dx = 1; dy = 0; } else { dx = 0; dy = -1; }
+            } else if (atBottom && atLeft) {
+                if (term.x <= (h - term.y)) { dx = -1; dy = 0; } else { dx = 0; dy = 1; }
+            } else if (atBottom && atRight) {
+                if ((w - term.x) <= (h - term.y)) { dx = 1; dy = 0; } else { dx = 0; dy = 1; }
+            } else {
+                // Fallback: terminal is NOT at any edge (rare), use center-based detect
+                const tx = term.x - cx, ty = term.y - cy;
+                if (Math.abs(tx) > Math.abs(ty)) {
+                    dx = tx > 0 ? 1 : -1; dy = 0;
+                } else {
+                    dx = 0; dy = ty > 0 ? 1 : -1;
+                }
+            }
         }
+
         // Rotate direction vector using exact values (same as rotatePoint)
         if (comp.rotation) {
             const angle = ((comp.rotation % 360) + 360) % 360;

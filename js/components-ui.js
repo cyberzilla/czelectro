@@ -56,14 +56,7 @@
         // Mark new Arduino components with current pin layout version
         if (tmplCap?.isArduino) comp._pinLayoutVersion = 2;
         // Toggleable output components start OFF (like real appliances)
-        const TOGGLEABLE_TYPES = [
-            'tv_led','fridge','pump_125','pump_250','lamp_30w',
-            'iron','blender','ricecooker','ac_05pk','ac_1pk',
-            'computer','motor_dc','buzzer','speaker','bulb',
-            'led_red','led_green','led_blue','led_white','led_rgb',
-            'fan_12v','servo_sg90','seven_segment','seven_segment_clock','led_matrix'
-        ];
-        if (TOGGLEABLE_TYPES.includes(comp.type)) {
+        if (tmplCap && tmplCap.category === 'output') {
             comp.isPoweredOff = true;
             comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
             el.classList.add('powered-off');

@@ -542,16 +542,10 @@
                 // ── Relay toggle (manual on/off when not energized) ──
 
                 // ── Power on/off for output components ──
-                const TOGGLEABLE = [
-                    'tv_led','fridge','pump_125','pump_250','lamp_30w',
-                    'iron','blender','ricecooker','ac_05pk','ac_1pk',
-                    'computer','motor_dc','buzzer','speaker','bulb',
-                    'led_red','led_green','led_blue','led_white','led_rgb',
-                    'fan_12v','servo_sg90','seven_segment','seven_segment_clock','led_matrix'
-                ];
-                if (comp && TOGGLEABLE.includes(comp.type)) {
+                const toggleTmpl = comp ? COMPONENTS.find(t => t.id === comp.type) : null;
+                if (comp && toggleTmpl && toggleTmpl.category === 'output') {
                     comp.isPoweredOff = !comp.isPoweredOff;
-                    const tmpl = COMPONENTS.find(t => t.id === comp.type);
+                    const tmpl = toggleTmpl;
                     if (comp.isPoweredOff) {
                         comp.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
                         CZ.dragEl.classList.add('powered-off');
@@ -827,6 +821,151 @@
             }
         });
 
+        // ── Component Info Modal ──
+        function showComponentInfo(comp, tmpl) {
+            document.querySelector('.comp-info-modal')?.remove();
+
+            const name = tmpl ? CZ.getCompName(tmpl) : comp.type;
+            const spec = tmpl ? CZ.getCompSpec(tmpl) : '';
+            const catLabels = { source: '⚡ Sumber', passive: '🔧 Pasif', control: '🎛 Kontrol', output: '💡 Output' };
+            const catLabelsEn = { source: '⚡ Source', passive: '🔧 Passive', control: '🎛 Control', output: '💡 Output' };
+            const catMap = CZ.lang === 'en' ? catLabelsEn : catLabels;
+            const category = tmpl?.category ? (catMap[tmpl.category] || tmpl.category) : '-';
+
+            // Build spec rows
+            const rows = [];
+            const addRow = (icon, label, value, unit = '') => {
+                if (value !== undefined && value !== null && value !== 0 && value !== false)
+                    rows.push({ icon, label, value: typeof value === 'number' ? (value >= 1000 ? (value/1000).toFixed(2) + ' k' : value % 1 !== 0 ? value.toFixed(3) : value) + (unit ? ' ' + unit : '') : value + (unit ? ' ' + unit : '') });
+            };
+
+            addRow('⚡', CZ.lang === 'en' ? 'Voltage' : 'Tegangan', tmpl?.voltage, 'V');
+            addRow('🔌', CZ.lang === 'en' ? 'Forward Voltage' : 'Tegangan Maju', tmpl?.forwardVoltage, 'V');
+            addRow('Ω', CZ.lang === 'en' ? 'Resistance' : 'Resistansi', tmpl?.resistance, 'Ω');
+            addRow('⚠', CZ.lang === 'en' ? 'Max Current' : 'Arus Maks', tmpl?.maxCurrent ? (tmpl.maxCurrent * 1000).toFixed(0) : null, 'mA');
+            addRow('🔥', CZ.lang === 'en' ? 'Rated Power' : 'Daya Nominal', tmpl?.ratedPower ? (tmpl.ratedPower >= 1 ? tmpl.ratedPower : (tmpl.ratedPower * 1000).toFixed(0) + ' m') : null, tmpl?.ratedPower >= 1 ? 'W' : 'W');
+            addRow('🔋', CZ.lang === 'en' ? 'Battery' : 'Baterai', comp.batteryCapacity, 'mAh');
+            addRow('📐', CZ.lang === 'en' ? 'Size' : 'Ukuran', tmpl ? `${tmpl.width} × ${tmpl.height}` : null, 'px');
+
+            // Special flags
+            const flags = [];
+            if (tmpl?.isDiode) flags.push('🔒 Diode');
+            if (tmpl?.isSwitch) flags.push('🔀 Switch');
+            if (tmpl?.isFuse) flags.push('⚡ Fuse');
+            if (tmpl?.isArduino) flags.push('🤖 Arduino');
+            if (tmpl?.acOnly) flags.push('🏭 AC Only');
+            if (tmpl?.isChargeController) flags.push('☀ Charge Controller');
+            if (tmpl?.isMCB) flags.push('⚡ MCB');
+            if (tmpl?.isKwhMeter) flags.push('📊 kWh Meter');
+            if (tmpl?.isPLN) flags.push('🏢 PLN');
+            if (tmpl?.isATS) flags.push('🔄 ATS');
+
+            // Terminals
+            const terminals = tmpl?.terminals || [];
+
+            // Connected wires
+            const wires = CZ.wires.filter(w => w.c1 === comp.id || w.c2 === comp.id);
+
+            // Connection details
+            const connections = wires.map(w => {
+                const otherId = w.c1 === comp.id ? w.c2 : w.c1;
+                const otherComp = CZ.deployed.find(c => c.id === otherId);
+                const otherTmpl = otherComp ? COMPONENTS.find(t => t.id === otherComp.type) : null;
+                const otherName = otherTmpl ? CZ.getCompName(otherTmpl) : otherId;
+                const myTermIdx = w.c1 === comp.id ? w.i1 : w.i2;
+                const otherTermIdx = w.c1 === comp.id ? w.i2 : w.i1;
+                const myTerm = terminals[myTermIdx];
+                const otherTerm = otherTmpl?.terminals?.[otherTermIdx];
+                return `<div class="ci-conn-row">
+                    <span class="ci-conn-pin">${myTerm?.label || myTermIdx}</span>
+                    <span class="ci-conn-arrow">→</span>
+                    <span class="ci-conn-target">${otherName}</span>
+                    <span class="ci-conn-pin">${otherTerm?.label || otherTermIdx}</span>
+                </div>`;
+            });
+
+            // Status info
+            const statusItems = [];
+            if (comp.isBroken) statusItems.push('<span class="ci-status-bad">💥 ' + (CZ.lang === 'en' ? 'BROKEN' : 'RUSAK') + '</span>');
+            if (comp.isPoweredOff) statusItems.push('<span class="ci-status-off">⏻ OFF</span>');
+            if (comp.isClosed === false) statusItems.push('<span class="ci-status-off">◯ ' + (CZ.lang === 'en' ? 'OPEN' : 'TERBUKA') + '</span>');
+            if (comp.isFlashed) statusItems.push('<span class="ci-status-good">💾 FLASHED</span>');
+            if (comp.rotation) statusItems.push('<span class="ci-status-info">↻ ' + comp.rotation + '°</span>');
+
+            const modal = document.createElement('div');
+            modal.className = 'comp-info-modal';
+            modal.innerHTML = `
+                <div class="ci-backdrop"></div>
+                <div class="ci-container">
+                    <div class="ci-header">
+                        <div class="ci-title-row">
+                            <div class="ci-preview">${tmpl?.svg || ''}</div>
+                            <div class="ci-title-text">
+                                <h2 class="ci-name">${name}</h2>
+                                <div class="ci-spec">${spec}</div>
+                                <div class="ci-meta">
+                                    <span class="ci-category">${category}</span>
+                                    <span class="ci-id">${comp.id}</span>
+                                    <span class="ci-type">${comp.type}</span>
+                                </div>
+                            </div>
+                            <button class="ci-close" title="Close">✕</button>
+                        </div>
+                        ${statusItems.length ? `<div class="ci-status-bar">${statusItems.join('')}</div>` : ''}
+                    </div>
+                    <div class="ci-body">
+                        ${rows.length ? `
+                        <div class="ci-section">
+                            <div class="ci-section-title">${CZ.lang === 'en' ? '⚡ Electrical Properties' : '⚡ Sifat Kelistrikan'}</div>
+                            <div class="ci-props-grid">
+                                ${rows.map(r => `
+                                    <div class="ci-prop">
+                                        <span class="ci-prop-icon">${r.icon}</span>
+                                        <span class="ci-prop-label">${r.label}</span>
+                                        <span class="ci-prop-value">${r.value}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>` : ''}
+
+                        ${flags.length ? `
+                        <div class="ci-section">
+                            <div class="ci-section-title">${CZ.lang === 'en' ? '🏷 Features' : '🏷 Fitur'}</div>
+                            <div class="ci-flags">${flags.map(f => `<span class="ci-flag">${f}</span>`).join('')}</div>
+                        </div>` : ''}
+
+                        <div class="ci-section">
+                            <div class="ci-section-title">${CZ.lang === 'en' ? '🔌 Terminals' : '🔌 Terminal'} (${terminals.length})</div>
+                            <div class="ci-terminals">
+                                ${terminals.map((t, i) => `
+                                    <div class="ci-term">
+                                        <span class="ci-term-idx">${i}</span>
+                                        <span class="ci-term-label">${t.label || '-'}</span>
+                                        <span class="ci-term-pos">x:${t.x} y:${t.y}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="ci-section">
+                            <div class="ci-section-title">${CZ.lang === 'en' ? '🔗 Connections' : '🔗 Koneksi'} (${wires.length})</div>
+                            ${connections.length ? `<div class="ci-connections">${connections.join('')}</div>` : `<div class="ci-empty">${CZ.lang === 'en' ? 'No connections' : 'Tidak ada koneksi'}</div>`}
+                        </div>
+
+                        <div class="ci-section">
+                            <div class="ci-section-title">${CZ.lang === 'en' ? '📍 Position' : '📍 Posisi'}</div>
+                            <div class="ci-pos">X: ${Math.round(comp.x)} &nbsp; Y: ${Math.round(comp.y)} &nbsp; ${CZ.lang === 'en' ? 'Rotation' : 'Rotasi'}: ${comp.rotation || 0}°</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            requestAnimationFrame(() => modal.classList.add('ci-visible'));
+
+            modal.querySelector('.ci-close').onclick = () => { modal.classList.remove('ci-visible'); setTimeout(() => modal.remove(), 200); };
+            modal.querySelector('.ci-backdrop').onclick = () => { modal.classList.remove('ci-visible'); setTimeout(() => modal.remove(), 200); };
+        }
+
         // ── Context menu: right-click component ──
         wCont.addEventListener('contextmenu', e => {
             e.preventDefault();
@@ -943,7 +1082,9 @@
 
             menu.addEventListener('click', ev => {
                 const action = ev.target.closest('.ctx-item')?.dataset.action;
-                if (action === 'delete') {
+                if (action === 'info' && comp && !isMulti) {
+                    showComponentInfo(comp, tmpl);
+                } else if (action === 'delete') {
                     const idsToDelete = new Set(CZ.selectedIds);
                     idsToDelete.forEach(cid => {
                         CZ.deployed = CZ.deployed.filter(c => c.id !== cid);

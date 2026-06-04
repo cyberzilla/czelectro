@@ -252,7 +252,8 @@ const COMPONENT_MANIFEST = [
         defaultVariant: 'outlet',
         variants: [
             { id: 'outlet',       label: 'Stop Kontak',      spec: '220V AC, 16A' },
-            { id: 'outlet_strip', label: 'Terminal Listrik',  spec: '220V AC, 4 Lubang' },
+            { id: 'outlet_strip', label: 'Terminal Listrik 4 Lubang',  spec: '220V AC, 4 Lubang' },
+            { id: 'power_strip_4', label: 'Power Strip 4 Lubang', labelEn: 'Power Strip 4-Outlet', spec: '220V, 16A' },
         ]
     },
     {
@@ -528,6 +529,7 @@ const COMPONENT_MANIFEST = [
             { id: 'terminal_block_2', label: 'Terminal Block', spec: '2-Pin, 15A' },
         ]
     },
+
     {
         groupId: 'transformer',
         label: 'Trafo',
