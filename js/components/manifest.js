@@ -560,7 +560,8 @@ const COMPONENT_MANIFEST = [
         file: 'comp.7segment.js',
         defaultVariant: 'seven_segment',
         variants: [
-            { id: 'seven_segment', label: '7-Segment', spec: 'Common Cathode' },
+            { id: 'seven_segment', label: '7-Segment 1 Digit', spec: 'Common Cathode' },
+            { id: 'seven_segment_clock', label: 'Jam 4-Digit', spec: '4-Digit HH:MM, Merah' },
         ]
     },
     {

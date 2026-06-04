@@ -61,7 +61,7 @@
             'iron','blender','ricecooker','ac_05pk','ac_1pk',
             'computer','motor_dc','buzzer','speaker','bulb',
             'led_red','led_green','led_blue','led_white','led_rgb',
-            'fan_12v','servo_sg90','seven_segment','led_matrix'
+            'fan_12v','servo_sg90','seven_segment','seven_segment_clock','led_matrix'
         ];
         if (TOGGLEABLE_TYPES.includes(comp.type)) {
             comp.isPoweredOff = true;

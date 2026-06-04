@@ -106,6 +106,32 @@
             if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
             // Clear timer intervals only during full reset (not during timer-triggered re-eval)
             if (c._timerInterval && !CZ._timerEvalLock) { clearInterval(c._timerInterval); c._timerInterval = null; }
+            // Clear 7-segment intervals (will be re-created if still powered)
+            // BUT skip if being controlled by a running Arduino session
+            if (c.type === 'seven_segment' || c.type === 'seven_segment_clock') {
+                const isArduinoControlled = CZ.arduinoSessions && [...CZ.arduinoSessions.values()].some(
+                    s => s.running && s.connected && (
+                        s.connected.seg7s.some(x => x.id === c.id) ||
+                        s.connected.clocks.some(x => x.id === c.id)
+                    )
+                );
+                if (!isArduinoControlled) {
+                    if (c._seg7ClockInterval) { clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null; }
+                    if (c._seg7Interval) { clearInterval(c._seg7Interval); c._seg7Interval = null; }
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
+                }
+            } else if (c.type === 'led_matrix') {
+                const isArduinoControlled = CZ.arduinoSessions && [...CZ.arduinoSessions.values()].some(
+                    s => s.running && s.connected && s.connected.matrices.some(x => x.id === c.id)
+                );
+                if (!isArduinoControlled) {
+                    if (c._matScrollInterval) { clearInterval(c._matScrollInterval); c._matScrollInterval = null; }
+                    el.querySelectorAll('.mdot').forEach(d => { d.setAttribute('fill', '#1a2332'); d.style.filter = 'none'; });
+                }
+            } else {
+                if (c._seg7ClockInterval) { clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null; }
+                if (c._seg7Interval) { clearInterval(c._seg7Interval); c._seg7Interval = null; }
+            }
             el.style.removeProperty('--glow-intensity');
             const bulb = el.querySelector('.led-bulb');
             if (bulb && !c.isBroken) { bulb.style.fill = ''; bulb.style.filter = ''; }
@@ -534,6 +560,11 @@
                     clearInterval(c._seg7Interval); c._seg7Interval = null;
                     el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
                 }
+                // 7-Segment Clock cleanup when no current
+                if (c.type === 'seven_segment_clock' && c._seg7ClockInterval && amps < EL.SIM.MIN_CURRENT) {
+                    clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null;
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
+                }
 
                 if (amps < EL.SIM.MIN_CURRENT) return;
 
@@ -762,6 +793,122 @@
                     el.classList.remove('seg7-active');
                     el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
                 }
+                // 7-Segment Clock Display — real-time HH:MM
+                if (c.type === 'seven_segment_clock' && amps > EL.SIM.MIN_CURRENT && !c.isPoweredOff) {
+                    el.classList.add('seg7-active');
+                    if (!c._seg7ClockInterval) {
+                        const DIGITS = [
+                            [1,1,1,1,1,1,0], // 0
+                            [0,1,1,0,0,0,0], // 1
+                            [1,1,0,1,1,0,1], // 2
+                            [1,1,1,1,0,0,1], // 3
+                            [0,1,1,0,0,1,1], // 4
+                            [1,0,1,1,0,1,1], // 5
+                            [1,0,1,1,1,1,1], // 6
+                            [1,1,1,0,0,0,0], // 7
+                            [1,1,1,1,1,1,1], // 8
+                            [1,1,1,1,0,1,1], // 9
+                        ];
+                        const SEG_NAMES = ['a','b','c','d','e','f','g'];
+                        const updateClock = () => {
+                            const now = new Date();
+                            const h = now.getHours();
+                            const m = now.getMinutes();
+                            const digits = [
+                                Math.floor(h / 10),
+                                h % 10,
+                                Math.floor(m / 10),
+                                m % 10
+                            ];
+                            // Update each digit (d0-d3)
+                            for (let di = 0; di < 4; di++) {
+                                const pattern = DIGITS[digits[di]];
+                                SEG_NAMES.forEach((name, si) => {
+                                    const seg = el.querySelector(`.d${di}-${name}`);
+                                    if (seg) {
+                                        if (pattern[si]) {
+                                            seg.setAttribute('fill', '#ef4444');
+                                            seg.style.filter = 'drop-shadow(0 0 3px rgba(239,68,68,0.8))';
+                                        } else {
+                                            seg.setAttribute('fill', '#374151');
+                                            seg.style.filter = 'none';
+                                        }
+                                    }
+                                });
+                            }
+                            // Blink colon every second
+                            const colonOn = now.getSeconds() % 2 === 0;
+                            const colonTop = el.querySelector('.colon-top');
+                            const colonBot = el.querySelector('.colon-bot');
+                            if (colonTop) {
+                                colonTop.setAttribute('fill', colonOn ? '#ef4444' : '#374151');
+                                colonTop.style.filter = colonOn ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
+                            }
+                            if (colonBot) {
+                                colonBot.setAttribute('fill', colonOn ? '#ef4444' : '#374151');
+                                colonBot.style.filter = colonOn ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
+                            }
+                        };
+                        updateClock();
+                        c._seg7ClockInterval = setInterval(updateClock, 500);
+                    }
+                } else if (c.type === 'seven_segment_clock' && (c.isPoweredOff || amps <= EL.SIM.MIN_CURRENT)) {
+                    if (c._seg7ClockInterval) { clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null; }
+                    el.classList.remove('seg7-active');
+                    el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
+                }
+                // LED Dot Matrix — default scrolling "CZElectro" when powered without Arduino
+                const _matArduinoCtrl = CZ.arduinoSessions && [...CZ.arduinoSessions.values()].some(s =>
+                    s.running && s.connected && s.connected.matrices.some(m => m.id === c.id)
+                );
+                if (c.type === 'led_matrix' && amps > EL.SIM.MIN_CURRENT && !c.isPoweredOff && !_matArduinoCtrl) {
+                    if (!c._matScrollInterval) {
+                        // 5×7 pixel font (same as Arduino IDE)
+                        const FONT = {
+                            'C':[0x3E,0x41,0x41,0x41,0x22],'Z':[0x61,0x51,0x49,0x45,0x43],
+                            'E':[0x7F,0x49,0x49,0x49,0x41],
+                            'l':[0x00,0x41,0x7F,0x40,0x00],'e':[0x38,0x54,0x54,0x54,0x18],
+                            'c':[0x38,0x44,0x44,0x44,0x20],'t':[0x04,0x3F,0x44,0x40,0x20],
+                            'r':[0x7C,0x08,0x04,0x04,0x08],'o':[0x38,0x44,0x44,0x44,0x38],
+                            ' ':[0x00,0x00,0x00,0x00,0x00]
+                        };
+                        const scrollText = 'CZElectro  ';
+                        // Build full pixel buffer
+                        const fullBuf = [];
+                        for (let i = 0; i < 32; i++) fullBuf.push(0);
+                        for (let i = 0; i < scrollText.length; i++) {
+                            const glyph = FONT[scrollText[i]] || FONT[' '];
+                            for (let g = 0; g < 5; g++) fullBuf.push(glyph[g]);
+                            fullBuf.push(0);
+                        }
+                        for (let i = 0; i < 32; i++) fullBuf.push(0);
+                        c._matScrollOffset = 0;
+                        c._matScrollBuffer = fullBuf;
+                        const drawFrame = () => {
+                            const buf = c._matScrollBuffer;
+                            const off = c._matScrollOffset;
+                            for (let col = 0; col < 32; col++) {
+                                const byte = buf[(off + col) % buf.length] || 0;
+                                for (let row = 0; row < 8; row++) {
+                                    const on = (byte >> row) & 1;
+                                    const dot = el.querySelector(`.mdot-${col}-${row}`);
+                                    if (dot) {
+                                        dot.setAttribute('fill', on ? '#ef4444' : '#1a2332');
+                                        dot.style.filter = on ? 'drop-shadow(0 0 2px rgba(239,68,68,0.7))' : 'none';
+                                    }
+                                }
+                            }
+                            c._matScrollOffset = (off + 1) % buf.length;
+                        };
+                        drawFrame();
+                        c._matScrollInterval = setInterval(drawFrame, 80);
+                    }
+                } else if (c.type === 'led_matrix' && (c.isPoweredOff || amps <= EL.SIM.MIN_CURRENT)) {
+                    if (c._matScrollInterval) { clearInterval(c._matScrollInterval); c._matScrollInterval = null; }
+                    el.querySelectorAll('.mdot').forEach(d => {
+                        d.setAttribute('fill', '#1a2332'); d.style.filter = 'none';
+                    });
+                }
                 // Transistor
                 if ((c.type === 'transistor_npn' || c.type === 'transistor_pnp') && amps > EL.SIM.MIN_CURRENT) { el.classList.add('transistor-active'); }
                 // MOSFET
@@ -976,6 +1123,34 @@
                 const rdg = el.querySelector('.vm-reading');
                 if (rdg) { rdg.textContent = '0.00'; rdg.setAttribute('fill', '#22c55e'); }
                 el.querySelectorAll('.vm-badge').forEach(b => b.remove());
+            }
+        });
+
+        // ── Handle disconnected 7-segment displays (not in MNA results) ──
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'seven_segment' && c.type !== 'seven_segment_clock') return;
+            // Check if this component was processed in PASS 2
+            const inCircuit = result.components.some(cr => cr.comp.id === c.id);
+            if (inCircuit) return; // still connected, handled above
+            // Not in circuit — stop interval and reset segments
+            if (c._seg7Interval) { clearInterval(c._seg7Interval); c._seg7Interval = null; }
+            if (c._seg7ClockInterval) { clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null; }
+            const el = document.getElementById(c.id);
+            if (el) {
+                el.classList.remove('seg7-active');
+                el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
+            }
+        });
+
+        // ── Handle disconnected LED matrices (not in MNA results) ──
+        CZ.deployed.forEach(c => {
+            if (c.type !== 'led_matrix') return;
+            const inCircuit = result.components.some(cr => cr.comp.id === c.id);
+            if (inCircuit) return;
+            if (c._matScrollInterval) { clearInterval(c._matScrollInterval); c._matScrollInterval = null; }
+            const el = document.getElementById(c.id);
+            if (el) {
+                el.querySelectorAll('.mdot').forEach(d => { d.setAttribute('fill', '#1a2332'); d.style.filter = 'none'; });
             }
         });
 

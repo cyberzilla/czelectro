@@ -241,6 +241,47 @@ void loop() {
   delay(500);
 }`
         },
+        'clock_display': {
+            name: '🕐 Jam Digital (Clock)',
+            code: `// Jam digital pada 7-Segment Clock Display
+// Koneksi: Clock Display → D10 & GND
+void setup() {
+  pinMode(10, OUTPUT);  // Clock data pin
+  Serial.println("Clock Display Started");
+  clock.clear();
+}
+
+void loop() {
+  // Tampilkan jam real-time
+  clock.showTime();
+  delay(500);
+}`
+        },
+        'clock_custom': {
+            name: '⏱️ Clock Custom Time',
+            code: `// Tampilkan custom time pada Clock Display
+// Koneksi: Clock Display → D10 & GND
+void setup() {
+  pinMode(10, OUTPUT);
+  Serial.println("Custom Clock Demo");
+  clock.clear();
+}
+
+void loop() {
+  // Countdown dari 05:00 ke 00:00
+  for (int m = 5; m >= 0; m--) {
+    for (int s = 59; s >= 0; s--) {
+      clock.show(0, m, s / 10, s % 10);
+      clock.colon(s % 2 == 0);
+      Serial.println("0" + String(m) + ":" + String(s));
+      delay(100);
+      if (m == 0 && s == 0) break;
+    }
+  }
+  Serial.println("DONE!");
+  delay(2000);
+}`
+        },
         'combo_all': {
             name: '🎯 LED + 7Seg + Matrix',
             code: `// LED (D13) + 7-Segment + LED Matrix sekaligus
@@ -314,7 +355,7 @@ void loop() {
     // ── Find connected components (per-pin mapping) ──
     function findConnected(arduinoId) {
         const byPin = {};  // pinNumber → [{ id, comp, type }]
-        const leds = [], seg7s = [], matrices = [], motors = [], servos = [], fans = [], buzzers = [], all = [];
+        const leds = [], seg7s = [], clocks = [], matrices = [], motors = [], servos = [], fans = [], buzzers = [], all = [];
 
         // Track which components connect to which Arduino terminals
         const compTerminals = {}; // otherId → Set of ardTermIdx
@@ -353,6 +394,7 @@ void loop() {
             // Categorize by type
             if (comp.type.startsWith('led_') && comp.type !== 'led_matrix') leds.push(entry);
             if (comp.type === 'seven_segment') seg7s.push(entry);
+            if (comp.type === 'seven_segment_clock') clocks.push(entry);
             if (comp.type === 'led_matrix') matrices.push(entry);
             if (comp.type === 'motor_dc') motors.push(entry);
             if (comp.type === 'servo_sg90') servos.push(entry);
@@ -369,7 +411,7 @@ void loop() {
             });
         });
 
-        return { byPin, leds, seg7s, matrices, motors, servos, fans, buzzers, all };
+        return { byPin, leds, seg7s, clocks, matrices, motors, servos, fans, buzzers, all };
     }
 
     // ── Apply 7-segment pattern to DOM ──
@@ -562,6 +604,107 @@ void loop() {
                 }
             },
 
+            // 7-Segment Clock Display (4-digit HH:MM) API
+            clock: {
+                _isConnected(clockId) {
+                    if (!session.connected.clocks.some(s => s.id === clockId)) return false;
+                    const comp = CZ.deployed.find(c => c.id === clockId);
+                    if (!comp || comp.isPoweredOff) return false;
+                    const hasT0 = CZ.wires.some(w => (w.c1 === clockId && w.i1 === 0) || (w.c2 === clockId && w.i2 === 0));
+                    const hasT1 = CZ.wires.some(w => (w.c1 === clockId && w.i1 === 1) || (w.c2 === clockId && w.i2 === 1));
+                    if (!hasT0 || !hasT1) return false;
+                    const clockPin = Object.entries(session.connected.byPin)
+                        .find(([pin, devs]) => devs.some(d => d.id === clockId));
+                    if (!clockPin) return false;
+                    if (api._pinModes[parseInt(clockPin[0])] !== api.OUTPUT) return false;
+                    return true;
+                },
+
+                _applyDigits(clockId, d0, d1, d2, d3) {
+                    const el = document.getElementById(clockId);
+                    if (!el) return;
+                    const DIGITS = [
+                        [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],
+                        [1,1,1,1,0,0,1],[0,1,1,0,0,1,1],[1,0,1,1,0,1,1],
+                        [1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],
+                        [1,1,1,1,0,1,1]
+                    ];
+                    const vals = [d0, d1, d2, d3].map(v => Math.floor(v) % 10);
+                    el.classList.add('seg7-active');
+                    for (let di = 0; di < 4; di++) {
+                        const pattern = DIGITS[vals[di]] || DIGITS[0];
+                        SEG_NAMES.forEach((name, si) => {
+                            const seg = el.querySelector(`.d${di}-${name}`);
+                            if (seg) {
+                                if (pattern[si]) {
+                                    seg.setAttribute('fill', '#ef4444');
+                                    seg.style.filter = 'drop-shadow(0 0 3px rgba(239,68,68,0.8))';
+                                } else {
+                                    seg.setAttribute('fill', '#374151');
+                                    seg.style.filter = 'none';
+                                }
+                            }
+                        });
+                    }
+                },
+
+                // Show 4 individual digits: clock.show(d0, d1, d2, d3)
+                show(d0, d1, d2, d3) {
+                    if (session.aborted) return;
+                    session.connected.clocks.forEach(s => {
+                        if (!api.clock._isConnected(s.id)) return;
+                        const comp = CZ.deployed.find(c => c.id === s.id);
+                        if (comp && comp._seg7ClockInterval) {
+                            clearInterval(comp._seg7ClockInterval);
+                            comp._seg7ClockInterval = null;
+                        }
+                        api.clock._applyDigits(s.id, d0, d1, d2, d3);
+                    });
+                },
+
+                // Show real-time HH:MM
+                showTime() {
+                    if (session.aborted) return;
+                    const now = new Date();
+                    const h = now.getHours(), m = now.getMinutes();
+                    api.clock.show(Math.floor(h/10), h%10, Math.floor(m/10), m%10);
+                    // Blink colon
+                    api.clock.colon(now.getSeconds() % 2 === 0);
+                },
+
+                // Control colon dots
+                colon(on) {
+                    if (session.aborted) return;
+                    session.connected.clocks.forEach(s => {
+                        if (!api.clock._isConnected(s.id)) return;
+                        const el = document.getElementById(s.id);
+                        if (!el) return;
+                        const top = el.querySelector('.colon-top');
+                        const bot = el.querySelector('.colon-bot');
+                        if (top) {
+                            top.setAttribute('fill', on ? '#ef4444' : '#374151');
+                            top.style.filter = on ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
+                        }
+                        if (bot) {
+                            bot.setAttribute('fill', on ? '#ef4444' : '#374151');
+                            bot.style.filter = on ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
+                        }
+                    });
+                },
+
+                clear() {
+                    session.connected.clocks.forEach(s => {
+                        const el = document.getElementById(s.id);
+                        if (!el) return;
+                        el.querySelectorAll('.seg').forEach(seg => {
+                            seg.setAttribute('fill', '#374151');
+                            seg.style.filter = 'none';
+                        });
+                        el.classList.remove('seg7-active');
+                    });
+                }
+            },
+
             // LED Dot Matrix API (32×8)
             matrix: {
                 // 5×7 pixel font (each entry = 5 column bytes, LSB = top row)
@@ -575,6 +718,16 @@ void loop() {
                     'S':[0x26,0x49,0x49,0x49,0x32],'T':[0x01,0x01,0x7F,0x01,0x01],'U':[0x3F,0x40,0x40,0x40,0x3F],
                     'V':[0x0F,0x30,0x40,0x30,0x0F],'W':[0x3F,0x40,0x30,0x40,0x3F],'X':[0x63,0x14,0x08,0x14,0x63],
                     'Y':[0x03,0x04,0x78,0x04,0x03],'Z':[0x61,0x51,0x49,0x45,0x43],
+                    // Lowercase letters
+                    'a':[0x20,0x54,0x54,0x54,0x78],'b':[0x7F,0x48,0x44,0x44,0x38],'c':[0x38,0x44,0x44,0x44,0x20],
+                    'd':[0x38,0x44,0x44,0x48,0x7F],'e':[0x38,0x54,0x54,0x54,0x18],'f':[0x08,0x7E,0x09,0x01,0x02],
+                    'g':[0x0C,0x52,0x52,0x52,0x3E],'h':[0x7F,0x08,0x04,0x04,0x78],'i':[0x00,0x44,0x7D,0x40,0x00],
+                    'j':[0x20,0x40,0x44,0x3D,0x00],'k':[0x7F,0x10,0x28,0x44,0x00],'l':[0x00,0x41,0x7F,0x40,0x00],
+                    'm':[0x7C,0x04,0x18,0x04,0x78],'n':[0x7C,0x08,0x04,0x04,0x78],'o':[0x38,0x44,0x44,0x44,0x38],
+                    'p':[0x7C,0x14,0x14,0x14,0x08],'q':[0x08,0x14,0x14,0x18,0x7C],'r':[0x7C,0x08,0x04,0x04,0x08],
+                    's':[0x48,0x54,0x54,0x54,0x20],'t':[0x04,0x3F,0x44,0x40,0x20],'u':[0x3C,0x40,0x40,0x20,0x7C],
+                    'v':[0x1C,0x20,0x40,0x20,0x1C],'w':[0x3C,0x40,0x30,0x40,0x3C],'x':[0x44,0x28,0x10,0x28,0x44],
+                    'y':[0x0C,0x50,0x50,0x50,0x3C],'z':[0x44,0x64,0x54,0x4C,0x44],
                     '0':[0x3E,0x51,0x49,0x45,0x3E],'1':[0x00,0x42,0x7F,0x40,0x00],'2':[0x62,0x51,0x49,0x49,0x46],
                     '3':[0x22,0x41,0x49,0x49,0x36],'4':[0x18,0x14,0x12,0x7F,0x10],'5':[0x27,0x45,0x45,0x45,0x39],
                     '6':[0x3C,0x4A,0x49,0x49,0x30],'7':[0x01,0x71,0x09,0x05,0x03],'8':[0x36,0x49,0x49,0x49,0x36],
@@ -653,7 +806,7 @@ void loop() {
                 text(str) {
                     if (session.aborted) return;
                     api.matrix._activateMatrixPins(true);
-                    const text = String(str).toUpperCase();
+                    const text = String(str);
                     const font = api.matrix._font;
                     const buffer = new Array(32).fill(0);
                     let col = 0;
@@ -673,7 +826,7 @@ void loop() {
                 // Scroll text across the display
                 async scroll(str, speed) {
                     api.matrix._activateMatrixPins(true);
-                    const text = String(str).toUpperCase();
+                    const text = String(str);
                     const font = api.matrix._font;
                     const delayMs = speed || 80;
                     // Build full pixel buffer for entire text
@@ -947,7 +1100,12 @@ void loop() {
             if (!uploaded) { session.running = false; updateRunButton(session); return; }
             // Save flashed state on the component object (single source of truth)
             const ardComp2 = CZ.deployed.find(c => c.id === session.compId);
-            if (ardComp2) { ardComp2.arduinoCode = session.code; ardComp2.isFlashed = true; ardComp2._pinLayoutVersion = 2; }
+            if (ardComp2) {
+                ardComp2.arduinoCode = session.code;
+                ardComp2.isFlashed = true;
+                ardComp2._pinLayoutVersion = 2;
+                ardComp2._tempCode = undefined; // sync: editor matches flash
+            }
             // Show FLASHED indicator on IDE and on chip SVG
             const flashEl = document.getElementById('ard-flash-' + session.compId);
             if (flashEl) flashEl.style.display = 'inline';
@@ -991,6 +1149,7 @@ void loop() {
             session.serialLines.push('── Detected Devices ──');
             deviceLines.forEach(l => session.serialLines.push(l));
             if (conn.seg7s.length) session.serialLines.push(`  🔢 7-Segment: ${conn.seg7s.length} unit`);
+            if (conn.clocks.length) session.serialLines.push(`  🕐 Clock Display: ${conn.clocks.length} unit`);
             if (conn.matrices.length) session.serialLines.push(`  📺 LED Matrix: ${conn.matrices.length} unit`);
             session.serialLines.push('');
             updateSerialMonitor(session);
@@ -1040,7 +1199,7 @@ void loop() {
             const fn = new AsyncFunction(
                 'HIGH','LOW','OUTPUT','INPUT','LED_BUILTIN',
                 'pinMode','digitalWrite','digitalRead','analogRead','analogWrite',
-                'delay','Serial','seg7','matrix','motor','servo','buzzer','led',
+                'delay','Serial','seg7','clock','matrix','motor','servo','buzzer','led',
                 '_isAborted',
                 fnBody
             );
@@ -1052,7 +1211,7 @@ void loop() {
                 api.HIGH, api.LOW, api.OUTPUT, api.INPUT, api.LED_BUILTIN,
                 api.pinMode, api.digitalWrite.bind(api), api.digitalRead.bind(api),
                 api.analogRead.bind(api), api.analogWrite.bind(api),
-                api.delay, api.Serial, api.seg7, api.matrix, api.motor, api.servo, api.buzzer, api.led,
+                api.delay, api.Serial, api.seg7, api.clock, api.matrix, api.motor, api.servo, api.buzzer, api.led,
                 () => session.aborted
             );
         } catch(e) {
@@ -1161,8 +1320,8 @@ void loop() {
 
         // Get or create session
         if (!sessions.has(compId)) {
-            // Load saved code from component object
-            const savedCode = comp.arduinoCode;
+            // Load temp code (editor buffer) first, then fall back to flashed code
+            const savedCode = comp._tempCode || comp.arduinoCode;
             sessions.set(compId, {
                 compId,
                 code: savedCode || PRESETS['blink_led'].code,
@@ -1232,11 +1391,11 @@ void loop() {
 
         document.body.appendChild(modal);
 
-        // Helper: save code to component object
+        // Helper: save temp code to component (editor buffer, NOT flash memory)
         const saveCode = () => {
             const val = document.getElementById(`ard-code-${compId}`).value;
             session.code = val;
-            comp.arduinoCode = val;
+            comp._tempCode = val; // save as temp code, not flash
         };
 
         // Event handlers
@@ -1273,6 +1432,7 @@ void loop() {
             // Erase = stop + clear flash
             if (session.running) stopArduino(session);
             comp.arduinoCode = undefined;
+            comp._tempCode = undefined;
             comp.isFlashed = false;
             session.code = PRESETS['blink_led'].code;
             document.getElementById(`ard-code-${compId}`).value = session.code;
@@ -1296,8 +1456,9 @@ void loop() {
         };
         document.getElementById(`ard-preset-${compId}`).onchange = (e) => {
             if (e.target.value && PRESETS[e.target.value]) {
-                document.getElementById(`ard-code-${compId}`).value = PRESETS[e.target.value].code;
-                saveCode();
+                const code = PRESETS[e.target.value].code;
+                document.getElementById(`ard-code-${compId}`).value = code;
+                session.code = code; // update editor session only, NOT flash memory
                 e.target.value = '';
             }
         };
@@ -1421,7 +1582,7 @@ void loop() {
 
         // 1b. Reset disconnected 7-segment displays to gray
         CZ.deployed.forEach(c => {
-            if (c.type !== 'seven_segment') return;
+            if (c.type !== 'seven_segment' && c.type !== 'seven_segment_clock') return;
             const hasT0 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0));
             const hasT1 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 1) || (w.c2 === c.id && w.i2 === 1));
             if (!hasT0 || !hasT1) {

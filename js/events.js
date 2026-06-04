@@ -547,7 +547,7 @@
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
                     'led_red','led_green','led_blue','led_white','led_rgb',
-                    'fan_12v','servo_sg90','seven_segment','led_matrix'
+                    'fan_12v','servo_sg90','seven_segment','seven_segment_clock','led_matrix'
                 ];
                 if (comp && TOGGLEABLE.includes(comp.type)) {
                     comp.isPoweredOff = !comp.isPoweredOff;
@@ -569,7 +569,7 @@
                     pwrBadge.textContent = comp.isPoweredOff ? '⏻ OFF' : '⏻ ON';
                     pwrBadge.classList.toggle('off', comp.isPoweredOff);
                     // Immediately reset 7-segment segments when powered off
-                    if (comp.type === 'seven_segment' && comp.isPoweredOff) {
+                    if ((comp.type === 'seven_segment' || comp.type === 'seven_segment_clock') && comp.isPoweredOff) {
                         CZ.dragEl.querySelectorAll('.seg').forEach(s => {
                             s.setAttribute('fill', '#374151');
                             s.style.filter = 'none';
@@ -894,6 +894,12 @@
                 }
             }
 
+            // Arduino IDE option (for touch devices that can't double-click)
+            if (!isMulti && comp && tmpl && tmpl.isArduino) {
+                const ideLabel = CZ.lang === 'en' ? 'Open Arduino IDE' : 'Buka Arduino IDE';
+                menuItems += `<div class="ctx-item" data-action="openide">💻 ${ideLabel}</div>`;
+            }
+
             menuItems += `<div class="ctx-item" data-action="duplicate">📋 ${CZ.t('ctxDuplicate')}${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="rotate">↻ ${CZ.t('ctxRotate')} (R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
             menuItems += `<div class="ctx-item" data-action="rotaterev">↺ ${CZ.t('ctxRotateRev')} (Shift+R)${isMulti ? ` (${CZ.selectedIds.size})` : ''}</div>`;
@@ -951,6 +957,10 @@
                     if (typeof CZ.onArduinoWiresChanged === 'function') CZ.onArduinoWiresChanged();
                     CZ.renderWires(); CZ.evaluateCircuit();
                     CZ.saveState();
+                } else if (action === 'openide') {
+                    if (comp && typeof CZ.openArduinoIDE === 'function') {
+                        CZ.openArduinoIDE(comp.id);
+                    }
                 } else if (action === 'duplicate') {
                     CZ.duplicateSelected();
                 } else if (action === 'copytext') {

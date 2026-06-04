@@ -679,6 +679,7 @@
                                 batteryLevel: c.batteryLevel,
                                 batteryCapacity: c.batteryCapacity,
                                 arduinoCode: c.arduinoCode ? btoa(unescape(encodeURIComponent(c.arduinoCode))) : undefined,
+                                tempCode: c._tempCode ? btoa(unescape(encodeURIComponent(c._tempCode))) : undefined,
                                 isFlashed: c.isFlashed || undefined,
                                 pinLayoutVersion: c._pinLayoutVersion || undefined
                             })),

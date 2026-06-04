@@ -112,6 +112,7 @@
                 atsMode: c.atsMode || undefined,
                 kwhTotal: c._kwhTotal || undefined,
                 arduinoCode: c.arduinoCode ? encodeArdCode(c.arduinoCode) : undefined,
+                tempCode: c._tempCode ? encodeArdCode(c._tempCode) : undefined,
                 isFlashed: c.isFlashed || undefined,
                 pinLayoutVersion: c._pinLayoutVersion || undefined
             })),
@@ -194,6 +195,10 @@
                 comp.isFlashed = true;
                 el.classList.add('arduino-flashed');
             }
+            // Restore temp code (editor buffer)
+            if (saved.tempCode) {
+                comp._tempCode = decodeArdCode(saved.tempCode);
+            }
             comp._pinLayoutVersion = saved.pinLayoutVersion || 0;
             comp.terminals.forEach((term, idx) => {
                 const tEl = document.createElement('div');
@@ -237,7 +242,7 @@
                 'iron','blender','ricecooker','ac_05pk','ac_1pk',
                 'computer','motor_dc','buzzer','speaker','bulb',
                 'led_red','led_green','led_blue','led_white','led_rgb',
-                'pln_source','seven_segment','led_matrix'
+                'pln_source','seven_segment','seven_segment_clock','led_matrix'
             ];
             if (RESTORE_TOGGLEABLE.includes(comp.type)) {
                 if (comp.isPoweredOff) {
@@ -455,6 +460,10 @@
                     comp.arduinoCode = saved.flashedCode;
                     comp.isFlashed = true;
                 }
+                // Restore temp code (editor buffer)
+                if (saved.tempCode) {
+                    comp._tempCode = decodeArdCode(saved.tempCode);
+                }
                 comp._pinLayoutVersion = saved.pinLayoutVersion || 0;
 
                 // Re-create terminals
@@ -502,7 +511,7 @@
                     'iron','blender','ricecooker','ac_05pk','ac_1pk',
                     'computer','motor_dc','buzzer','speaker','bulb',
                     'led_red','led_green','led_blue','led_white','led_rgb',
-                    'pln_source','seven_segment','led_matrix'
+                    'pln_source','seven_segment','seven_segment_clock','led_matrix'
                 ];
                 if (RESTORE_TOGGLEABLE2.includes(comp.type)) {
                     if (comp.isPoweredOff) {
