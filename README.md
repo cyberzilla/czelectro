@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/CZElectro.png" alt="CZElectro Logo" width="120"/>
+  <img src="icon/icon-128x128.png" alt="CZElectro Logo" width="120"/>
 </p>
 
 <h1 align="center">⚡ CZElectro</h1>
