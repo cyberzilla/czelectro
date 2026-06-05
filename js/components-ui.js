@@ -347,6 +347,16 @@
                 newComp.batteryCapacity = tmpl.capacityWh;
                 newComp.batteryLevel = comp.batteryLevel ?? tmpl.capacityWh;
             }
+            // Copy Arduino-specific properties from source
+            if (tmpl.isArduino) {
+                newComp._pinLayoutVersion = comp._pinLayoutVersion || 2;
+                if (comp.arduinoCode) newComp.arduinoCode = comp.arduinoCode;
+                if (comp.isFlashed) {
+                    newComp.isFlashed = true;
+                    el.classList.add('arduino-flashed');
+                }
+                if (comp._tempCode) newComp._tempCode = comp._tempCode;
+            }
             // Apply rotation CSS if source was rotated
             if (newComp.rotation) {
                 el.style.transform = `rotate(${newComp.rotation}deg)`;
@@ -402,6 +412,17 @@
         });
         CZ.renderWires(); CZ.evaluateCircuit();
         CZ.renderGroupLabels();
+        // Auto-run flashed Arduinos that were just duplicated (delay for circuit to settle)
+        setTimeout(() => {
+            newIds.forEach(id => {
+                const c = CZ.deployed.find(x => x.id === id);
+                if (!c || !c.isFlashed || !c.arduinoCode) return;
+                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                if (tmpl && tmpl.isArduino && typeof CZ.autoRunFlashedArduinos === 'function') {
+                    CZ.autoRunFlashedArduinos();
+                }
+            });
+        }, 300);
     };
 
 })(window.CZ);
