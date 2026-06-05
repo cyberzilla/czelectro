@@ -5,7 +5,7 @@
 
     // ── Spawn Component ──
     CZ.spawnComponent = function(tmplId, cx, cy) {
-        const tmpl = COMPONENTS.find(t => t.id === tmplId);
+        const tmpl = REGISTRY.find(tmplId);
         if (!tmpl) return;
         CZ.counter++;
         const uId = `c_${tmplId}_${CZ.counter}`;
@@ -40,7 +40,7 @@
 
         CZ.ws.appendChild(el);
         // Initialize battery level if component has capacity
-        const tmplCap = COMPONENTS.find(t => t.id === comp.type);
+        const tmplCap = REGISTRY.find(comp.type);
         if (tmplCap?.capacityWh) {
             comp.batteryCapacity = tmplCap.capacityWh;
             comp.batteryLevel = comp.batteryLevel ?? tmplCap.capacityWh;
@@ -52,7 +52,7 @@
         } else if (tmplCap?.isMultimeter) {
             comp.mmMode = 'V';
         }
-        CZ.deployed.push(comp);
+        CZ.addDeployed(comp);
         // Mark new Arduino components with current pin layout version
         if (tmplCap?.isArduino) comp._pinLayoutVersion = 2;
         // Toggleable output components start OFF (like real appliances)
@@ -89,11 +89,11 @@
 
     // ── Reset a broken component to original state ──
     CZ.resetComponent = function(compId) {
-        const comp = CZ.deployed.find(c => c.id === compId);
+        const comp = CZ.deployedMap.get(compId);
         if (!comp) return;
         const el = document.getElementById(compId);
         if (!el) return;
-        const tmpl = COMPONENTS.find(t => t.id === comp.type);
+        const tmpl = REGISTRY.find(comp.type);
         if (!tmpl) return;
 
         // Restore electrical properties
@@ -153,7 +153,7 @@
     // direction: +90 (CW, default) or -90 (CCW)
     CZ.rotateComponent = function(compId, direction) {
         const deg = direction || 90;
-        const comp = CZ.deployed.find(c => c.id === compId);
+        const comp = CZ.deployedMap.get(compId);
         if (!comp) return;
         const el = document.getElementById(compId);
         if (!el) return;
@@ -231,9 +231,9 @@
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         CZ.selectedIds.forEach(cid => {
-            const comp = CZ.deployed.find(c => c.id === cid);
+            const comp = CZ.deployedMap.get(cid);
             if (!comp) return;
-            const tmpl = COMPONENTS.find(t => t.id === comp.type);
+            const tmpl = REGISTRY.find(comp.type);
             if (!tmpl) return;
             entries.push({ comp, tmpl });
             minX = Math.min(minX, comp.x);
@@ -320,9 +320,9 @@
         const newIds = new Set();
         const idMap = {};
         CZ.selectedIds.forEach(cid => {
-            const comp = CZ.deployed.find(c => c.id === cid);
+            const comp = CZ.deployedMap.get(cid);
             if (!comp) return;
-            const tmpl = COMPONENTS.find(t => t.id === comp.type);
+            const tmpl = REGISTRY.find(comp.type);
             if (!tmpl) return;
             CZ.counter++;
             const newId = `c_${comp.type}_${CZ.counter}`;
@@ -372,7 +372,7 @@
                 el.appendChild(tEl);
             });
             CZ.ws.appendChild(el);
-            CZ.deployed.push(newComp);
+            CZ.addDeployed(newComp);
             newIds.add(newId);
         });
         // Duplicate wires between selected components (snapshot to avoid infinite loop)
@@ -415,9 +415,9 @@
         // Auto-run flashed Arduinos that were just duplicated (delay for circuit to settle)
         setTimeout(() => {
             newIds.forEach(id => {
-                const c = CZ.deployed.find(x => x.id === id);
+                const c = CZ.deployedMap.get(id);
                 if (!c || !c.isFlashed || !c.arduinoCode) return;
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 if (tmpl && tmpl.isArduino && typeof CZ.autoRunFlashedArduinos === 'function') {
                     CZ.autoRunFlashedArduinos();
                 }

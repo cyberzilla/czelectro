@@ -31,7 +31,7 @@
     // ── Absolute terminal position ──
     // Returns absolute workspace position of a terminal, accounting for rotation.
     CZ.getAbsPos = function(comp, term) {
-        const tmpl = COMPONENTS.find(t => t.id === comp.type);
+        const tmpl = REGISTRY.find(comp.type);
         if (!tmpl || !comp.rotation) {
             return { x: comp.x + term.x, y: comp.y + term.y };
         }
@@ -43,7 +43,7 @@
     // ── Terminal exit direction ──
     // Detects terminal direction based on position relative to component center.
     CZ.getTerminalDir = function(comp, termIdx) {
-        const tmpl = COMPONENTS.find(t => t.id === comp.type);
+        const tmpl = REGISTRY.find(comp.type);
         if (!tmpl) return { dx: 0, dy: 1 };
         const term = comp.terminals[termIdx];
         const cx = tmpl.width / 2, cy = tmpl.height / 2;
@@ -266,6 +266,9 @@
         const activeIndices = new Set();
         document.querySelectorAll('.terminal').forEach(el => el.classList.remove('connected'));
 
+        // Collect connected terminal keys for batch marking at end
+        const connectedTermKeys = new Set();
+
         // Auto-spread: compute offset for wires sharing the same terminal pair
         const terminalGroups = {};
         CZ.wires.forEach((w, idx) => {
@@ -287,8 +290,8 @@
                 if (!wireSpread[widx]) wireSpread[widx] = { x: 0, y: 0 };
                 // Spread perpendicular to the wire direction
                 const w = CZ.wires[widx];
-                const c1 = CZ.deployed.find(c => c.id === w.c1);
-                const c2 = CZ.deployed.find(c => c.id === w.c2);
+                const c1 = CZ.deployedMap.get(w.c1);
+                const c2 = CZ.deployedMap.get(w.c2);
                 if (!c1 || !c2) return;
                 const p1 = CZ.getAbsPos(c1, c1.terminals[w.i1]);
                 const p2 = CZ.getAbsPos(c2, c2.terminals[w.i2]);
@@ -301,8 +304,8 @@
         });
 
         CZ.wires.forEach((w, idx) => {
-            const c1 = CZ.deployed.find(c => c.id === w.c1);
-            const c2 = CZ.deployed.find(c => c.id === w.c2);
+            const c1 = CZ.deployedMap.get(w.c1);
+            const c2 = CZ.deployedMap.get(w.c2);
             if (!c1 || !c2) return;
             const p1 = CZ.getAbsPos(c1, c1.terminals[w.i1]);
             const p2 = CZ.getAbsPos(c2, c2.terminals[w.i2]);
@@ -404,8 +407,14 @@
                 CZ.wiresG.appendChild(g);
             }
 
-            document.querySelector(`[data-cid="${w.c1}"][data-tidx="${w.i1}"]`)?.classList.add('connected');
-            document.querySelector(`[data-cid="${w.c2}"][data-tidx="${w.i2}"]`)?.classList.add('connected');
+            connectedTermKeys.add(`${w.c1}:${w.i1}`);
+            connectedTermKeys.add(`${w.c2}:${w.i2}`);
+        });
+
+        // Batch apply terminal connected state using pre-collected keys
+        document.querySelectorAll('.terminal').forEach(el => {
+            const key = `${el.dataset.cid}:${el.dataset.tidx}`;
+            if (connectedTermKeys.has(key)) el.classList.add('connected');
         });
 
         // Remove stale wire groups (deleted wires)
@@ -423,8 +432,8 @@
         const w = CZ.wires[idx];
         if (!w) return;
 
-        const c1 = CZ.deployed.find(c => c.id === w.c1);
-        const c2 = CZ.deployed.find(c => c.id === w.c2);
+        const c1 = CZ.deployedMap.get(w.c1);
+        const c2 = CZ.deployedMap.get(w.c2);
         if (!c1 || !c2) return;
 
         const p1 = CZ.getAbsPos(c1, c1.terminals[w.i1]);

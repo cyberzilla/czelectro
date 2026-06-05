@@ -55,7 +55,7 @@
 
         // Initialize all terminal keys
         deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (!tmpl) return;
             tmpl.terminals.forEach((_, idx) => find(termKey(c.id, idx)));
         });
@@ -65,7 +65,7 @@
 
         // Arduino: internally connect GND pins (terminals 13 and 21) — like real Arduino
         deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (tmpl && tmpl.isArduino) {
                 union(termKey(c.id, 13), termKey(c.id, 21)); // GND = GND2
             }
@@ -90,7 +90,7 @@
         find(GND_KEY);
         let hasExplicitGround = false;
         deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (tmpl && tmpl.isGround) {
                 union(termKey(c.id, 0), GND_KEY);
                 hasExplicitGround = true;
@@ -196,7 +196,7 @@
             const nP = getNode(c.id, 0); // pin 0 = positive
             const nN = getNode(c.id, 1); // pin 1 = negative
             if (nP < 0 || nN < 0 || nP === nN) return;
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             const intR = tmpl?.internalResistance || tmpl?.resistance || 0.01;
             vSources.push({ comp: c, v, nP, nN, intR, tmpl });
         });
@@ -216,7 +216,7 @@
 
         // Arduino virtual voltage sources — only when Arduino is properly powered
         deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (!tmpl || !tmpl.isArduino || !c._arduinoPins) return;
 
             // Check if Arduino is properly powered (VIN → battery AND GND → battery)
@@ -225,7 +225,7 @@
             );
             const hasPower = vinWires.some(w => {
                 const otherId = w.c1 === c.id ? w.c2 : w.c1;
-                const otherComp = CZ.deployed.find(x => x.id === otherId);
+                const otherComp = CZ.deployedMap.get(otherId);
                 if (!otherComp) return false;
                 return isSource(otherComp) && !otherComp.isPoweredOff && !otherComp.isBroken;
             });
@@ -236,7 +236,7 @@
             );
             const hasGND = gndWires.some(w => {
                 const otherId = w.c1 === c.id ? w.c2 : w.c1;
-                const otherComp = CZ.deployed.find(x => x.id === otherId);
+                const otherComp = CZ.deployedMap.get(otherId);
                 if (!otherComp) return false;
                 return isSource(otherComp) && !otherComp.isPoweredOff && !otherComp.isBroken;
             });
@@ -287,7 +287,7 @@
             // Build minimal component results for Ω mode (all zero V/I)
             const compResults = [];
             deployed.forEach(c => {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 const n1 = getNode(c.id, 0), n2 = getNode(c.id, 1);
                 if (n1 < 0 || n2 < 0) return;
                 compResults.push({ comp: c, tmpl, vDrop: 0, current: 0, power: 0, nodeP: n1, nodeN: n2, v1: 0, v2: 0 });
@@ -314,7 +314,7 @@
         // Stamp passive components (resistors, etc.) + dead batteries as internal resistors
         deployed.forEach(c => {
             if (isSource(c) && !deadSourceIds.has(c.id)) return; // active sources handled separately
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (!tmpl) return;
 
             const n1 = getNode(c.id, 0);
@@ -347,7 +347,7 @@
                         visited.add(key);
                         // Check if this component is the source we're looking for
                         if (cid !== atsId) {
-                            const comp = CZ.deployed.find(x => x.id === cid);
+                            const comp = CZ.deployedMap.get(cid);
                             if (comp && sourceCheck(comp)) return true;
                         }
                         // Follow wires from this terminal
@@ -360,8 +360,8 @@
                             queue.push({ cid: nextCid, ti: nextTi });
                             // Traverse through component to its other terminals
                             // (skip ground & ATS to avoid cross-contamination)
-                            const nc = CZ.deployed.find(x => x.id === nextCid);
-                            const nt = nc ? COMPONENTS.find(t => t.id === nc.type) : null;
+                            const nc = CZ.deployedMap.get(nextCid);
+                            const nt = nc ? REGISTRY.find(nc.type) : null;
                             if (nt && nt.terminals && !nt.isGround && !nt.isATS) {
                                 nt.terminals.forEach((_, i) => {
                                     if (i !== nextTi) queue.push({ cid: nextCid, ti: i });
@@ -374,7 +374,7 @@
 
                 // Check PLN: trace from ATS terminal 0 to find active PLN source
                 const plnActive = hasSourceViaWire(c.id, 0, pc => {
-                    const pt = COMPONENTS.find(t => t.id === pc.type);
+                    const pt = REGISTRY.find(pc.type);
                     return pt && pt.isPLN && !pc.isPoweredOff && !pc.isBroken;
                 });
 
@@ -469,7 +469,7 @@
 
         // Check all deployed (including broken for reporting)
         CZ.deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (!tmpl) return;
             const n1 = getNode(c.id, 0);
             const n2 = getNode(c.id, 1);
@@ -641,7 +641,7 @@
         // This prevents deadlock where a blocked diode stays blocked forever
         CZ.deployed.forEach(c => {
             if (c.isBroken) return;
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (tmpl && tmpl.isDiode && c.currentResistance === 1e12) {
                 c.currentResistance = tmpl.resistance;
             }

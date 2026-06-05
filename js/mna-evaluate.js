@@ -185,7 +185,7 @@
             const stripLed = el.querySelector('.strip-power-led');
             if (stripLed) { stripLed.style.fill = ''; stripLed.style.filter = ''; }
             // Reset charge controller / step-down
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if ((tmpl && tmpl.isChargeController) || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
                 if (tmpl) c.currentResistance = tmpl.resistance;
             }
@@ -294,10 +294,10 @@
                 const n2 = result.getNode ? result.getNode(w.c2, w.i2) : -1;
                 if (n1 < 0 || n2 < 0) return;
                 // Skip propagation through inverters (they create domain boundary)
-                const c1comp = CZ.deployed.find(c => c.id === w.c1);
-                const c2comp = CZ.deployed.find(c => c.id === w.c2);
-                const c1tmpl = c1comp ? COMPONENTS.find(t => t.id === c1comp.type) : null;
-                const c2tmpl = c2comp ? COMPONENTS.find(t => t.id === c2comp.type) : null;
+                const c1comp = CZ.deployedMap.get(w.c1);
+                const c2comp = CZ.deployedMap.get(w.c2);
+                const c1tmpl = c1comp ? REGISTRY.find(c1comp.type) : null;
+                const c2tmpl = c2comp ? REGISTRY.find(c2comp.type) : null;
                 if (c1tmpl?.isInverter || c2tmpl?.isInverter) return;
                 // Propagate AC domain
                 if (nodeDomain[n1] === 'AC' && nodeDomain[n2] !== 'AC') {
@@ -481,7 +481,7 @@
                                 let R;
                                 if (isSource(other.comp)) {
                                     // For batteries: use internal resistance
-                                    const otmpl = other.tmpl || COMPONENTS.find(t => t.id === other.comp.type);
+                                    const otmpl = other.tmpl || REGISTRY.find(other.comp.type);
                                     R = otmpl?.internalResistance || otmpl?.resistance || 0.01;
                                 } else {
                                     R = other.comp.currentResistance;
@@ -769,11 +769,17 @@
                             [1,1,1,1,0,1,1], // 9
                         ];
                         const SEG_NAMES = ['a','b','c','d','e','f','g'];
+                        // Pre-cache segment DOM elements for O(1) access
+                        if (!c._segEls) {
+                            c._segEls = {};
+                            SEG_NAMES.forEach(name => { c._segEls[name] = el.querySelector('.seg-' + name); });
+                            c._segEls.dp = el.querySelector('.seg-dp');
+                        }
                         c._seg7Digit = 0;
                         const updateDigit = () => {
                             const pattern = DIGITS[c._seg7Digit];
                             SEG_NAMES.forEach((name, i) => {
-                                const seg = el.querySelector('.seg-' + name);
+                                const seg = c._segEls[name];
                                 if (seg) {
                                     if (pattern[i]) {
                                         seg.setAttribute('fill', '#ef4444');
@@ -785,7 +791,7 @@
                                 }
                             });
                             // Blink decimal point every other digit
-                            const dp = el.querySelector('.seg-dp');
+                            const dp = c._segEls.dp;
                             if (dp) {
                                 dp.setAttribute('fill', c._seg7Digit % 2 === 0 ? '#ef4444' : '#374151');
                                 dp.style.filter = c._seg7Digit % 2 === 0 ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
@@ -818,21 +824,34 @@
                             [1,1,1,1,0,1,1], // 9
                         ];
                         const SEG_NAMES = ['a','b','c','d','e','f','g'];
+                        // Pre-cache all digit segment + colon DOM elements
+                        if (!c._clockSegEls) {
+                            c._clockSegEls = { digits: [] };
+                            for (let di = 0; di < 4; di++) {
+                                c._clockSegEls.digits[di] = {};
+                                SEG_NAMES.forEach(name => {
+                                    c._clockSegEls.digits[di][name] = el.querySelector(`.d${di}-${name}`);
+                                });
+                            }
+                            c._clockSegEls.colonTop = el.querySelector('.colon-top');
+                            c._clockSegEls.colonBot = el.querySelector('.colon-bot');
+                        }
                         const updateClock = () => {
                             const now = new Date();
                             const h = now.getHours();
                             const m = now.getMinutes();
-                            const digits = [
+                            const digitVals = [
                                 Math.floor(h / 10),
                                 h % 10,
                                 Math.floor(m / 10),
                                 m % 10
                             ];
-                            // Update each digit (d0-d3)
+                            // Update each digit (d0-d3) using cached elements
                             for (let di = 0; di < 4; di++) {
-                                const pattern = DIGITS[digits[di]];
+                                const pattern = DIGITS[digitVals[di]];
+                                const digitEls = c._clockSegEls.digits[di];
                                 SEG_NAMES.forEach((name, si) => {
-                                    const seg = el.querySelector(`.d${di}-${name}`);
+                                    const seg = digitEls[name];
                                     if (seg) {
                                         if (pattern[si]) {
                                             seg.setAttribute('fill', '#ef4444');
@@ -846,8 +865,8 @@
                             }
                             // Blink colon every second
                             const colonOn = now.getSeconds() % 2 === 0;
-                            const colonTop = el.querySelector('.colon-top');
-                            const colonBot = el.querySelector('.colon-bot');
+                            const colonTop = c._clockSegEls.colonTop;
+                            const colonBot = c._clockSegEls.colonBot;
                             if (colonTop) {
                                 colonTop.setAttribute('fill', colonOn ? '#ef4444' : '#374151');
                                 colonTop.style.filter = colonOn ? 'drop-shadow(0 0 3px rgba(239,68,68,0.8))' : 'none';
@@ -892,14 +911,25 @@
                         for (let i = 0; i < 32; i++) fullBuf.push(0);
                         c._matScrollOffset = 0;
                         c._matScrollBuffer = fullBuf;
+                        // Pre-cache all dot references (32×8 = 256 elements) for O(1) access
+                        if (!c._matDots) {
+                            c._matDots = [];
+                            for (let col = 0; col < 32; col++) {
+                                c._matDots[col] = [];
+                                for (let row = 0; row < 8; row++) {
+                                    c._matDots[col][row] = el.querySelector(`.mdot-${col}-${row}`);
+                                }
+                            }
+                        }
                         const drawFrame = () => {
                             const buf = c._matScrollBuffer;
                             const off = c._matScrollOffset;
+                            const dots = c._matDots;
                             for (let col = 0; col < 32; col++) {
                                 const byte = buf[(off + col) % buf.length] || 0;
                                 for (let row = 0; row < 8; row++) {
                                     const on = (byte >> row) & 1;
-                                    const dot = el.querySelector(`.mdot-${col}-${row}`);
+                                    const dot = dots[col][row];
                                     if (dot) {
                                         dot.setAttribute('fill', on ? '#ef4444' : '#1a2332');
                                         dot.style.filter = on ? 'drop-shadow(0 0 2px rgba(239,68,68,0.7))' : 'none';
@@ -1215,7 +1245,7 @@
         // ── Timer 555 Oscillation ──
         if (!CZ._timerEvalLock) {
             CZ.deployed.forEach(c => {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 if (!tmpl || !tmpl.isTimer) return;
                 const el = document.getElementById(c.id);
                 // Check connectivity: timer must have wires on both terminals

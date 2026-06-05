@@ -145,7 +145,7 @@
                         // Horizontal — it's a drag
                         touchState.decided = 'drag';
                         CZ._sidebarDragging = true;
-                        const tmpl = COMPONENTS.find(t => t.id === touchState.tmplId);
+                        const tmpl = REGISTRY.find(touchState.tmplId);
                         if (!tmpl) { touchState = null; return; }
                         touchState.tmpl = tmpl;
                         const ghost = document.createElement('div');
@@ -208,7 +208,7 @@
             if (sItem && e.button === 0) {
                 e.preventDefault();
                 const tmplId = sItem.dataset.id;
-                const tmpl = COMPONENTS.find(t => t.id === tmplId);
+                const tmpl = REGISTRY.find(tmplId);
                 if (!tmpl) return;
 
                 const ghost = document.createElement('div');
@@ -256,7 +256,7 @@
             if (termEl) {
                 e.stopPropagation();
                 const cid = termEl.dataset.cid, tidx = parseInt(termEl.dataset.tidx);
-                const comp = CZ.deployed.find(c => c.id === cid);
+                const comp = CZ.deployedMap.get(cid);
                 CZ.activeTerm = { cid, tidx, comp, el: termEl };
                 const pos = CZ.getAbsPos(comp, comp.terminals[tidx]);
                 tmpWire.setAttribute('d', `M ${pos.x} ${pos.y} L ${pos.x} ${pos.y}`);
@@ -268,7 +268,7 @@
             const bComp = e.target.closest('.board-component');
             if (bComp && e.button === 0) {
                 CZ.dragEl = bComp;
-                const comp = CZ.deployed.find(c => c.id === bComp.id);
+                const comp = CZ.deployedMap.get(bComp.id);
                 const wPos = CZ.clientToWorkspace(e.clientX, e.clientY);
                 CZ.dragOX = comp ? wPos.x - comp.x : 0;
                 CZ.dragOY = comp ? wPos.y - comp.y : 0;
@@ -369,7 +369,7 @@
                 let ny = Math.round((m.y - CZ.dragOY) / CZ.GRID) * CZ.GRID;
                 CZ.dragEl.style.left = nx + 'px';
                 CZ.dragEl.style.top = ny + 'px';
-                const comp = CZ.deployed.find(c => c.id === CZ.dragEl.id);
+                const comp = CZ.deployedMap.get(CZ.dragEl.id);
                 if (comp) {
                     const oldX = comp.x, oldY = comp.y;
                     comp.x = nx; comp.y = ny;
@@ -420,7 +420,7 @@
                 CZ.selRect.remove(); CZ.selRect = null;
                 if (rw > 5 || rh > 5) {
                     CZ.deployed.forEach(c => {
-                        const tmpl = COMPONENTS.find(t => t.id === c.type);
+                        const tmpl = REGISTRY.find(c.type);
                         if (!tmpl) return;
                         const cx = c.x + tmpl.width / 2, cy = c.y + tmpl.height / 2;
                         if (cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh) {
@@ -446,7 +446,7 @@
             // Click (not drag) — handle switch toggle + show terminals on touch
             if (CZ.isDragging && CZ.dragEl && !CZ.dragMoved) {
                 try {
-                const comp = CZ.deployed.find(c => c.id === CZ.dragEl.id);
+                const comp = CZ.deployedMap.get(CZ.dragEl.id);
                 if (comp && comp.type === 'switch_toggle') {
                     comp.isClosed = !comp.isClosed;
                     comp.currentResistance = comp.isClosed ? EL.SIM.SWITCH_ON_R : EL.SIM.SWITCH_OFF_R;
@@ -460,7 +460,7 @@
 
                 // ── MCB toggle (click to reset after trip, or manual on/off) ──
                 if (comp && comp.type.startsWith('mcb_')) {
-                    const tmpl = COMPONENTS.find(t => t.id === comp.type);
+                    const tmpl = REGISTRY.find(comp.type);
                     comp.isClosed = comp.isClosed === false ? true : false;
                     comp.currentResistance = comp.isClosed ? (tmpl ? tmpl.resistance : 0.01) : EL.SIM.OPEN_CIRCUIT_R;
                     CZ.dragEl.classList.remove('mcb-tripped');
@@ -491,7 +491,7 @@
                         if (plnLed) plnLed.setAttribute('fill', '#ef4444');
                         if (plnVolt) { plnVolt.textContent = 'OFF'; plnVolt.setAttribute('fill', '#ef4444'); }
                     } else {
-                        const tmpl = COMPONENTS.find(t => t.id === 'pln_source');
+                        const tmpl = REGISTRY.find('pln_source');
                         comp.currentResistance = tmpl ? tmpl.resistance : 0.01;
                         if (plnLed) plnLed.setAttribute('fill', '#22c55e');
                         if (plnVolt) { plnVolt.textContent = '220V'; plnVolt.setAttribute('fill', '#22c55e'); }
@@ -542,7 +542,7 @@
                 // ── Relay toggle (manual on/off when not energized) ──
 
                 // ── Power on/off for output components ──
-                const toggleTmpl = comp ? COMPONENTS.find(t => t.id === comp.type) : null;
+                const toggleTmpl = comp ? REGISTRY.find(comp.type) : null;
                 if (comp && toggleTmpl && toggleTmpl.category === 'output') {
                     comp.isPoweredOff = !comp.isPoweredOff;
                     const tmpl = toggleTmpl;
@@ -778,10 +778,10 @@
                 } else {
                     // Touch: show confirmation menu
                     document.querySelector('.ctx-menu')?.remove();
-                    const comp1 = CZ.deployed.find(c => c.id === w.c1);
-                    const comp2 = CZ.deployed.find(c => c.id === w.c2);
-                    const t1 = comp1 ? COMPONENTS.find(t => t.id === comp1.type) : null;
-                    const t2 = comp2 ? COMPONENTS.find(t => t.id === comp2.type) : null;
+                    const comp1 = CZ.deployedMap.get(w.c1);
+                    const comp2 = CZ.deployedMap.get(w.c2);
+                    const t1 = comp1 ? REGISTRY.find(comp1.type) : null;
+                    const t2 = comp2 ? REGISTRY.find(comp2.type) : null;
                     const name1 = t1 ? CZ.getCompName(t1) : (comp1?.type || '?');
                     const name2 = t2 ? CZ.getCompName(t2) : (comp2?.type || '?');
 
@@ -869,8 +869,8 @@
             // Connection details
             const connections = wires.map(w => {
                 const otherId = w.c1 === comp.id ? w.c2 : w.c1;
-                const otherComp = CZ.deployed.find(c => c.id === otherId);
-                const otherTmpl = otherComp ? COMPONENTS.find(t => t.id === otherComp.type) : null;
+                const otherComp = CZ.deployedMap.get(otherId);
+                const otherTmpl = otherComp ? REGISTRY.find(otherComp.type) : null;
                 const otherName = otherTmpl ? CZ.getCompName(otherTmpl) : otherId;
                 const myTermIdx = w.c1 === comp.id ? w.i1 : w.i2;
                 const otherTermIdx = w.c1 === comp.id ? w.i2 : w.i1;
@@ -975,8 +975,8 @@
             const bComp = e.target.closest('.board-component');
             if (!bComp) return;
 
-            const comp = CZ.deployed.find(c => c.id === bComp.id);
-            const tmpl = COMPONENTS.find(t => t.id === comp?.type);
+            const comp = CZ.deployedMap.get(bComp.id);
+            const tmpl = REGISTRY.find(comp?.type);
             const name = tmpl ? CZ.getCompName(tmpl) : (CZ.lang === 'en' ? 'Component' : 'Komponen');
             const isBroken = comp?.isBroken;
 
@@ -1008,7 +1008,7 @@
             }
 
             const allBatteries = isMulti && [...CZ.selectedIds].every(cid => {
-                const c = CZ.deployed.find(d => d.id === cid);
+                const c = CZ.deployedMap.get(cid);
                 return c && c.batteryCapacity;
             });
 
@@ -1025,7 +1025,7 @@
 
             // kWh Meter options (copy reading / reset counter)
             if (!isMulti && comp) {
-                const kwhTmpl = COMPONENTS.find(t => t.id === comp.type);
+                const kwhTmpl = REGISTRY.find(comp.type);
                 if (kwhTmpl && kwhTmpl.isKwhMeter) {
                     const kwh = (comp._kwhTotal || 0).toFixed(2);
                     menuItems += `<div class="ctx-item" data-action="copykwh">📋 ${CZ.t('ctxCopyKwh')} (${kwh})</div>`;
@@ -1087,7 +1087,7 @@
                 } else if (action === 'delete') {
                     const idsToDelete = new Set(CZ.selectedIds);
                     idsToDelete.forEach(cid => {
-                        CZ.deployed = CZ.deployed.filter(c => c.id !== cid);
+                        CZ.removeDeployed(cid);
                         CZ.wires = CZ.wires.filter(w => w.c1 !== cid && w.c2 !== cid);
                         document.getElementById(cid)?.remove();
                         CZ.groups.forEach(g => { const idx = g.members.indexOf(cid); if (idx >= 0) g.members.splice(idx, 1); });
@@ -1110,9 +1110,9 @@
                     const compMap = {}; // id -> {comp, tmpl, shortName}
                     const compNums = {}; // type -> counter for numbering
                     selIds.forEach(cid => {
-                        const c = CZ.deployed.find(d => d.id === cid);
+                        const c = CZ.deployedMap.get(cid);
                         if (!c) return;
-                        const t = COMPONENTS.find(x => x.id === c.type);
+                        const t = REGISTRY.find(c.type);
                         const baseName = t ? CZ.getCompName(t) : c.type;
                         compNums[baseName] = (compNums[baseName] || 0) + 1;
                         compMap[cid] = { comp: c, tmpl: t, baseName };
@@ -1210,10 +1210,10 @@
                 } else if (action === 'resetbatt') {
                     const targets = isMulti ? [...CZ.selectedIds] : (comp ? [comp.id] : []);
                     targets.forEach(cid => {
-                        const c = CZ.deployed.find(d => d.id === cid);
+                        const c = CZ.deployedMap.get(cid);
                         if (!c || !c.batteryCapacity) return;
                         c.batteryLevel = c.batteryCapacity;
-                        const t = COMPONENTS.find(x => x.id === c.type);
+                        const t = REGISTRY.find(c.type);
                         if (t) c.voltage = t.voltage;
                         // Clear dead visual state
                         const el = document.getElementById(cid);
@@ -1337,9 +1337,9 @@
         wCont.addEventListener('dblclick', e => {
             const compEl = e.target.closest('.board-component');
             if (!compEl) return;
-            const comp = CZ.deployed.find(c => c.id === compEl.id);
+            const comp = CZ.deployedMap.get(compEl.id);
             if (!comp) return;
-            const tmpl = REGISTRY.components.find(t => t.id === comp.type);
+            const tmpl = REGISTRY.find(comp.type);
             if (tmpl && tmpl.isArduino && typeof CZ.openArduinoIDE === 'function') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1357,7 +1357,7 @@
                 if (CZ.selectedIds.size > 0) {
                     e.preventDefault();
                     CZ.selectedIds.forEach(cid => {
-                        CZ.deployed = CZ.deployed.filter(c => c.id !== cid);
+                        CZ.removeDeployed(cid);
                         CZ.wires = CZ.wires.filter(w => w.c1 !== cid && w.c2 !== cid);
                         document.getElementById(cid)?.remove();
                         CZ.groups.forEach(g => { const idx = g.members.indexOf(cid); if (idx >= 0) g.members.splice(idx, 1); });

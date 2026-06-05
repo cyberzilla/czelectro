@@ -67,7 +67,7 @@
             // BMS cutoff: when ALL batteries are at dead level, loads are disconnected
             // In real life, BMS cuts off inverter → loads stop → only solar charges
             const allLoopBatts = loop.battIds
-                .map(id => CZ.deployed.find(c => c.id === id))
+                .map(id => CZ.deployedMap.get(id))
                 .filter(Boolean);
             const allDead = allLoopBatts.length > 0 && allLoopBatts.every(b => {
                 const minLevel = CZ.getBattDeadLevel(b);
@@ -130,7 +130,7 @@
                 // Check if any solar panel shares network with orphan batteries
                 const solarPanels = CZ.deployed.filter(c => c.type.startsWith('solar_'));
                 const hasCCinNetwork = CZ.deployed.some(c => {
-                    const t = COMPONENTS.find(x => x.id === c.type);
+                    const t = REGISTRY.find(c.type);
                     return t && t.isChargeController;
                 });
 
@@ -139,7 +139,7 @@
                     const connectedSolar = solarPanels.find(sp => ufFindSim(sp.id) === batRoot);
                     if (!connectedSolar || !hasCCinNetwork) return;
 
-                    const tmpl = COMPONENTS.find(t => t.id === connectedSolar.type);
+                    const tmpl = REGISTRY.find(connectedSolar.type);
                     if (!tmpl || !tmpl.ratedPower) return;
 
                     // Charge at solar rated power × solar factor × CC efficiency
@@ -309,7 +309,7 @@
             const isRch = type.includes('lifepo4') || type.includes('plts') || type === 'battery_32140';
             const icon = avgPct > 50 ? '🟢' : avgPct > 20 ? '🟡' : (isRch && avgPct <= 10) ? '🛑' : avgPct > 0 ? '🔴' : '💀';
             const dodLabel = isRch && avgPct <= 10 ? ' <span style="color:#ef4444;font-size:9px">(BMS)</span>' : '';
-            const tmpl = COMPONENTS.find(t => t.id === type);
+            const tmpl = REGISTRY.find(type);
             const typeName = tmpl ? CZ.getCompName(tmpl) : type;
             if (batts.length === 1) {
                 battInfo += `<div class="sim-batt">${icon} ${avgPct.toFixed(0)}% (${totalLevel.toFixed(0)}Wh)${dodLabel}</div>`;
@@ -347,7 +347,7 @@
     CZ.resetBatteries = function() {
         CZ.deployed.forEach(c => {
             if (c.batteryCapacity) {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 c.batteryLevel = c.batteryCapacity;
                 if (tmpl) c.voltage = tmpl.voltage;
                 const el = document.getElementById(c.id);

@@ -289,9 +289,9 @@
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             let hasMembers = false;
             g.members.forEach(id => {
-                const c = CZ.deployed.find(d => d.id === id);
+                const c = CZ.deployedMap.get(id);
                 if (!c) return;
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 if (!tmpl) return;
                 hasMembers = true;
                 minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
@@ -434,7 +434,7 @@
             if (!CZ.deployed.length) return;
             if (!confirm(CZ.t('confirmClearAll'))) return;
             CZ.deployed.forEach(c => document.getElementById(c.id)?.remove());
-            CZ.deployed = []; CZ.wires = []; CZ.groups = [];
+            CZ.deployed = []; CZ.deployedMap.clear(); CZ.wires = []; CZ.groups = [];
             document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
             CZ.renderWires(); CZ.evaluateCircuit();
         });
@@ -787,7 +787,7 @@
                     // Calculate position offset to avoid overlap
                     let maxX = -Infinity;
                     CZ.deployed.forEach(c => {
-                        const tmpl = COMPONENTS.find(t => t.id === c.type);
+                        const tmpl = REGISTRY.find(c.type);
                         const w = tmpl ? tmpl.width : 80;
                         maxX = Math.max(maxX, c.x + w);
                     });

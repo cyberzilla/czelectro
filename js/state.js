@@ -21,6 +21,7 @@
     const CZ = window.CZ = {
         // ── State ──
         deployed: [],
+        deployedMap: new Map(),  // id → component (O(1) lookup)
         wires: [],
         counter: 0,
         zoom: 1,
@@ -84,6 +85,21 @@
         tooltip: null
     };
 
+    // ── Deployed component management helpers ──
+    // Maintain deployedMap in sync with deployed array for O(1) lookups
+    CZ.rebuildDeployedMap = function() {
+        CZ.deployedMap.clear();
+        CZ.deployed.forEach(c => CZ.deployedMap.set(c.id, c));
+    };
+    CZ.addDeployed = function(comp) {
+        CZ.deployed.push(comp);
+        CZ.deployedMap.set(comp.id, comp);
+    };
+    CZ.removeDeployed = function(id) {
+        CZ.deployed = CZ.deployed.filter(c => c.id !== id);
+        CZ.deployedMap.delete(id);
+    };
+
     // ── DOM Initialization ──
     CZ.initDOM = function() {
         CZ.listEl = document.getElementById('component-list');
@@ -127,12 +143,36 @@
     };
 
     // Full snapshot including viewport — for localStorage persistence only
+    // Built directly to avoid double serialize/parse overhead
     CZ.getFullSnapshot = function() {
-        const base = JSON.parse(CZ.getSnapshot());
-        base.zoom = CZ.zoom;
-        base.panX = CZ.panX;
-        base.panY = CZ.panY;
-        return JSON.stringify(base);
+        return JSON.stringify({
+            deployed: CZ.deployed.map(c => ({
+                id: c.id, type: c.type, x: c.x, y: c.y,
+                isBroken: c.isBroken, isClosed: c.isClosed,
+                isPoweredOff: c.isPoweredOff || false,
+                mmMode: c.mmMode || undefined,
+                currentResistance: c.currentResistance,
+                rotation: c.rotation || 0,
+                batteryLevel: c.batteryLevel,
+                batteryCapacity: c.batteryCapacity,
+                atsMode: c.atsMode || undefined,
+                kwhTotal: c._kwhTotal || undefined,
+                arduinoCode: c.arduinoCode ? encodeArdCode(c.arduinoCode) : undefined,
+                tempCode: c._tempCode ? encodeArdCode(c._tempCode) : undefined,
+                isFlashed: c.isFlashed || undefined,
+                pinLayoutVersion: c._pinLayoutVersion || undefined
+            })),
+            wires: CZ.wires.map(w => ({
+                c1: w.c1, i1: w.i1, c2: w.c2, i2: w.i2,
+                color: w.color,
+                controlPoints: w.controlPoints || CZ.getDefaultControlPoints()
+            })),
+            groups: CZ.groups.map(g => ({ id: g.id, members: [...g.members], label: g.label || '' })),
+            counter: CZ.counter,
+            zoom: CZ.zoom,
+            panX: CZ.panX,
+            panY: CZ.panY
+        });
     };
 
     CZ.applySnapshot = function(json) {
@@ -140,7 +180,7 @@
         // Clear current DOM
         document.querySelectorAll('.board-component').forEach(el => el.remove());
         document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
-        CZ.deployed = []; CZ.wires = [];
+        CZ.deployed = []; CZ.deployedMap.clear(); CZ.wires = [];
 
         CZ.counter = state.counter || 0;
         // Only restore viewport if present (full snapshot from localStorage)
@@ -151,7 +191,7 @@
 
         // Rebuild components
         state.deployed.forEach(saved => {
-            const tmpl = COMPONENTS.find(t => t.id === saved.type);
+            const tmpl = REGISTRY.find(saved.type);
             if (!tmpl) return;
             const el = document.createElement('div');
             el.className = 'board-component';
@@ -237,7 +277,7 @@
                 if (indicator) indicator.setAttribute('fill', '#6b7280');
             }
             // Restore power on/off badge for all toggleable components
-            const restoreTmpl = COMPONENTS.find(t => t.id === comp.type);
+            const restoreTmpl = REGISTRY.find(comp.type);
             if ((restoreTmpl && restoreTmpl.category === 'output') || comp.type === 'pln_source') {
                 if (comp.isPoweredOff) {
                     el.classList.add('powered-off');
@@ -276,7 +316,7 @@
             if (grp) el.classList.add('grouped');
 
             CZ.ws.appendChild(el);
-            CZ.deployed.push(comp);
+            CZ.addDeployed(comp);
         });
 
         // Rebuild wires
@@ -340,6 +380,7 @@
     // ── Save state after an action ──
     // Stack model: undoStack top = current state.
     // Undo pops current → redo, applies previous (peek).
+    CZ._saveDebounceTimer = null;
     CZ.saveState = function() {
         if (CZ.isRestoring) return; // don't save during undo/redo
         try {
@@ -350,12 +391,20 @@
             if (CZ.undoStack.length > CZ.UNDO_MAX) CZ.undoStack.shift();
             CZ.redoStack = []; // any new action clears redo
             CZ.updateUndoRedoButtons();
-            localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot());
+            // Debounce localStorage write — expensive for large circuits
+            clearTimeout(CZ._saveDebounceTimer);
+            CZ._saveDebounceTimer = setTimeout(() => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, CZ.getFullSnapshot());
+                } catch (e2) {
+                    if (e2.name === 'QuotaExceededError' || e2.code === 22) {
+                        console.warn('CZElectro: localStorage quota exceeded');
+                        if (typeof CZ.showToast === 'function') CZ.showToast('⚠️ Storage penuh! State tidak tersimpan.', 'warning');
+                    }
+                }
+            }, 300);
         } catch (e) {
-            if (e.name === 'QuotaExceededError' || e.code === 22) {
-                console.warn('CZElectro: localStorage quota exceeded, state not persisted');
-                if (typeof CZ.showToast === 'function') CZ.showToast('⚠️ Storage penuh! State tidak tersimpan.', 'warning');
-            }
+            console.warn('CZElectro: saveState error', e);
         }
     };
 
@@ -410,7 +459,7 @@
 
             // Rebuild components
             state.deployed.forEach(saved => {
-                const tmpl = COMPONENTS.find(t => t.id === saved.type);
+                const tmpl = REGISTRY.find(saved.type);
                 if (!tmpl) return;
 
                 const el = document.createElement('div');
@@ -500,7 +549,7 @@
                     if (indicator) indicator.setAttribute('fill', '#6b7280');
                 }
                 // Restore power on/off badge for all toggleable components
-                const restoreTmpl2 = COMPONENTS.find(t => t.id === comp.type);
+                const restoreTmpl2 = REGISTRY.find(comp.type);
                 if ((restoreTmpl2 && restoreTmpl2.category === 'output') || comp.type === 'pln_source') {
                     if (comp.isPoweredOff) {
                         el.classList.add('powered-off');
@@ -541,7 +590,7 @@
                 if (grp) el.classList.add('grouped');
 
                 CZ.ws.appendChild(el);
-                CZ.deployed.push(comp);
+                CZ.addDeployed(comp);
             });
 
             // Rebuild wires

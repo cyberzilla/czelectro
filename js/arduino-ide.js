@@ -395,7 +395,7 @@ void loop() {
             else if (w.c2 === arduinoId) { ardTermIdx = w.i2; otherId = w.c1; }
             else return;
 
-            const comp = CZ.deployed.find(c => c.id === otherId);
+            const comp = CZ.deployedMap.get(otherId);
             if (!comp) return;
             if (!compTerminals[otherId]) compTerminals[otherId] = new Set();
             compTerminals[otherId].add(ardTermIdx);
@@ -407,7 +407,7 @@ void loop() {
         const GND_TERMS = new Set([13, 21]);
 
         Object.entries(compTerminals).forEach(([otherId, terms]) => {
-            const comp = CZ.deployed.find(c => c.id === otherId);
+            const comp = CZ.deployedMap.get(otherId);
             if (!comp) return;
 
             const hasDigital = [...terms].some(t => DIGITAL_TERMS.has(t));
@@ -448,7 +448,7 @@ void loop() {
         const el = document.getElementById(seg7Entry.id);
         if (!el) return;
         // Don't light up if component is powered off or not fully connected
-        const comp = CZ.deployed.find(c => c.id === seg7Entry.id);
+        const comp = CZ.deployedMap.get(seg7Entry.id);
         if (comp && comp.isPoweredOff) return;
         // Both terminals must have wires (complete circuit required)
         const hasT0 = CZ.wires.some(w => (w.c1 === seg7Entry.id && w.i1 === 0) || (w.c2 === seg7Entry.id && w.i2 === 0));
@@ -505,7 +505,7 @@ void loop() {
                 if (session.aborted) return;
                 api._pins[pin] = value;
                 // Store pin state on the deployed component for MNA integration
-                const ardComp = CZ.deployed.find(c => c.id === session.compId);
+                const ardComp = CZ.deployedMap.get(session.compId);
                 if (ardComp) {
                     if (!ardComp._arduinoPins) ardComp._arduinoPins = {};
                     ardComp._arduinoPins[pin] = value ? 1 : 0;
@@ -556,7 +556,7 @@ void loop() {
                 // Check if seg7 is properly wired and pin set as OUTPUT
                 _isConnected(seg7Id) {
                     if (!session.connected.seg7s.some(s => s.id === seg7Id)) return false;
-                    const comp = CZ.deployed.find(c => c.id === seg7Id);
+                    const comp = CZ.deployedMap.get(seg7Id);
                     if (!comp || comp.isPoweredOff) return false;
                     const hasT0 = CZ.wires.some(w => (w.c1 === seg7Id && w.i1 === 0) || (w.c2 === seg7Id && w.i2 === 0));
                     const hasT1 = CZ.wires.some(w => (w.c1 === seg7Id && w.i1 === 1) || (w.c2 === seg7Id && w.i2 === 1));
@@ -576,7 +576,7 @@ void loop() {
                     const hasDot = String(ch).includes('.');
                     session.connected.seg7s.forEach(s => {
                         if (!api.seg7._isConnected(s.id)) return;
-                        const comp = CZ.deployed.find(c => c.id === s.id);
+                        const comp = CZ.deployedMap.get(s.id);
                         // Stop any existing MNA-driven animation
                         if (comp && comp._seg7Interval) {
                             clearInterval(comp._seg7Interval);
@@ -592,7 +592,7 @@ void loop() {
                     while (pattern.length < 7) pattern.push(0);
                     session.connected.seg7s.forEach(s => {
                         if (!api.seg7._isConnected(s.id)) return;
-                        const comp = CZ.deployed.find(c => c.id === s.id);
+                        const comp = CZ.deployedMap.get(s.id);
                         if (comp && comp._seg7Interval) {
                             clearInterval(comp._seg7Interval);
                             comp._seg7Interval = null;
@@ -637,7 +637,7 @@ void loop() {
             clock: {
                 _isConnected(clockId) {
                     if (!session.connected.clocks.some(s => s.id === clockId)) return false;
-                    const comp = CZ.deployed.find(c => c.id === clockId);
+                    const comp = CZ.deployedMap.get(clockId);
                     if (!comp || comp.isPoweredOff) return false;
                     const hasT0 = CZ.wires.some(w => (w.c1 === clockId && w.i1 === 0) || (w.c2 === clockId && w.i2 === 0));
                     const hasT1 = CZ.wires.some(w => (w.c1 === clockId && w.i1 === 1) || (w.c2 === clockId && w.i2 === 1));
@@ -682,7 +682,7 @@ void loop() {
                     if (session.aborted) return;
                     session.connected.clocks.forEach(s => {
                         if (!api.clock._isConnected(s.id)) return;
-                        const comp = CZ.deployed.find(c => c.id === s.id);
+                        const comp = CZ.deployedMap.get(s.id);
                         if (comp && comp._seg7ClockInterval) {
                             clearInterval(comp._seg7ClockInterval);
                             comp._seg7ClockInterval = null;
@@ -798,7 +798,7 @@ void loop() {
 
                 // Set Arduino pin HIGH for matrix so MNA detects current flow
                 _activateMatrixPins(active) {
-                    const ardComp = CZ.deployed.find(c => c.id === session.compId);
+                    const ardComp = CZ.deployedMap.get(session.compId);
                     if (!ardComp) return;
                     if (!ardComp._arduinoPins) ardComp._arduinoPins = {};
                     // Find which pins matrices are connected to
@@ -816,7 +816,7 @@ void loop() {
                 _isConnected(matrixId) {
                     // Must be in current session's connected list
                     if (!session.connected.matrices.some(m => m.id === matrixId)) return false;
-                    const comp = CZ.deployed.find(c => c.id === matrixId);
+                    const comp = CZ.deployedMap.get(matrixId);
                     if (!comp || comp.isPoweredOff) return false;
                     // Both terminals must have wires
                     const hasT0 = CZ.wires.some(w => (w.c1 === matrixId && w.i1 === 0) || (w.c2 === matrixId && w.i2 === 0));
@@ -837,8 +837,8 @@ void loop() {
                     return session.connected.matrices
                         .filter(m => api.matrix._isConnected(m.id))
                         .sort((a, b) => {
-                            const compA = CZ.deployed.find(c => c.id === a.id);
-                            const compB = CZ.deployed.find(c => c.id === b.id);
+                            const compA = CZ.deployedMap.get(a.id);
+                            const compB = CZ.deployedMap.get(b.id);
                             return (compA?.x || 0) - (compB?.x || 0);
                         });
                 },
@@ -1141,7 +1141,7 @@ void loop() {
         session.aborted = false;
         session._timers = [];
         // Clear previous pin states
-        const ardComp = CZ.deployed.find(c => c.id === session.compId);
+        const ardComp = CZ.deployedMap.get(session.compId);
         if (ardComp) ardComp._arduinoPins = {};
         // Track wire count for disconnect detection
         session._wireCount = CZ.wires.filter(w => w.c1 === session.compId || w.c2 === session.compId).length;
@@ -1151,7 +1151,7 @@ void loop() {
             const uploaded = await simulateUpload(session);
             if (!uploaded) { session.running = false; updateRunButton(session); return; }
             // Save flashed state on the component object (single source of truth)
-            const ardComp2 = CZ.deployed.find(c => c.id === session.compId);
+            const ardComp2 = CZ.deployedMap.get(session.compId);
             if (ardComp2) {
                 ardComp2.arduinoCode = session.code;
                 ardComp2.isFlashed = true;
@@ -1278,7 +1278,7 @@ void loop() {
         const chipOff = document.getElementById(session.compId);
         if (chipOff) {
             chipOff.classList.remove('arduino-running');
-            const ardComp3 = CZ.deployed.find(c => c.id === session.compId);
+            const ardComp3 = CZ.deployedMap.get(session.compId);
             if (ardComp3 && ardComp3.isFlashed) {
                 chipOff.classList.add('arduino-flashed');
             }
@@ -1290,7 +1290,7 @@ void loop() {
     // ── Reset all controlled component DOM effects ──
     function resetAllControlled(session) {
         // Clear Arduino pin states — removes virtual voltage sources from MNA
-        const ardComp = CZ.deployed.find(c => c.id === session.compId);
+        const ardComp = CZ.deployedMap.get(session.compId);
         if (ardComp) {
             ardComp._arduinoPins = {};
         }
@@ -1336,7 +1336,7 @@ void loop() {
         const chipEl = document.getElementById(session.compId);
         if (chipEl) {
             chipEl.classList.remove('arduino-running');
-            const ardComp4 = CZ.deployed.find(c => c.id === session.compId);
+            const ardComp4 = CZ.deployedMap.get(session.compId);
             if (ardComp4 && ardComp4.isFlashed) {
                 chipEl.classList.add('arduino-flashed');
             }
@@ -1367,7 +1367,7 @@ void loop() {
         const existing = document.getElementById('arduino-ide-modal');
         if (existing) existing.remove();
 
-        const comp = CZ.deployed.find(c => c.id === compId);
+        const comp = CZ.deployedMap.get(compId);
         if (!comp) return;
 
         // Get or create session
@@ -1557,7 +1557,7 @@ void loop() {
     // Terminal indices: VIN=12, GND=13, GND2=21
     function isArduinoPowered(compId) {
         const isSourceComp = (otherId) => {
-            const c = CZ.deployed.find(x => x.id === otherId);
+            const c = CZ.deployedMap.get(otherId);
             if (!c || c.isPoweredOff || c.isBroken) return false;
             // Check if battery is dead (depleted)
             if (c.batteryCapacity && c.batteryLevel !== undefined) {
@@ -1581,7 +1581,7 @@ void loop() {
 
     // Auto-run flashed code on a specific Arduino
     function autoRunFlashed(compId) {
-        const ardComp = CZ.deployed.find(c => c.id === compId);
+        const ardComp = CZ.deployedMap.get(compId);
         if (!ardComp || !ardComp.isFlashed || !ardComp.arduinoCode) return;
 
         // Always show flashed indicator on chip
@@ -1668,7 +1668,7 @@ void loop() {
         // 2. Auto-run: check if any Arduino just got power and has flashed code
         setTimeout(() => {
             CZ.deployed.forEach(c => {
-                const tmpl = COMPONENTS.find(t => t.id === c.type);
+                const tmpl = REGISTRY.find(c.type);
                 if (!tmpl || !tmpl.isArduino) return;
                 autoRunFlashed(c.id);
             });
@@ -1678,7 +1678,7 @@ void loop() {
     // Auto-run flashed Arduinos on page load
     CZ.autoRunFlashedArduinos = function() {
         CZ.deployed.forEach(c => {
-            const tmpl = COMPONENTS.find(t => t.id === c.type);
+            const tmpl = REGISTRY.find(c.type);
             if (!tmpl || !tmpl.isArduino) return;
             autoRunFlashed(c.id);
         });

@@ -47,11 +47,11 @@ void loop() {
             return;
         }
 
-        const arduino = COMPONENTS.find(c => c.id === 'arduino_uno');
-        const matrix = COMPONENTS.find(c => c.id === 'led_matrix');
-        const resistor = COMPONENTS.find(c => c.id === 'resistor_220');
-        const led = COMPONENTS.find(c => c.id === 'led_rgb');
-        const battery = COMPONENTS.find(c => c.id === 'battery_9v');
+        const arduino = REGISTRY.find('arduino_uno');
+        const matrix = REGISTRY.find('led_matrix');
+        const resistor = REGISTRY.find('resistor_220');
+        const led = REGISTRY.find('led_rgb');
+        const battery = REGISTRY.find('battery_9v');
 
         if (!arduino || !matrix || !led || !battery || !resistor) {
             console.warn('Greeting: missing required components');
@@ -129,7 +129,7 @@ void loop() {
                 comp.batteryLevel = comp.batteryLevel ?? tmpl.capacityWh;
             }
 
-            CZ.deployed.push(comp);
+            CZ.addDeployed(comp);
 
             // Power badge for toggleable outputs
             const TOGGLEABLE = ['led_rgb', 'led_matrix', 'seven_segment', 'motor_dc', 'buzzer', 'fan_12v'];
