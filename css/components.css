@@ -17,10 +17,9 @@
     overflow: visible !important;
 }
 
-/* Kill transitions + promote to GPU layer during drag for smooth 60fps */
+/* Kill transitions during drag — position updates must be instant */
 .board-component.cz-dragging {
     transition: none !important;
-    will-change: left, top;
 }
 
 .board-component:active {
