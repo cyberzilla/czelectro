@@ -274,7 +274,7 @@
     };
 
     // ── Current language state ──
-    CZ.lang = localStorage.getItem('czelectro_lang') || 'id';
+    CZ.lang = CZ.getSetting('lang', 'id');
 
     /**
      * Get translated string
@@ -421,7 +421,7 @@
     CZ.setLanguage = function(lang) {
         if (!DICT[lang]) return;
         CZ.lang = lang;
-        localStorage.setItem('czelectro_lang', lang);
+        CZ.setSetting('lang', lang);
         CZ.applyTranslations();
         // Update language toggle UI
         document.querySelectorAll('.lang-opt').forEach(btn => {

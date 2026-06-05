@@ -4,6 +4,52 @@
     'use strict';
 
     const STORAGE_KEY = 'czelectro_state';
+    const SETTINGS_KEY = 'czelectro_settings';
+
+    // ── Centralized Settings (single localStorage key) ──
+    // All UI preferences stored in one JSON object: { theme, sidebar, grid, muted, lang }
+    let _settingsCache = null;
+
+    function _loadSettings() {
+        if (_settingsCache) return _settingsCache;
+        try {
+            _settingsCache = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+        } catch (e) {
+            _settingsCache = {};
+        }
+        return _settingsCache;
+    }
+
+    function _saveSettings() {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settingsCache)); } catch(e) {}
+    }
+
+    // Migrate old individual keys → unified settings object (runs once)
+    (function _migrateSettings() {
+        const existing = localStorage.getItem(SETTINGS_KEY);
+        if (existing) return; // already migrated
+        const map = {
+            theme:   'czelectro_theme',
+            sidebar: 'czelectro_sidebar',
+            grid:    'czelectro_grid',
+            muted:   'czelectro_muted',
+            lang:    'czelectro_lang'
+        };
+        const migrated = {};
+        let found = false;
+        for (const [key, oldKey] of Object.entries(map)) {
+            const val = localStorage.getItem(oldKey);
+            if (val !== null) {
+                migrated[key] = val;
+                localStorage.removeItem(oldKey);
+                found = true;
+            }
+        }
+        if (found) {
+            _settingsCache = migrated;
+            _saveSettings();
+        }
+    })();
 
     // ── Base64 encode/decode for Arduino code (UTF-8 safe) ──
     function encodeArdCode(code) {
@@ -83,6 +129,17 @@
         wireLayer: null,
         gridCanvas: null,
         tooltip: null
+    };
+
+    // ── Centralized Settings API ──
+    CZ.getSetting = function(key, defaultVal) {
+        const s = _loadSettings();
+        return s[key] !== undefined ? s[key] : (defaultVal !== undefined ? defaultVal : null);
+    };
+    CZ.setSetting = function(key, value) {
+        _loadSettings();
+        _settingsCache[key] = value;
+        _saveSettings();
     };
 
     // ── Deployed component management helpers ──

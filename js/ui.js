@@ -445,9 +445,8 @@
         });
 
         // Mute — restore saved preference
-        const MUTE_KEY = 'czelectro_muted';
         const btnMute = document.getElementById('btn-mute');
-        const savedMute = localStorage.getItem(MUTE_KEY);
+        const savedMute = CZ.getSetting('muted');
         if (savedMute === 'true') {
             CZ.isMuted = true;
             btnMute.textContent = '🔇';
@@ -458,24 +457,22 @@
             CZ.isMuted = !CZ.isMuted;
             this.textContent = CZ.isMuted ? '🔇' : '🔊';
             this.classList.toggle('muted', CZ.isMuted);
-            localStorage.setItem(MUTE_KEY, CZ.isMuted);
+            CZ.setSetting('muted', CZ.isMuted);
             if (CZ.isMuted) CZ.SFX.stopAll();
         });
 
-        // ── Settings Panel ──
         const settingsPanel = document.getElementById('settings-panel');
         const btnSettings = document.getElementById('btn-settings');
-        const THEME_KEY = 'czelectro_theme';
 
         // Apply saved theme on load
-        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+        const savedTheme = CZ.getSetting('theme', 'dark');
         CZ.applyTheme = function(theme) {
             document.documentElement.setAttribute('data-theme', theme);
             // Update theme toggle buttons
             document.querySelectorAll('.theme-opt').forEach(b => {
                 b.classList.toggle('active', b.dataset.theme === theme);
             });
-            localStorage.setItem(THEME_KEY, theme);
+            CZ.setSetting('theme', theme);
             CZ.drawGrid();
         };
         CZ.applyTheme(savedTheme);
@@ -509,7 +506,7 @@
         settingsGrid.checked = CZ.showGrid;
         settingsGrid.addEventListener('change', () => {
             CZ.showGrid = settingsGrid.checked;
-            localStorage.setItem('czelectro_grid', CZ.showGrid);
+            CZ.setSetting('grid', CZ.showGrid);
             CZ.drawGrid();
         });
 
@@ -596,8 +593,6 @@
             document.body.appendChild(overlay);
 
             const isMobile = () => window.innerWidth <= 768;
-            const SIDEBAR_KEY = 'czelectro_sidebar';
-
             CZ.toggleSidebar = function() {
                 if (isMobile()) {
                     sidebar.classList.toggle('open');
@@ -606,7 +601,7 @@
                 } else {
                     sidebar.classList.toggle('collapsed');
                     toggleBtn.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
-                    localStorage.setItem(SIDEBAR_KEY, sidebar.classList.contains('collapsed') ? 'collapsed' : 'open');
+                    CZ.setSetting('sidebar', sidebar.classList.contains('collapsed') ? 'collapsed' : 'open');
                     setTimeout(() => CZ.drawGrid(), 360);
                 }
             };

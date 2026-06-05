@@ -74,11 +74,10 @@
         document.getElementById('btn-zoom-out').onclick = () => { CZ.zoom = Math.max(0.2, CZ.zoom - 0.1); CZ.applyTransform(); CZ.persistView(); };
         document.getElementById('btn-fit').onclick = () => { CZ.zoom = 1; CZ.panX = 0; CZ.panY = 0; CZ.applyTransform(); CZ.persistView(); };
 
-        // Grid toggle — state loaded from localStorage (UI control is in settings panel)
-        const GRID_KEY = 'czelectro_grid';
-        const savedGrid = localStorage.getItem(GRID_KEY);
+        // Grid toggle — state loaded from settings (UI control is in settings panel)
+        const savedGrid = CZ.getSetting('grid');
         if (savedGrid !== null) {
-            CZ.showGrid = savedGrid !== 'false';
+            CZ.showGrid = savedGrid !== 'false' && savedGrid !== false;
         }
         CZ.drawGrid();
 
