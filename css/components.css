@@ -17,6 +17,12 @@
     overflow: visible !important;
 }
 
+/* Kill transitions + promote to GPU layer during drag for smooth 60fps */
+.board-component.cz-dragging {
+    transition: none !important;
+    will-change: left, top;
+}
+
 .board-component:active {
     cursor: grabbing;
 }
@@ -29,6 +35,11 @@
     outline: .5px dashed var(--accent);
     outline-offset: 4px;
     filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.3));
+}
+
+/* Simplify filter during drag — drop-shadow is expensive per-frame */
+.board-component.selected.cz-dragging {
+    filter: none;
 }
 
 /* Grouped component indicator */
@@ -466,6 +477,11 @@
 
 @keyframes flowDash {
     to { stroke-dashoffset: -14; }
+}
+
+/* Pause flow animations during drag for performance */
+.cz-drag-active .wire-flow {
+    animation-play-state: paused;
 }
 
 /* ── Component value badge ── */

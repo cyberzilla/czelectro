@@ -364,6 +364,16 @@
                     if (dx + dy < CZ.DRAG_THRESHOLD) return;
                     CZ.dragMoved = true;
                     ws.appendChild(CZ.dragEl);
+                    // Performance: disable transitions + drop-shadow on all dragged components
+                    CZ.dragEl.classList.add('cz-dragging');
+                    if (CZ.selectedIds.has(CZ.dragEl.id) && CZ.selectedIds.size > 1) {
+                        CZ.selectedIds.forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.classList.add('cz-dragging');
+                        });
+                    }
+                    // Pause wire-flow animations during drag
+                    CZ.wiresG.classList.add('cz-drag-active');
                 }
                 let nx = Math.round((m.x - CZ.dragOX) / CZ.GRID) * CZ.GRID;
                 let ny = Math.round((m.y - CZ.dragOY) / CZ.GRID) * CZ.GRID;
@@ -383,8 +393,17 @@
                             }
                         });
                     }
-                    CZ.renderWires();
-                    CZ.renderGroupLabels();
+                    // Only update wires connected to dragged components (not all wires)
+                    const draggedIds = new Set([comp.id]);
+                    if (CZ.selectedIds.has(comp.id) && CZ.selectedIds.size > 1) {
+                        CZ.selectedIds.forEach(id => draggedIds.add(id));
+                    }
+                    CZ.wires.forEach((w, idx) => {
+                        if (draggedIds.has(w.c1) || draggedIds.has(w.c2)) {
+                            CZ.updateWire(idx);
+                        }
+                    });
+                    if (CZ.selectedIds.size > 1) CZ.renderGroupLabels();
                 }
             }
 
@@ -649,7 +668,15 @@
 
             if (CZ.dragEl) { CZ.dragEl.style.opacity = ''; CZ.dragEl.style.zIndex = ''; }
             CZ.isDragging = false; CZ.dragEl = null;
-            if (CZ.dragMoved) { CZ.saveState(); }
+            if (CZ.dragMoved) {
+                // Remove drag performance class from all components
+                document.querySelectorAll('.cz-dragging').forEach(el => el.classList.remove('cz-dragging'));
+                // Resume wire-flow animations
+                CZ.wiresG.classList.remove('cz-drag-active');
+                // Full wire re-render to recalculate spread offsets
+                CZ.renderWires();
+                CZ.saveState();
+            }
             CZ.dragMoved = false;
 
             if (CZ.activeTerm) {
