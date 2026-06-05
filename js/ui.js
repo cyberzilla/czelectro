@@ -9,6 +9,11 @@
 
     CZ.renderSidebar = function() {
         CZ.listEl.innerHTML = '';
+        // Restore interactivity after pre-render cache is replaced
+        if (CZ.listEl.dataset.cached) {
+            CZ.listEl.style.pointerEvents = '';
+            delete CZ.listEl.dataset.cached;
+        }
         const catOrder = { source: 0, passive: 1, control: 2, output: 3 };
 
         // Build grouped sidebar from manifest

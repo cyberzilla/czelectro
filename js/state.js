@@ -234,8 +234,11 @@
 
     CZ.applySnapshot = function(json) {
         const state = JSON.parse(json);
-        // Clear current DOM
-        document.querySelectorAll('.board-component').forEach(el => el.remove());
+        // Clear current DOM (keep preload-cache until new components are built)
+        document.querySelectorAll(':scope > .board-component', CZ.ws).forEach(el => el.remove());
+        document.querySelectorAll('.board-component').forEach(el => {
+            if (!el.closest('#preload-cache')) el.remove();
+        });
         document.querySelectorAll('.group-label-badge').forEach(el => el.remove());
         CZ.deployed = []; CZ.deployedMap.clear(); CZ.wires = [];
 
@@ -396,8 +399,12 @@
         });
 
         CZ.applyTransform();
+        CZ.wiresG.innerHTML = ''; // clear cached wire SVG before rebuild
         CZ.renderWires();
         CZ.renderGroupLabels();
+        // Remove pre-render cache AFTER new components + wires are built (seamless swap)
+        const preCache = document.getElementById('preload-cache');
+        if (preCache) preCache.remove();
         // Migrate old Arduino pin layout (8-pin → 22-pin)
         migrateArduinoPins();
         CZ.evaluateCircuit();
@@ -458,6 +465,32 @@
                         console.warn('CZElectro: localStorage quota exceeded');
                         if (typeof CZ.showToast === 'function') CZ.showToast('⚠️ Storage penuh! State tidak tersimpan.', 'warning');
                     }
+                }
+                // Visual cache: serialize in idle time to avoid blocking during rapid edits
+                const updateCache = () => {
+                    try {
+                        const nodes = CZ.ws.querySelectorAll(':scope > .board-component');
+                        if (nodes.length > 0) {
+                            const parts = [];
+                            nodes.forEach(n => parts.push(n.outerHTML));
+                            localStorage.setItem('czelectro_vcache', parts.join(''));
+                        } else {
+                            localStorage.removeItem('czelectro_vcache');
+                        }
+                        if (CZ.wiresG && CZ.wiresG.innerHTML) {
+                            localStorage.setItem('czelectro_wire_cache', CZ.wiresG.innerHTML);
+                        } else {
+                            localStorage.removeItem('czelectro_wire_cache');
+                        }
+                        if (CZ.listEl && CZ.listEl.children.length > 0) {
+                            localStorage.setItem('czelectro_sidebar_cache', CZ.listEl.innerHTML);
+                        }
+                    } catch(e3) {}
+                };
+                if (typeof requestIdleCallback === 'function') {
+                    requestIdleCallback(updateCache, { timeout: 3000 });
+                } else {
+                    setTimeout(updateCache, 500);
                 }
             }, 300);
         } catch (e) {
@@ -671,8 +704,12 @@
             });
 
             CZ.applyTransform();
+            CZ.wiresG.innerHTML = ''; // clear cached wire SVG before rebuild
             CZ.renderWires();
             CZ.renderGroupLabels();
+            // Remove pre-render cache AFTER new components + wires are built (seamless swap)
+            const preCache = document.getElementById('preload-cache');
+            if (preCache) preCache.remove();
             // Migrate old Arduino pin layout (8-pin → 22-pin)
             migrateArduinoPins();
             CZ.evaluateCircuit();

@@ -767,6 +767,8 @@ void loop() {
                 },
 
                 _setDot(matrixId, col, row, on) {
+                    const comp = CZ.deployedMap.get(matrixId);
+                    if (comp && comp.isPoweredOff) return;
                     const el = document.getElementById(matrixId);
                     if (!el) return;
                     const dot = el.querySelector(`.mdot-${col}-${row}`);
@@ -786,6 +788,9 @@ void loop() {
                 },
 
                 _drawBuffer(matrixId, buffer) {
+                    // Skip drawing if matrix is powered off
+                    const matComp = CZ.deployedMap.get(matrixId);
+                    if (matComp && matComp.isPoweredOff) return;
                     // buffer = array of column bytes (each byte = 8 rows)
                     for (let col = 0; col < 32; col++) {
                         const byte = buffer[col] || 0;
@@ -852,6 +857,8 @@ void loop() {
                     const font = api.matrix._font;
                     const sorted = api.matrix._getSortedMatrices();
                     if (!sorted.length) return;
+                    // Skip if all matrices are powered off
+                    if (sorted.every(m => { const mc = CZ.deployedMap.get(m.id); return mc && mc.isPoweredOff; })) return;
                     const totalCols = 32 * sorted.length;
                     const buffer = new Array(totalCols).fill(0);
                     let col = 0;
@@ -894,6 +901,9 @@ void loop() {
                     // Scroll through — window size = totalCols
                     for (let offset = 0; offset <= fullBuffer.length - totalCols; offset++) {
                         if (session.aborted) throw '__ABORT__';
+                        // Stop scrolling if ALL matrices are powered off
+                        const activeMats = sorted.filter(m => { const mc = CZ.deployedMap.get(m.id); return mc && !mc.isPoweredOff; });
+                        if (activeMats.length === 0) return;
                         const win = fullBuffer.slice(offset, offset + totalCols);
                         // Each matrix gets its own 32-column slice
                         sorted.forEach((m, idx) => {

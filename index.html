@@ -129,7 +129,22 @@
             <input type="text" id="comp-search" data-i18n="searchPlaceholder" placeholder="🔍 Cari komponen..."
                 autocomplete="off" spellcheck="false">
         </div>
-        <div id="component-list"></div>
+        <div id="component-list">
+            <script>
+                // Pre-render sidebar cache: show component list instantly
+                (function() {
+                    try {
+                        var html = localStorage.getItem('czelectro_sidebar_cache');
+                        if (html) {
+                            var el = document.currentScript.parentNode;
+                            el.innerHTML = html;
+                            el.style.pointerEvents = 'none';
+                            el.dataset.cached = '1';
+                        }
+                    } catch(e) {}
+                })();
+            </script>
+        </div>
     </aside>
 
     <!-- Sidebar Toggle -->
@@ -228,12 +243,75 @@
 
         <!-- Canvas layers -->
         <canvas id="grid-canvas"></canvas>
+        <script>
+            // Pre-draw grid canvas immediately — prevents grid FOUC
+            (function() {
+                try {
+                    var st = JSON.parse(localStorage.getItem('czelectro_settings')) || {};
+                    if (st.grid === 'false' || st.grid === false) return;
+                    var cv = document.getElementById('grid-canvas');
+                    var p = cv.parentElement;
+                    cv.width = p.clientWidth || window.innerWidth;
+                    cv.height = p.clientHeight || window.innerHeight;
+                    var ctx = cv.getContext('2d');
+                    var raw = localStorage.getItem('czelectro_state');
+                    var zoom = 1, panX = 0, panY = 0;
+                    if (raw) { var s = JSON.parse(raw); zoom = s.zoom || 1; panX = s.panX || 0; panY = s.panY || 0; }
+                    var step = 10 * zoom;
+                    var offX = ((panX % step) + step) % step;
+                    var offY = ((panY % step) + step) % step;
+                    var cs = getComputedStyle(document.documentElement);
+                    var minor = cs.getPropertyValue('--grid-minor').trim() || 'rgba(74,222,128,0.12)';
+                    ctx.strokeStyle = minor; ctx.lineWidth = 0.5; ctx.beginPath();
+                    for (var x = offX; x < cv.width; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, cv.height); }
+                    for (var y = offY; y < cv.height; y += step) { ctx.moveTo(0, y); ctx.lineTo(cv.width, y); }
+                    ctx.stroke();
+                    var major = step * 10;
+                    var mOffX = ((panX % major) + major) % major;
+                    var mOffY = ((panY % major) + major) % major;
+                    var majorC = cs.getPropertyValue('--grid-major').trim() || 'rgba(74,222,128,0.25)';
+                    ctx.strokeStyle = majorC; ctx.lineWidth = 1.5; ctx.beginPath();
+                    for (var x2 = mOffX; x2 < cv.width; x2 += major) { ctx.moveTo(x2, 0); ctx.lineTo(x2, cv.height); }
+                    for (var y2 = mOffY; y2 < cv.height; y2 += major) { ctx.moveTo(0, y2); ctx.lineTo(cv.width, y2); }
+                    ctx.stroke();
+                } catch(e) {}
+            })();
+        </script>
         <div id="workspace">
             <svg id="wire-layer" width="5000" height="5000">
                 <g id="wires-group"></g>
                 <path id="temp-wire" d="" fill="none" stroke="#60a5fa" stroke-width="3" stroke-dasharray="8 4"
                     style="display:none;pointer-events:none" />
             </svg>
+            <script>
+                // Pre-render visual cache: show components + wires instantly before module load
+                (function() {
+                    try {
+                        // Inject cached wire SVG into wires-group
+                        var wireHtml = localStorage.getItem('czelectro_wire_cache');
+                        if (wireHtml) {
+                            var wg = document.getElementById('wires-group');
+                            if (wg) wg.innerHTML = wireHtml;
+                        }
+                        // Inject cached component HTML
+                        var html = localStorage.getItem('czelectro_vcache');
+                        if (html) {
+                            var wrap = document.createElement('div');
+                            wrap.id = 'preload-cache';
+                            wrap.style.pointerEvents = 'none';
+                            wrap.innerHTML = html;
+                            document.currentScript.parentNode.appendChild(wrap);
+                        }
+                        // Apply saved zoom/pan transform immediately (state is always up-to-date)
+                        var raw = localStorage.getItem('czelectro_state');
+                        if (raw) {
+                            var s = JSON.parse(raw);
+                            var ws = document.currentScript.parentNode;
+                            ws.style.transform = 'translate(' + (s.panX||0) + 'px,' + (s.panY||0) + 'px) scale(' + (s.zoom||1) + ')';
+                        }
+                    } catch(e) {}
+                })();
+            </script>
         </div>
 
         <!-- Status Bar -->
@@ -277,7 +355,7 @@
     <script src="js/core/registry.js"></script>
     <script src="js/components/manifest.js"></script>
     <!-- Core modules: state → i18n → audio → grid → wire → effects → solver → evaluate → battery → ui → events -->
-    <script src="js/state.js?v=4"></script>
+    <script src="js/state.js?v=6"></script>
     <script src="js/i18n.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/grid.js"></script>
@@ -285,12 +363,12 @@
     <script src="js/effects.js"></script>
     <script src="js/mna-solver.js?v=3"></script>
 
-    <script src="js/mna-evaluate.js?v=3"></script>
+    <script src="js/mna-evaluate.js?v=4"></script>
     <script src="js/battery-sim.js"></script>
     <script src="js/components-ui.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/events.js?v=4"></script>
-    <script src="js/arduino-ide.js"></script>
+    <script src="js/events.js?v=7"></script>
+    <script src="js/arduino-ide.js?v=2"></script>
     <script src="js/greeting.js"></script>
     <!-- Component Loader: loads all component modules via import(), then calls CZ.init() -->
     <script type="module" src="js/components-loader.js"></script>

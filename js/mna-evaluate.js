@@ -922,6 +922,18 @@
                             }
                         }
                         const drawFrame = () => {
+                            // Self-stop: if powered off, kill interval and reset dots
+                            if (c.isPoweredOff) {
+                                if (c._matScrollInterval) { clearInterval(c._matScrollInterval); c._matScrollInterval = null; }
+                                if (c._matDots) {
+                                    for (let col = 0; col < 32; col++)
+                                        for (let row = 0; row < 8; row++) {
+                                            const d = c._matDots[col][row];
+                                            if (d) { d.setAttribute('fill', '#1a2332'); d.style.filter = 'none'; }
+                                        }
+                                }
+                                return;
+                            }
                             const buf = c._matScrollBuffer;
                             const off = c._matScrollOffset;
                             const dots = c._matDots;

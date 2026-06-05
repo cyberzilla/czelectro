@@ -5,7 +5,7 @@
 // Bump CACHE_VERSION after deploying changes.
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = 'czelectro-v4';
+const CACHE_VERSION = 'czelectro-v5';
 
 // Only these extensions will be cached
 const CACHEABLE_EXT = /\.(html|css|js|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|json|webmanifest)$/i;

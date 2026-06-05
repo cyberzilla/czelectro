@@ -234,6 +234,7 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+    background-color: var(--bg-workspace);
 }
 
 #workspace {
@@ -243,6 +244,18 @@
     top: 0;
     left: 0;
     transform-origin: 0 0;
+}
+
+/* Pre-render cache: static visual placeholder before JS hydration */
+#preload-cache {
+    pointer-events: none;
+}
+#preload-cache .terminal {
+    display: none;
+}
+#preload-cache .power-on-off-badge,
+#preload-cache .broken-badge {
+    pointer-events: none;
 }
 
 /* Grid overlay */

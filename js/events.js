@@ -589,8 +589,9 @@
                         });
                         CZ.dragEl.classList.remove('seg7-active');
                     }
-                    // Immediately reset matrix dots when powered off
+                    // Immediately reset matrix dots and stop animation when powered off
                     if (comp.type === 'led_matrix' && comp.isPoweredOff) {
+                        if (comp._matScrollInterval) { clearInterval(comp._matScrollInterval); comp._matScrollInterval = null; }
                         CZ.dragEl.querySelectorAll('.mdot').forEach(d => {
                             d.setAttribute('fill', '#1a2332');
                             d.style.filter = 'none';
