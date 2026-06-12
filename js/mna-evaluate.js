@@ -96,12 +96,53 @@
         comp._vmAnimId = requestAnimationFrame(tick);
     }
 
+    // ── Reusable class list for reset (avoid re-creating array every call) ──
+    const _RESET_CLASSES = 'led-on led-dim led-bright motor-active motor-reversed buzzer-active led-rgb-active speaker-active relay-active scc-active scc-protecting ac-active ac-no-inverter vm-active strip-active meter-active mcb-active pln-active ats-pln-mode ats-plts-mode fan-active servo-active seg7-active transistor-active mosfet-active opamp-active scr-active triac-active zener-active inductor-active sensor-active crystal-active photodiode-active arduino-active trafo-active vreg-active am-active'.split(' ');
+
+    // ── DOM reference cache: avoid document.getElementById on every evaluate ──
+    function _getEl(c) {
+        if (c._el && c._el.isConnected) return c._el;
+        c._el = document.getElementById(c.id);
+        return c._el;
+    }
+
+    // ── Diff-based reset: track which components were active to skip unchanged ones ──
+    let _lastActiveIds = new Set();
+
+    // ── RAF-coalesced evaluate: prevents redundant evaluations within the same frame ──
+    let _evalRAF = null;
+    CZ.scheduleEvaluate = function() {
+        if (_evalRAF) return; // already scheduled for this frame
+        _evalRAF = requestAnimationFrame(() => {
+            _evalRAF = null;
+            CZ.evaluateCircuit();
+        });
+    };
+
     CZ.evaluateCircuit = function() {
-        // ── RESET all output states ──
+        const _thisActiveIds = new Set();
+
+        // ── PHYSICS RESET (must run on ALL components — affects MNA solver correctness) ──
         CZ.deployed.forEach(c => {
-            const el = document.getElementById(c.id);
+            const tmpl = REGISTRY.find(c.type);
+            if ((tmpl && tmpl.isChargeController) || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
+                if (tmpl) c.currentResistance = tmpl.resistance;
+            }
+            if (tmpl && tmpl.isChargeController) {
+                const hod = (CZ.simElapsedMin / 60) % 24;
+                const isSolarActive = hod >= 6 && hod < 18;
+                if (!isSolarActive) {
+                    c.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
+                }
+            }
+        });
+
+        // ── VISUAL RESET (diff-based: only reset previously-active components) ──
+        const resetTargets = _lastActiveIds.size > 0 ? CZ.deployed.filter(c => _lastActiveIds.has(c.id)) : CZ.deployed;
+        resetTargets.forEach(c => {
+            const el = _getEl(c);
             if (!el) return;
-            el.classList.remove('led-on','led-dim','led-bright','motor-active','motor-reversed','buzzer-active','led-rgb-active','speaker-active','relay-active','scc-active','scc-protecting','ac-active','ac-no-inverter','vm-active','strip-active','meter-active','mcb-active','pln-active','ats-pln-mode','ats-plts-mode','fan-active','servo-active','seg7-active','transistor-active','mosfet-active','opamp-active','scr-active','triac-active','zener-active','inductor-active','sensor-active','crystal-active','photodiode-active','arduino-active','trafo-active','vreg-active','am-active');
+            el.classList.remove(..._RESET_CLASSES);
             if (c._rgbAnimId) { cancelAnimationFrame(c._rgbAnimId); c._rgbAnimId = null; }
             if (c._stripAnimId && !CZ._timerEvalLock) { cancelAnimationFrame(c._stripAnimId); c._stripAnimId = null; }
             // Clear timer intervals only during full reset (not during timer-triggered re-eval)
@@ -184,21 +225,6 @@
             if (stripPwr) { stripPwr.style.fill = ''; stripPwr.style.opacity = ''; stripPwr.style.filter = ''; }
             const stripLed = el.querySelector('.strip-power-led');
             if (stripLed) { stripLed.style.fill = ''; stripLed.style.filter = ''; }
-            // Reset charge controller / step-down
-            const tmpl = REGISTRY.find(c.type);
-            if ((tmpl && tmpl.isChargeController) || c.type === 'stepdown_12v' || c.type === 'stepdown_5v') {
-                if (tmpl) c.currentResistance = tmpl.resistance;
-            }
-            // CC blocking diode: block reverse current when solar is not producing voltage
-            // Real charge controllers have built-in blocking diodes to prevent
-            // battery discharge through the solar panel at night
-            if (tmpl && tmpl.isChargeController) {
-                const hod = (CZ.simElapsedMin / 60) % 24;
-                const isSolarActive = hod >= 6 && hod < 18;
-                if (!isSolarActive) {
-                    c.currentResistance = EL.SIM.OPEN_CIRCUIT_R;
-                }
-            }
         });
         CZ.SFX.stopAll();
         CZ.wires.forEach(w => w.energized = false);
@@ -401,9 +427,10 @@
         // Process the weakest link
         if (overcurrentList.length > 0) {
             const weak = overcurrentList[0];
-            const c = weak.cr.comp, el = document.getElementById(c.id);
+            const c = weak.cr.comp, el = _getEl(c);
             if (el) {
                 anyBroken = true;
+                _thisActiveIds.add(c.id); // track for diff-based reset
 
                 if (weak.isMCB) {
                     // MCB: clean TRIP (just flips off, no sparks/burn)
@@ -453,7 +480,8 @@
         // ── PASS 2: Activate outputs ──
         if (!anyBroken) {
             result.components.forEach(cr => {
-                const c = cr.comp, el = document.getElementById(c.id);
+              try {
+                const c = cr.comp, el = _getEl(c);
                 if (!el || c.isBroken) return;
                 const amps = Math.abs(cr.current);
                 const vComp = Math.abs(cr.vDrop);
@@ -573,6 +601,9 @@
                 // Skip low-current components, but allow bus-only components (e.g. outlet_strip) through
                 const isBusOnly = tmpl && tmpl.isBusOnly;
                 if (amps < EL.SIM.MIN_CURRENT && !isBusOnly) return;
+
+                // Track this component as active for diff-based reset on next call
+                _thisActiveIds.add(c.id);
 
                 // AC-only check: must be on AC domain with valid voltage
                 if (tmpl && tmpl.acOnly) {
@@ -1168,6 +1199,7 @@
                     modeBadge.textContent = mode === 'PLTS_FIRST' ? '☀ PLTS↑' : '⚡ PLN↑';
                     modeBadge.style.background = mode === 'PLTS_FIRST' ? 'rgba(59,130,246,0.85)' : 'rgba(245,158,11,0.85)';
                 }
+              } catch (err) { console.warn('[CZ] Component evaluate error:', cr?.comp?.id, err); }
             });
         }
 
@@ -1175,7 +1207,7 @@
         CZ.deployed.forEach(c => {
             if (!c.type.includes('meter')) return;
             if (c._vmProcessed) { c._vmProcessed = false; return; }
-            const el = document.getElementById(c.id);
+            const el = _getEl(c);
             if (!el) return;
             const mode = c.mmMode || 'V';
             if ((c._vmTarget || 0) > 0.01) {
@@ -1198,7 +1230,7 @@
             // Not in circuit — stop interval and reset segments
             if (c._seg7Interval) { clearInterval(c._seg7Interval); c._seg7Interval = null; }
             if (c._seg7ClockInterval) { clearInterval(c._seg7ClockInterval); c._seg7ClockInterval = null; }
-            const el = document.getElementById(c.id);
+            const el = _getEl(c);
             if (el) {
                 el.classList.remove('seg7-active');
                 el.querySelectorAll('.seg').forEach(s => { s.setAttribute('fill', '#374151'); s.style.filter = 'none'; });
@@ -1211,7 +1243,7 @@
             const inCircuit = result.components.some(cr => cr.comp.id === c.id);
             if (inCircuit) return;
             if (c._matScrollInterval) { clearInterval(c._matScrollInterval); c._matScrollInterval = null; }
-            const el = document.getElementById(c.id);
+            const el = _getEl(c);
             if (el) {
                 el.querySelectorAll('.mdot').forEach(d => { d.setAttribute('fill', '#1a2332'); d.style.filter = 'none'; });
             }
@@ -1229,7 +1261,7 @@
         CZ.deployed.forEach(c => {
             if (c.type.startsWith('battery') && c.batteryCapacity) {
                 const hasWire = CZ.wires.some(w => w.c1 === c.id || w.c2 === c.id);
-                const el = document.getElementById(c.id);
+                const el = _getEl(c);
                 if (hasWire && el && CZ.wires.some(w => w.energized && (w.c1 === c.id || w.c2 === c.id))) {
                     activeBatteryIds.add(c.id);
                 }
@@ -1259,7 +1291,7 @@
             CZ.deployed.forEach(c => {
                 const tmpl = REGISTRY.find(c.type);
                 if (!tmpl || !tmpl.isTimer) return;
-                const el = document.getElementById(c.id);
+                const el = _getEl(c);
                 // Check connectivity: timer must have wires on both terminals
                 const wiresOnT0 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 0) || (w.c2 === c.id && w.i2 === 0));
                 const wiresOnT1 = CZ.wires.some(w => (w.c1 === c.id && w.i1 === 1) || (w.c2 === c.id && w.i2 === 1));
@@ -1309,6 +1341,9 @@
         CZ.updateStatusValues(hasLoop, activeLoops);
         CZ.updateBatteryBars();
         CZ.saveState();
+
+        // Update diff-based reset tracking for next call
+        _lastActiveIds = _thisActiveIds;
     };
 
 })(window.CZ);

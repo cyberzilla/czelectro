@@ -9,12 +9,18 @@
         return CZ.audioCtx;
     };
 
-    // ── Utility: create white noise buffer ──
+    // ── Utility: create white noise buffer (pooled) ──
+    const _noisePool = {};
     function noiseBuffer(ctx, duration) {
+        // Round to nearest 10ms for cache key to maximize reuse
+        const key = Math.round(duration * 100);
+        if (_noisePool[key]) return _noisePool[key];
         const len = Math.floor(ctx.sampleRate * duration);
         const buf = ctx.createBuffer(1, len, ctx.sampleRate);
         const data = buf.getChannelData(0);
         for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        // Cache up to 20 buffers to avoid unbounded growth
+        if (Object.keys(_noisePool).length < 20) _noisePool[key] = buf;
         return buf;
     }
 
@@ -507,10 +513,17 @@
                 if (s.gain) s.gain.gain.setTargetAtTime(0, t, 0.05);
                 setTimeout(() => {
                     try {
-                        if (s.osc) s.osc.stop();
-                        if (s.osc2) s.osc2.stop();
-                        if (s.noise) s.noise.stop();
-                        if (s.lfo) s.lfo.stop();
+                        if (s.osc) { s.osc.stop(); s.osc.disconnect(); }
+                        if (s.osc2) { s.osc2.stop(); s.osc2.disconnect(); }
+                        if (s.noise) { s.noise.stop(); s.noise.disconnect(); }
+                        if (s.lfo) { s.lfo.stop(); s.lfo.disconnect(); }
+                        // Disconnect all gain/filter nodes to release from audio graph
+                        if (s.gain) s.gain.disconnect();
+                        if (s.g1) s.g1.disconnect();
+                        if (s.g2) s.g2.disconnect();
+                        if (s.lpf) s.lpf.disconnect();
+                        if (s.nbpf) s.nbpf.disconnect();
+                        if (s.bpf) s.bpf.disconnect();
                     } catch(e) {}
                 }, 120);
             } catch(e) {}

@@ -1,0 +1,862 @@
+{
+  "js/arduino-ide.js": {
+    "mtime": 1780673746.63217,
+    "ast_hash": "267f0806bb5216da6bbb809bd6486994",
+    "semantic_hash": ""
+  },
+  "js/audio.js": {
+    "mtime": 1780663003.6612668,
+    "ast_hash": "60a38904f0a55953ce4cc6516255001f",
+    "semantic_hash": ""
+  },
+  "js/battery-sim.js": {
+    "mtime": 1780663003.6622698,
+    "ast_hash": "687f03f5ce2f485c3c8f26d93960df8b",
+    "semantic_hash": ""
+  },
+  "js/components-loader.js": {
+    "mtime": 1780663003.6632698,
+    "ast_hash": "12dcfab556b511b5e598907f60bfe50c",
+    "semantic_hash": ""
+  },
+  "js/components-ui.js": {
+    "mtime": 1780663003.6642816,
+    "ast_hash": "f684160df3f89018ecd9980ab63eaced",
+    "semantic_hash": ""
+  },
+  "js/components/comp.7segment.js": {
+    "mtime": 1780663003.665349,
+    "ast_hash": "52357704886938ae846c86814ca75737",
+    "semantic_hash": ""
+  },
+  "js/components/comp.ammeter.js": {
+    "mtime": 1780663003.6665442,
+    "ast_hash": "7ecdeaaa6bcc2ad608fcc3fb009ced80",
+    "semantic_hash": ""
+  },
+  "js/components/comp.appliance.js": {
+    "mtime": 1780663003.66717,
+    "ast_hash": "f8e2dee51c9253a494277128ece2ceda",
+    "semantic_hash": ""
+  },
+  "js/components/comp.arduino.js": {
+    "mtime": 1780663003.669177,
+    "ast_hash": "fc06b5d3f25c0e1c0cd0f8e5ae20534b",
+    "semantic_hash": ""
+  },
+  "js/components/comp.ats.js": {
+    "mtime": 1780663003.669177,
+    "ast_hash": "8659a8730e50d87d3168850aaa9dadac",
+    "semantic_hash": ""
+  },
+  "js/components/comp.battery-large.js": {
+    "mtime": 1780663003.671186,
+    "ast_hash": "cef6ab4ea75a7f8b59ba82ce54e4bc2f",
+    "semantic_hash": ""
+  },
+  "js/components/comp.battery-plts.js": {
+    "mtime": 1780663003.671186,
+    "ast_hash": "00da222a1320e04020da4aaeb823e14f",
+    "semantic_hash": ""
+  },
+  "js/components/comp.battery.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "a7daadcb5c1c27fc74cd997e03ebe61a",
+    "semantic_hash": ""
+  },
+  "js/components/comp.bulb.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "1e88bb264741133fbefe086c2a6cdce7",
+    "semantic_hash": ""
+  },
+  "js/components/comp.buzzer.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "d7aa1049d43a840aea993edc673fc355",
+    "semantic_hash": ""
+  },
+  "js/components/comp.capacitor.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "fe35375c1df84a2b5ded505fbeb47a45",
+    "semantic_hash": ""
+  },
+  "js/components/comp.charge-ctrl.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "ac2a4b6382bb4b011d924d2765d313d9",
+    "semantic_hash": ""
+  },
+  "js/components/comp.crystal.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "b18e94909b2f20c47e709c62a6149e44",
+    "semantic_hash": ""
+  },
+  "js/components/comp.diode.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "1d881d53f9b611a31fc9c234ea3b644c",
+    "semantic_hash": ""
+  },
+  "js/components/comp.dpdt-switch.js": {
+    "mtime": 1780663003.677673,
+    "ast_hash": "7a3f90961c96afd93b802b6630d5af26",
+    "semantic_hash": ""
+  },
+  "js/components/comp.fan.js": {
+    "mtime": 1780663003.677673,
+    "ast_hash": "e46c701f4a58be4affe6a14ae3fa305f",
+    "semantic_hash": ""
+  },
+  "js/components/comp.fuse.js": {
+    "mtime": 1780663003.6786773,
+    "ast_hash": "f591ac53d562ea17196d722acd9ef544",
+    "semantic_hash": ""
+  },
+  "js/components/comp.ground.js": {
+    "mtime": 1780663003.6796765,
+    "ast_hash": "5565ca639ebb6bd609a40ec5f54dc37a",
+    "semantic_hash": ""
+  },
+  "js/components/comp.inductor.js": {
+    "mtime": 1780663003.6796765,
+    "ast_hash": "a64079f29004701b7dab078b8afaa94a",
+    "semantic_hash": ""
+  },
+  "js/components/comp.inverter.js": {
+    "mtime": 1780663003.6806767,
+    "ast_hash": "deacfa846456c01e0a1e9e846223071e",
+    "semantic_hash": ""
+  },
+  "js/components/comp.jumper.js": {
+    "mtime": 1780663003.6820927,
+    "ast_hash": "22e7ddc208fad97bb6b7a0f5ef3f6c2b",
+    "semantic_hash": ""
+  },
+  "js/components/comp.kwh-meter.js": {
+    "mtime": 1780663003.6820927,
+    "ast_hash": "9d0d401216d21b6a85e5e10371c93bea",
+    "semantic_hash": ""
+  },
+  "js/components/comp.ldr.js": {
+    "mtime": 1780663003.6831987,
+    "ast_hash": "2a519dd07ed6455bba051ef24ee7e4e8",
+    "semantic_hash": ""
+  },
+  "js/components/comp.led-matrix.js": {
+    "mtime": 1780663003.683816,
+    "ast_hash": "7553c9f3f8ebf4fbcd27c3fc63c70936",
+    "semantic_hash": ""
+  },
+  "js/components/comp.led-strip.js": {
+    "mtime": 1780663003.6845355,
+    "ast_hash": "4a07aa7fec26f838e6db7f2d43f7da7c",
+    "semantic_hash": ""
+  },
+  "js/components/comp.led.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "1d7a7a5fbb99fc79af4b0830f69668dc",
+    "semantic_hash": ""
+  },
+  "js/components/comp.mcb.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "508c6c39c9140b251d9b594bb68fa8c9",
+    "semantic_hash": ""
+  },
+  "js/components/comp.mosfet.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "421ea45495eed2ff8e57865f10ec906b",
+    "semantic_hash": ""
+  },
+  "js/components/comp.motor.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "8c9a3dddf4147522416438fc248848a3",
+    "semantic_hash": ""
+  },
+  "js/components/comp.multimeter.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "24335fe632891cff59e295164c564734",
+    "semantic_hash": ""
+  },
+  "js/components/comp.opamp.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "9b25a55d4753ae5f98cc5fc110bcab30",
+    "semantic_hash": ""
+  },
+  "js/components/comp.outlet.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "bbb0c25a9c09f075c3ff4f67437ab1b1",
+    "semantic_hash": ""
+  },
+  "js/components/comp.photodiode.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "afea4cb7ad8c34385e43395ea3ec35cd",
+    "semantic_hash": ""
+  },
+  "js/components/comp.pln.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "933a9d738fef5e75e0d8f1d55d71ef15",
+    "semantic_hash": ""
+  },
+  "js/components/comp.potentiometer.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "7cd0e07e6b44f35944258d9e030a4801",
+    "semantic_hash": ""
+  },
+  "js/components/comp.power-strip.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "9acfa3ad903bf314484fe9589117ff0e",
+    "semantic_hash": ""
+  },
+  "js/components/comp.push-button.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "d39c7d8a92b07ea84f6eb2ea989e0ee6",
+    "semantic_hash": ""
+  },
+  "js/components/comp.relay.js": {
+    "mtime": 1780663003.6932166,
+    "ast_hash": "2fffff8a3776ae08bfaa346ec5f4cce8",
+    "semantic_hash": ""
+  },
+  "js/components/comp.resistor.js": {
+    "mtime": 1780663003.6932166,
+    "ast_hash": "39fe18f710fd8cc4af8018805cc68cbd",
+    "semantic_hash": ""
+  },
+  "js/components/comp.scr.js": {
+    "mtime": 1780663003.694331,
+    "ast_hash": "ee07ae0b1af92cd03791507a2b68f442",
+    "semantic_hash": ""
+  },
+  "js/components/comp.servo.js": {
+    "mtime": 1780663003.694331,
+    "ast_hash": "95060511cc4d8769ac014db2bfdf1246",
+    "semantic_hash": ""
+  },
+  "js/components/comp.solar-array.js": {
+    "mtime": 1780663003.695334,
+    "ast_hash": "b2b11b200ed603760260a98b9b25902c",
+    "semantic_hash": ""
+  },
+  "js/components/comp.solar.js": {
+    "mtime": 1780663003.695334,
+    "ast_hash": "c3def63093efbe58ebd8e82113f8c876",
+    "semantic_hash": ""
+  },
+  "js/components/comp.speaker.js": {
+    "mtime": 1780663003.6963346,
+    "ast_hash": "4b553ed3f9d87fe37ad8de0d85c3c4b4",
+    "semantic_hash": ""
+  },
+  "js/components/comp.stepdown.js": {
+    "mtime": 1780663003.6963346,
+    "ast_hash": "232e222973bf54972f80776c957a3ade",
+    "semantic_hash": ""
+  },
+  "js/components/comp.switch.js": {
+    "mtime": 1780663003.6973348,
+    "ast_hash": "bb3ccfa43e5f239d9aaf18ccb2f6f323",
+    "semantic_hash": ""
+  },
+  "js/components/comp.terminal-block.js": {
+    "mtime": 1780663003.698335,
+    "ast_hash": "0df74215f1f44f38af03322896fdde77",
+    "semantic_hash": ""
+  },
+  "js/components/comp.thermistor.js": {
+    "mtime": 1780663003.6993341,
+    "ast_hash": "aa08aee1887cefe5e2541aced64a2ba7",
+    "semantic_hash": ""
+  },
+  "js/components/comp.timer.js": {
+    "mtime": 1780663003.7003343,
+    "ast_hash": "100bf8d44df13729212841ed5311ad1a",
+    "semantic_hash": ""
+  },
+  "js/components/comp.transformer.js": {
+    "mtime": 1780663003.7003343,
+    "ast_hash": "845a0cf53d3073d98a51727a98bcbb9c",
+    "semantic_hash": ""
+  },
+  "js/components/comp.transistor.js": {
+    "mtime": 1780663003.701334,
+    "ast_hash": "3be7f415349eec1500a495ef806b2743",
+    "semantic_hash": ""
+  },
+  "js/components/comp.triac.js": {
+    "mtime": 1780663003.7023335,
+    "ast_hash": "ab15ace26cec8f0582f6590ed684c6a7",
+    "semantic_hash": ""
+  },
+  "js/components/comp.varistor.js": {
+    "mtime": 1780663003.7023335,
+    "ast_hash": "012a766bc481d3c64e6229b304f8afd5",
+    "semantic_hash": ""
+  },
+  "js/components/comp.voltage-reg.js": {
+    "mtime": 1780663003.7033336,
+    "ast_hash": "56e17de852ac9a86db7fbef39dea3b23",
+    "semantic_hash": ""
+  },
+  "js/components/comp.zener.js": {
+    "mtime": 1780663003.7038388,
+    "ast_hash": "0a36b3e6ae0eec78e2344499f8e288d5",
+    "semantic_hash": ""
+  },
+  "js/components/manifest.js": {
+    "mtime": 1780663003.7047815,
+    "ast_hash": "f028fc2fa236d73ad1f152466400faac",
+    "semantic_hash": ""
+  },
+  "js/core/registry.js": {
+    "mtime": 1780663003.7047815,
+    "ast_hash": "e2d1568b5fa37f85a29d7f7905997b21",
+    "semantic_hash": ""
+  },
+  "js/effects.js": {
+    "mtime": 1780663003.7067895,
+    "ast_hash": "2264daaba18d66fa13ed71d4aae0f385",
+    "semantic_hash": ""
+  },
+  "js/electrical-laws.js": {
+    "mtime": 1780663003.7067895,
+    "ast_hash": "5845d192e719ba8df7b7b3811feae71b",
+    "semantic_hash": ""
+  },
+  "js/events.js": {
+    "mtime": 1780671560.9238315,
+    "ast_hash": "3cdafbc89a96426dfec284736dd44ab5",
+    "semantic_hash": ""
+  },
+  "js/greeting.js": {
+    "mtime": 1780663003.7093048,
+    "ast_hash": "af76597ade3ca98ff4c94e2543a92dfb",
+    "semantic_hash": ""
+  },
+  "js/grid.js": {
+    "mtime": 1780663003.710989,
+    "ast_hash": "d2e7ebfeac7daff5522792e4d08c3117",
+    "semantic_hash": ""
+  },
+  "js/i18n.js": {
+    "mtime": 1780663003.7118063,
+    "ast_hash": "7f458c392bc4a13e34dfade99e0cc5cb",
+    "semantic_hash": ""
+  },
+  "js/mna-evaluate.js": {
+    "mtime": 1780672166.5903654,
+    "ast_hash": "49c75844f13699c0c09b3e0967c54ef1",
+    "semantic_hash": ""
+  },
+  "js/mna-solver.js": {
+    "mtime": 1780663003.71481,
+    "ast_hash": "6ca7910d31b9cd686a566ecbd597925e",
+    "semantic_hash": ""
+  },
+  "js/state.js": {
+    "mtime": 1780670712.7228646,
+    "ast_hash": "5f15a2f5f8bd2d5dc67c2ee0dfb242bc",
+    "semantic_hash": ""
+  },
+  "js/ui.js": {
+    "mtime": 1780667291.5686147,
+    "ast_hash": "a43d27daa3e3250717ed53fa601c6e9c",
+    "semantic_hash": ""
+  },
+  "js/wire.js": {
+    "mtime": 1780663003.716822,
+    "ast_hash": "d5cc76f4cc3239b0a8ec19ba72788752",
+    "semantic_hash": ""
+  },
+  "sw.js": {
+    "mtime": 1780675385.0547194,
+    "ast_hash": "4f46b5853f8edae0398e08ba832fa012",
+    "semantic_hash": ""
+  },
+  ".agents/rules/graphify.md": {
+    "mtime": 1781278193.4471593,
+    "ast_hash": "a0e4d192b9e2e17256124dbfc8e24e6a",
+    "semantic_hash": ""
+  },
+  ".agents/workflows/graphify.md": {
+    "mtime": 1781278193.4471593,
+    "ast_hash": "637776aa6f7496d069afe7520c845c8a",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1780663003.6411457,
+    "ast_hash": "7667205e409ce8c7a12bf01420748f37",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1780673766.2993143,
+    "ast_hash": "ffa1eb52acce7867a0c72a7ca4229296",
+    "semantic_hash": ""
+  },
+  "icon/icon-128x128.png": {
+    "mtime": 1780663003.6463444,
+    "ast_hash": "26fb6f59187526f13247dffb06db8afd",
+    "semantic_hash": ""
+  },
+  "icon/icon-144x144.png": {
+    "mtime": 1780663003.647344,
+    "ast_hash": "f84f86438c385d38cb2b5b3fa2631a8e",
+    "semantic_hash": ""
+  },
+  "icon/icon-152x152.png": {
+    "mtime": 1780663003.6483445,
+    "ast_hash": "ad69b0f8d5a62ec2ca80ce40608eff05",
+    "semantic_hash": ""
+  },
+  "icon/icon-192x192.png": {
+    "mtime": 1780663003.6483445,
+    "ast_hash": "4a5f2438768cf91327e1c06122202aec",
+    "semantic_hash": ""
+  },
+  "icon/icon-384x384.png": {
+    "mtime": 1780663003.6504588,
+    "ast_hash": "04035d5994e3907c61941bc93e8a5049",
+    "semantic_hash": ""
+  },
+  "icon/icon-512x512.png": {
+    "mtime": 1780663003.652757,
+    "ast_hash": "17fdadc7bcd3a10e3c61155f0d46c06a",
+    "semantic_hash": ""
+  },
+  "icon/icon-72x72.png": {
+    "mtime": 1780663003.6565256,
+    "ast_hash": "e791dbe5c38aa4ddf004d4cfd51ca608",
+    "semantic_hash": ""
+  },
+  "icon/icon-96x96.png": {
+    "mtime": 1780663003.6565256,
+    "ast_hash": "8042c4dac0f40f858726e1a6bc90f14a",
+    "semantic_hash": ""
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\arduino-ide.js": {
+    "mtime": 1780673746.63217,
+    "ast_hash": "267f0806bb5216da6bbb809bd6486994",
+    "semantic_hash": "267f0806bb5216da6bbb809bd6486994"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\audio.js": {
+    "mtime": 1780663003.6612668,
+    "ast_hash": "60a38904f0a55953ce4cc6516255001f",
+    "semantic_hash": "60a38904f0a55953ce4cc6516255001f"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\battery-sim.js": {
+    "mtime": 1780663003.6622698,
+    "ast_hash": "687f03f5ce2f485c3c8f26d93960df8b",
+    "semantic_hash": "687f03f5ce2f485c3c8f26d93960df8b"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components-loader.js": {
+    "mtime": 1780663003.6632698,
+    "ast_hash": "12dcfab556b511b5e598907f60bfe50c",
+    "semantic_hash": "12dcfab556b511b5e598907f60bfe50c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components-ui.js": {
+    "mtime": 1780663003.6642816,
+    "ast_hash": "f684160df3f89018ecd9980ab63eaced",
+    "semantic_hash": "f684160df3f89018ecd9980ab63eaced"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.7segment.js": {
+    "mtime": 1780663003.665349,
+    "ast_hash": "52357704886938ae846c86814ca75737",
+    "semantic_hash": "52357704886938ae846c86814ca75737"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.ammeter.js": {
+    "mtime": 1780663003.6665442,
+    "ast_hash": "7ecdeaaa6bcc2ad608fcc3fb009ced80",
+    "semantic_hash": "7ecdeaaa6bcc2ad608fcc3fb009ced80"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.appliance.js": {
+    "mtime": 1780663003.66717,
+    "ast_hash": "f8e2dee51c9253a494277128ece2ceda",
+    "semantic_hash": "f8e2dee51c9253a494277128ece2ceda"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.arduino.js": {
+    "mtime": 1780663003.669177,
+    "ast_hash": "fc06b5d3f25c0e1c0cd0f8e5ae20534b",
+    "semantic_hash": "fc06b5d3f25c0e1c0cd0f8e5ae20534b"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.ats.js": {
+    "mtime": 1780663003.669177,
+    "ast_hash": "8659a8730e50d87d3168850aaa9dadac",
+    "semantic_hash": "8659a8730e50d87d3168850aaa9dadac"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.battery-large.js": {
+    "mtime": 1780663003.671186,
+    "ast_hash": "cef6ab4ea75a7f8b59ba82ce54e4bc2f",
+    "semantic_hash": "cef6ab4ea75a7f8b59ba82ce54e4bc2f"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.battery-plts.js": {
+    "mtime": 1780663003.671186,
+    "ast_hash": "00da222a1320e04020da4aaeb823e14f",
+    "semantic_hash": "00da222a1320e04020da4aaeb823e14f"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.battery.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "a7daadcb5c1c27fc74cd997e03ebe61a",
+    "semantic_hash": "a7daadcb5c1c27fc74cd997e03ebe61a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.bulb.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "1e88bb264741133fbefe086c2a6cdce7",
+    "semantic_hash": "1e88bb264741133fbefe086c2a6cdce7"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.buzzer.js": {
+    "mtime": 1780663003.6731956,
+    "ast_hash": "d7aa1049d43a840aea993edc673fc355",
+    "semantic_hash": "d7aa1049d43a840aea993edc673fc355"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.capacitor.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "fe35375c1df84a2b5ded505fbeb47a45",
+    "semantic_hash": "fe35375c1df84a2b5ded505fbeb47a45"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.charge-ctrl.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "ac2a4b6382bb4b011d924d2765d313d9",
+    "semantic_hash": "ac2a4b6382bb4b011d924d2765d313d9"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.crystal.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "b18e94909b2f20c47e709c62a6149e44",
+    "semantic_hash": "b18e94909b2f20c47e709c62a6149e44"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.diode.js": {
+    "mtime": 1780663003.6752033,
+    "ast_hash": "1d881d53f9b611a31fc9c234ea3b644c",
+    "semantic_hash": "1d881d53f9b611a31fc9c234ea3b644c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.dpdt-switch.js": {
+    "mtime": 1780663003.677673,
+    "ast_hash": "7a3f90961c96afd93b802b6630d5af26",
+    "semantic_hash": "7a3f90961c96afd93b802b6630d5af26"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.fan.js": {
+    "mtime": 1780663003.677673,
+    "ast_hash": "e46c701f4a58be4affe6a14ae3fa305f",
+    "semantic_hash": "e46c701f4a58be4affe6a14ae3fa305f"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.fuse.js": {
+    "mtime": 1780663003.6786773,
+    "ast_hash": "f591ac53d562ea17196d722acd9ef544",
+    "semantic_hash": "f591ac53d562ea17196d722acd9ef544"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.ground.js": {
+    "mtime": 1780663003.6796765,
+    "ast_hash": "5565ca639ebb6bd609a40ec5f54dc37a",
+    "semantic_hash": "5565ca639ebb6bd609a40ec5f54dc37a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.inductor.js": {
+    "mtime": 1780663003.6796765,
+    "ast_hash": "a64079f29004701b7dab078b8afaa94a",
+    "semantic_hash": "a64079f29004701b7dab078b8afaa94a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.inverter.js": {
+    "mtime": 1780663003.6806767,
+    "ast_hash": "deacfa846456c01e0a1e9e846223071e",
+    "semantic_hash": "deacfa846456c01e0a1e9e846223071e"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.jumper.js": {
+    "mtime": 1780663003.6820927,
+    "ast_hash": "22e7ddc208fad97bb6b7a0f5ef3f6c2b",
+    "semantic_hash": "22e7ddc208fad97bb6b7a0f5ef3f6c2b"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.kwh-meter.js": {
+    "mtime": 1780663003.6820927,
+    "ast_hash": "9d0d401216d21b6a85e5e10371c93bea",
+    "semantic_hash": "9d0d401216d21b6a85e5e10371c93bea"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.ldr.js": {
+    "mtime": 1780663003.6831987,
+    "ast_hash": "2a519dd07ed6455bba051ef24ee7e4e8",
+    "semantic_hash": "2a519dd07ed6455bba051ef24ee7e4e8"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.led-matrix.js": {
+    "mtime": 1780663003.683816,
+    "ast_hash": "7553c9f3f8ebf4fbcd27c3fc63c70936",
+    "semantic_hash": "7553c9f3f8ebf4fbcd27c3fc63c70936"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.led-strip.js": {
+    "mtime": 1780663003.6845355,
+    "ast_hash": "4a07aa7fec26f838e6db7f2d43f7da7c",
+    "semantic_hash": "4a07aa7fec26f838e6db7f2d43f7da7c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.led.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "1d7a7a5fbb99fc79af4b0830f69668dc",
+    "semantic_hash": "1d7a7a5fbb99fc79af4b0830f69668dc"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.mcb.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "508c6c39c9140b251d9b594bb68fa8c9",
+    "semantic_hash": "508c6c39c9140b251d9b594bb68fa8c9"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.mosfet.js": {
+    "mtime": 1780663003.6851854,
+    "ast_hash": "421ea45495eed2ff8e57865f10ec906b",
+    "semantic_hash": "421ea45495eed2ff8e57865f10ec906b"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.motor.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "8c9a3dddf4147522416438fc248848a3",
+    "semantic_hash": "8c9a3dddf4147522416438fc248848a3"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.multimeter.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "24335fe632891cff59e295164c564734",
+    "semantic_hash": "24335fe632891cff59e295164c564734"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.opamp.js": {
+    "mtime": 1780663003.687193,
+    "ast_hash": "9b25a55d4753ae5f98cc5fc110bcab30",
+    "semantic_hash": "9b25a55d4753ae5f98cc5fc110bcab30"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.outlet.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "bbb0c25a9c09f075c3ff4f67437ab1b1",
+    "semantic_hash": "bbb0c25a9c09f075c3ff4f67437ab1b1"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.photodiode.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "afea4cb7ad8c34385e43395ea3ec35cd",
+    "semantic_hash": "afea4cb7ad8c34385e43395ea3ec35cd"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.pln.js": {
+    "mtime": 1780663003.6892006,
+    "ast_hash": "933a9d738fef5e75e0d8f1d55d71ef15",
+    "semantic_hash": "933a9d738fef5e75e0d8f1d55d71ef15"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.potentiometer.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "7cd0e07e6b44f35944258d9e030a4801",
+    "semantic_hash": "7cd0e07e6b44f35944258d9e030a4801"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.power-strip.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "9acfa3ad903bf314484fe9589117ff0e",
+    "semantic_hash": "9acfa3ad903bf314484fe9589117ff0e"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.push-button.js": {
+    "mtime": 1780663003.6912093,
+    "ast_hash": "d39c7d8a92b07ea84f6eb2ea989e0ee6",
+    "semantic_hash": "d39c7d8a92b07ea84f6eb2ea989e0ee6"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.relay.js": {
+    "mtime": 1780663003.6932166,
+    "ast_hash": "2fffff8a3776ae08bfaa346ec5f4cce8",
+    "semantic_hash": "2fffff8a3776ae08bfaa346ec5f4cce8"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.resistor.js": {
+    "mtime": 1780663003.6932166,
+    "ast_hash": "39fe18f710fd8cc4af8018805cc68cbd",
+    "semantic_hash": "39fe18f710fd8cc4af8018805cc68cbd"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.scr.js": {
+    "mtime": 1780663003.694331,
+    "ast_hash": "ee07ae0b1af92cd03791507a2b68f442",
+    "semantic_hash": "ee07ae0b1af92cd03791507a2b68f442"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.servo.js": {
+    "mtime": 1780663003.694331,
+    "ast_hash": "95060511cc4d8769ac014db2bfdf1246",
+    "semantic_hash": "95060511cc4d8769ac014db2bfdf1246"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.solar-array.js": {
+    "mtime": 1780663003.695334,
+    "ast_hash": "b2b11b200ed603760260a98b9b25902c",
+    "semantic_hash": "b2b11b200ed603760260a98b9b25902c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.solar.js": {
+    "mtime": 1780663003.695334,
+    "ast_hash": "c3def63093efbe58ebd8e82113f8c876",
+    "semantic_hash": "c3def63093efbe58ebd8e82113f8c876"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.speaker.js": {
+    "mtime": 1780663003.6963346,
+    "ast_hash": "4b553ed3f9d87fe37ad8de0d85c3c4b4",
+    "semantic_hash": "4b553ed3f9d87fe37ad8de0d85c3c4b4"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.stepdown.js": {
+    "mtime": 1780663003.6963346,
+    "ast_hash": "232e222973bf54972f80776c957a3ade",
+    "semantic_hash": "232e222973bf54972f80776c957a3ade"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.switch.js": {
+    "mtime": 1780663003.6973348,
+    "ast_hash": "bb3ccfa43e5f239d9aaf18ccb2f6f323",
+    "semantic_hash": "bb3ccfa43e5f239d9aaf18ccb2f6f323"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.terminal-block.js": {
+    "mtime": 1780663003.698335,
+    "ast_hash": "0df74215f1f44f38af03322896fdde77",
+    "semantic_hash": "0df74215f1f44f38af03322896fdde77"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.thermistor.js": {
+    "mtime": 1780663003.6993341,
+    "ast_hash": "aa08aee1887cefe5e2541aced64a2ba7",
+    "semantic_hash": "aa08aee1887cefe5e2541aced64a2ba7"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.timer.js": {
+    "mtime": 1780663003.7003343,
+    "ast_hash": "100bf8d44df13729212841ed5311ad1a",
+    "semantic_hash": "100bf8d44df13729212841ed5311ad1a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.transformer.js": {
+    "mtime": 1780663003.7003343,
+    "ast_hash": "845a0cf53d3073d98a51727a98bcbb9c",
+    "semantic_hash": "845a0cf53d3073d98a51727a98bcbb9c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.transistor.js": {
+    "mtime": 1780663003.701334,
+    "ast_hash": "3be7f415349eec1500a495ef806b2743",
+    "semantic_hash": "3be7f415349eec1500a495ef806b2743"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.triac.js": {
+    "mtime": 1780663003.7023335,
+    "ast_hash": "ab15ace26cec8f0582f6590ed684c6a7",
+    "semantic_hash": "ab15ace26cec8f0582f6590ed684c6a7"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.varistor.js": {
+    "mtime": 1780663003.7023335,
+    "ast_hash": "012a766bc481d3c64e6229b304f8afd5",
+    "semantic_hash": "012a766bc481d3c64e6229b304f8afd5"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.voltage-reg.js": {
+    "mtime": 1780663003.7033336,
+    "ast_hash": "56e17de852ac9a86db7fbef39dea3b23",
+    "semantic_hash": "56e17de852ac9a86db7fbef39dea3b23"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\comp.zener.js": {
+    "mtime": 1780663003.7038388,
+    "ast_hash": "0a36b3e6ae0eec78e2344499f8e288d5",
+    "semantic_hash": "0a36b3e6ae0eec78e2344499f8e288d5"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\components\\manifest.js": {
+    "mtime": 1780663003.7047815,
+    "ast_hash": "f028fc2fa236d73ad1f152466400faac",
+    "semantic_hash": "f028fc2fa236d73ad1f152466400faac"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\core\\registry.js": {
+    "mtime": 1780663003.7047815,
+    "ast_hash": "e2d1568b5fa37f85a29d7f7905997b21",
+    "semantic_hash": "e2d1568b5fa37f85a29d7f7905997b21"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\effects.js": {
+    "mtime": 1780663003.7067895,
+    "ast_hash": "2264daaba18d66fa13ed71d4aae0f385",
+    "semantic_hash": "2264daaba18d66fa13ed71d4aae0f385"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\electrical-laws.js": {
+    "mtime": 1780663003.7067895,
+    "ast_hash": "5845d192e719ba8df7b7b3811feae71b",
+    "semantic_hash": "5845d192e719ba8df7b7b3811feae71b"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\events.js": {
+    "mtime": 1780671560.9238315,
+    "ast_hash": "3cdafbc89a96426dfec284736dd44ab5",
+    "semantic_hash": "3cdafbc89a96426dfec284736dd44ab5"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\greeting.js": {
+    "mtime": 1780663003.7093048,
+    "ast_hash": "af76597ade3ca98ff4c94e2543a92dfb",
+    "semantic_hash": "af76597ade3ca98ff4c94e2543a92dfb"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\grid.js": {
+    "mtime": 1780663003.710989,
+    "ast_hash": "d2e7ebfeac7daff5522792e4d08c3117",
+    "semantic_hash": "d2e7ebfeac7daff5522792e4d08c3117"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\i18n.js": {
+    "mtime": 1780663003.7118063,
+    "ast_hash": "7f458c392bc4a13e34dfade99e0cc5cb",
+    "semantic_hash": "7f458c392bc4a13e34dfade99e0cc5cb"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\mna-evaluate.js": {
+    "mtime": 1780672166.5903654,
+    "ast_hash": "49c75844f13699c0c09b3e0967c54ef1",
+    "semantic_hash": "49c75844f13699c0c09b3e0967c54ef1"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\mna-solver.js": {
+    "mtime": 1780663003.71481,
+    "ast_hash": "6ca7910d31b9cd686a566ecbd597925e",
+    "semantic_hash": "6ca7910d31b9cd686a566ecbd597925e"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\state.js": {
+    "mtime": 1780670712.7228646,
+    "ast_hash": "5f15a2f5f8bd2d5dc67c2ee0dfb242bc",
+    "semantic_hash": "5f15a2f5f8bd2d5dc67c2ee0dfb242bc"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\ui.js": {
+    "mtime": 1780667291.5686147,
+    "ast_hash": "a43d27daa3e3250717ed53fa601c6e9c",
+    "semantic_hash": "a43d27daa3e3250717ed53fa601c6e9c"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\js\\wire.js": {
+    "mtime": 1780663003.716822,
+    "ast_hash": "d5cc76f4cc3239b0a8ec19ba72788752",
+    "semantic_hash": "d5cc76f4cc3239b0a8ec19ba72788752"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\sw.js": {
+    "mtime": 1780675385.0547194,
+    "ast_hash": "4f46b5853f8edae0398e08ba832fa012",
+    "semantic_hash": "4f46b5853f8edae0398e08ba832fa012"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\.agents\\rules\\graphify.md": {
+    "mtime": 1781278193.4471593,
+    "ast_hash": "a0e4d192b9e2e17256124dbfc8e24e6a",
+    "semantic_hash": "a0e4d192b9e2e17256124dbfc8e24e6a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\.agents\\workflows\\graphify.md": {
+    "mtime": 1781278193.4471593,
+    "ast_hash": "637776aa6f7496d069afe7520c845c8a",
+    "semantic_hash": "637776aa6f7496d069afe7520c845c8a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\README.md": {
+    "mtime": 1780663003.6411457,
+    "ast_hash": "7667205e409ce8c7a12bf01420748f37",
+    "semantic_hash": "7667205e409ce8c7a12bf01420748f37"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\index.html": {
+    "mtime": 1780673766.2993143,
+    "ast_hash": "ffa1eb52acce7867a0c72a7ca4229296",
+    "semantic_hash": "ffa1eb52acce7867a0c72a7ca4229296"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-128x128.png": {
+    "mtime": 1780663003.6463444,
+    "ast_hash": "26fb6f59187526f13247dffb06db8afd",
+    "semantic_hash": "26fb6f59187526f13247dffb06db8afd"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-144x144.png": {
+    "mtime": 1780663003.647344,
+    "ast_hash": "f84f86438c385d38cb2b5b3fa2631a8e",
+    "semantic_hash": "f84f86438c385d38cb2b5b3fa2631a8e"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-152x152.png": {
+    "mtime": 1780663003.6483445,
+    "ast_hash": "ad69b0f8d5a62ec2ca80ce40608eff05",
+    "semantic_hash": "ad69b0f8d5a62ec2ca80ce40608eff05"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-192x192.png": {
+    "mtime": 1780663003.6483445,
+    "ast_hash": "4a5f2438768cf91327e1c06122202aec",
+    "semantic_hash": "4a5f2438768cf91327e1c06122202aec"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-384x384.png": {
+    "mtime": 1780663003.6504588,
+    "ast_hash": "04035d5994e3907c61941bc93e8a5049",
+    "semantic_hash": "04035d5994e3907c61941bc93e8a5049"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-512x512.png": {
+    "mtime": 1780663003.652757,
+    "ast_hash": "17fdadc7bcd3a10e3c61155f0d46c06a",
+    "semantic_hash": "17fdadc7bcd3a10e3c61155f0d46c06a"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-72x72.png": {
+    "mtime": 1780663003.6565256,
+    "ast_hash": "e791dbe5c38aa4ddf004d4cfd51ca608",
+    "semantic_hash": "e791dbe5c38aa4ddf004d4cfd51ca608"
+  },
+  "C:\\Laragon\\www\\gitweb\\czelectro\\icon\\icon-96x96.png": {
+    "mtime": 1780663003.6565256,
+    "ast_hash": "8042c4dac0f40f858726e1a6bc90f14a",
+    "semantic_hash": "8042c4dac0f40f858726e1a6bc90f14a"
+  }
+}
